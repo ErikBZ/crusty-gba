@@ -43,3 +43,77 @@ impl From<u32> for Conditional {
     }
 }
 
+#[derive(Debug)]
+pub enum Opcode {
+    AND,
+    EOR,
+    SUB,
+    RSB,
+    ADD,
+    ADC,
+    SBC,
+    RSC,
+    TST,
+    TEQ,
+    CMP,
+    CMN,
+    ORR,
+    MOV,
+    BIC,
+    MVN
+}
+
+impl From<u32> for Opcode {
+    fn from(inst: u32) -> Self {
+        let code = (inst >> 20) & 0xf;
+        match code {
+            0 => Opcode::AND,
+            1 => Opcode::EOR,
+            2 => Opcode::SUB,
+            3 => Opcode::RSB,
+            4 => Opcode::ADD,
+            5 => Opcode::ADC,
+            6 => Opcode::SBC,
+            7 => Opcode::RSC,
+            8 => Opcode::TST,
+            9 => Opcode::TEQ,
+            10 => Opcode::CMP,
+            11 => Opcode::CMN,
+            12 => Opcode::ORR,
+            13 => Opcode::MOV,
+            14 => Opcode::BIC,
+            _ => Opcode::MVN,
+        }
+    }
+}
+
+pub struct CPUOperation {
+    cond: Conditional,
+    opcode: Opcode,
+    s: bool,
+    rn: u8,
+    rd: u8,
+    operand: u16
+}
+
+impl From<u32> for CPUOperation {
+    fn from(inst: u32) -> Self {
+        CPUOperation {
+            cond: Conditional::from(inst),
+            opcode: Opcode::from(inst),
+            s: (inst >> 19 & 0x1) == 0x1,
+            rd: (inst >> 11 & 0xf) as u8,
+            rn: (inst >> 15 & 0xf) as u8,
+            operand: (inst & 0xfff) as u16
+        }
+    }
+}
+
+impl CPUOperation {
+    // TODO: impl Display instead and format the opcodes correctly, since some won't use all the
+    // parts
+    pub fn to_string(&self) -> String{
+        format!("{:?} {:?} r{} r{} {}", self.opcode, self.cond, self.rn, self.rd, self.operand)
+    }
+}
+
