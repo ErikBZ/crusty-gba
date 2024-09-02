@@ -1,3 +1,5 @@
+use core::fmt;
+
 // TODO: For conditions codes look at page A3-6 of the ARM instruction manual
 #[derive(Debug)]
 pub enum Conditional {
@@ -43,6 +45,8 @@ impl From<u32> for Conditional {
     }
 }
 
+// Should these opcodes wrap the decoded instruction's structs?
+// There could be 15 total structs
 #[derive(Debug)]
 pub enum Opcode {
     AND,
@@ -107,6 +111,28 @@ impl From<u32> for CPUOperation {
             rd: (inst >> 11 & 0xf) as u8,
             rn: (inst >> 15 & 0xf) as u8,
             operand: (inst & 0xfff) as u16
+        }
+    }
+}
+
+// This Display would change over to the Opcode Enum that wraps the structs
+impl fmt::Display for CPUOperation {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self.opcode {
+            Opcode::AND | Opcode::EOR | Opcode::ORR | Opcode::BIC |
+            Opcode::ADD | Opcode::SUB | Opcode::ADC | Opcode::SBC |
+            Opcode::RSC | Opcode::RSB => {
+                write!(f, "{:?} {:?} {} r{} r{}, <{}>", self.opcode, self.cond, self.s, self.rd, self.rn, self.operand)
+            },
+            Opcode::TST | Opcode::TEQ => {
+                write!(f, "{:?} {:?} r{}, <{}>", self.opcode, self.cond, self.rn, self.operand)
+            },
+            Opcode::CMP | Opcode::CMN => {
+                write!(f, "{:?} {:?} r{}, <{}>", self.opcode, self.cond, self.rd, self.operand)
+            },
+            Opcode::MOV | Opcode::MVN => {
+                write!(f, "{:?} {:?} {} r{}, <{}>", self.opcode, self.cond, self.s, self.rd, self.operand)
+            },
         }
     }
 }

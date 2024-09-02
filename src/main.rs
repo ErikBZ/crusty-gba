@@ -2,9 +2,10 @@ mod gba;
 use std::fs::File;
 use std::io::prelude::*;
 
-use gba::instructions::{CPUOperation, Conditional, Opcode};
+use gba::instructions::{CPUOperation, Conditional};
 
 fn main() {
+    // TODO: Just put test.gba in the root dir
     let mut file = match File::open("test.gba") {
         Ok(f) => f,
         Err(e) => {
@@ -33,7 +34,7 @@ fn main() {
             println!("undefined");
         } else if codes[i] & 0x0e000000 == 0x02000000 {
             let op = CPUOperation::from(codes[i]);
-            println!("{}", op.to_string());
+            println!("{}", op);
         } else {
             println!("{:032b}, 0x{:08x}, {:?}", codes[i], codes[i], cond);
         }
