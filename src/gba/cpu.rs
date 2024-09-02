@@ -40,4 +40,3 @@ impl CPU {
         self.r15
     }
 }
-

@@ -1,7 +1,4 @@
-use core::fmt;
-
-// TODO: For conditions codes look at page A3-6 of the ARM instruction manual
-#[derive(Debug)]
+#[derive(Debug, strum_macros::Display, PartialEq)]
 pub enum Conditional {
     EQ,
     NE,
@@ -17,8 +14,9 @@ pub enum Conditional {
     LT,
     GT,
     LE,
+    #[strum(to_string = "")]
     AL,
-    NV
+    NV,
 }
 
 impl From<u32> for Conditional {
@@ -45,103 +43,266 @@ impl From<u32> for Conditional {
     }
 }
 
-// Should these opcodes wrap the decoded instruction's structs?
-// There could be 15 total structs
-#[derive(Debug)]
+// S might be better place in the Enum, rather than the op struct
+#[derive(Debug, strum_macros::Display, PartialEq)]
 pub enum Opcode {
-    AND,
-    EOR,
-    SUB,
-    RSB,
-    ADD,
-    ADC,
-    SBC,
-    RSC,
-    TST,
-    TEQ,
-    CMP,
-    CMN,
-    ORR,
-    MOV,
-    BIC,
-    MVN
+    AND(Conditional, DataProcessingOp),
+    EOR(Conditional, DataProcessingOp),
+    SUB(Conditional, DataProcessingOp),
+    RSB(Conditional, DataProcessingOp),
+    ADD(Conditional, DataProcessingOp),
+    ADC(Conditional, DataProcessingOp),
+    SBC(Conditional, DataProcessingOp),
+    RSC(Conditional, DataProcessingOp),
+    TST(Conditional, DataProcessingOp),
+    TEQ(Conditional, DataProcessingOp),
+    CMP(Conditional, DataProcessingOp),
+    CMN(Conditional, DataProcessingOp),
+    ORR(Conditional, DataProcessingOp),
+    MOV(Conditional, DataProcessingOp),
+    BIC(Conditional, DataProcessingOp),
+    MVN(Conditional, DataProcessingOp),
+    MUL(Conditional, MultiplyOp),
+    MLA(Conditional, MultiplyOp),
+    // TODO: Change these to UMULL, UMLAL, SMULL, SMLAL
+    MULL(Conditional, MultiplyLongOp),
+    MLAL(Conditional, MultiplyLongOp),
+    SWP(Conditional, SingleDataSwapOp),
+    B(Conditional, BranchOp),
+    BL(Conditional, BranchOp),
+    BX(Conditional, BranchExchangeOp),
+    #[strum(to_string = "Undefined: {0}")]
+    Undef(u32),
 }
 
 impl From<u32> for Opcode {
     fn from(inst: u32) -> Self {
-        let code = (inst >> 20) & 0xf;
-        match code {
-            0 => Opcode::AND,
-            1 => Opcode::EOR,
-            2 => Opcode::SUB,
-            3 => Opcode::RSB,
-            4 => Opcode::ADD,
-            5 => Opcode::ADC,
-            6 => Opcode::SBC,
-            7 => Opcode::RSC,
-            8 => Opcode::TST,
-            9 => Opcode::TEQ,
-            10 => Opcode::CMP,
-            11 => Opcode::CMN,
-            12 => Opcode::ORR,
-            13 => Opcode::MOV,
-            14 => Opcode::BIC,
-            _ => Opcode::MVN,
+        let cond = Conditional::from(inst);
+        if is_data_processing(inst) {
+            let op = DataProcessingOp::from(inst);
+            let code = (inst >> 20) & 0xf;
+            match code {
+                0 => Opcode::AND(cond, op),
+                1 => Opcode::EOR(cond, op),
+                2 => Opcode::SUB(cond, op),
+                3 => Opcode::RSB(cond, op),
+                4 => Opcode::ADD(cond, op),
+                5 => Opcode::ADC(cond, op),
+                6 => Opcode::SBC(cond, op),
+                7 => Opcode::RSC(cond, op),
+                8 => Opcode::TST(cond, op),
+                9 => Opcode::TEQ(cond, op),
+                10 => Opcode::CMP(cond, op),
+                11 => Opcode::CMN(cond, op),
+                12 => Opcode::ORR(cond, op),
+                13 => Opcode::MOV(cond, op),
+                14 => Opcode::BIC(cond, op),
+                _ => Opcode::MVN(cond, op),
+            }
+        } else if is_multiply(inst) {
+            let op = MultiplyOp::from(inst);
+            if op.a {
+                Opcode::MLA(cond, op)
+            } else {
+                Opcode::MUL(cond, op)
+            }
+        } else if is_multiply_long(inst) {
+            let op = MultiplyLongOp::from(inst);
+            if op.a {
+                Opcode::MLAL(cond, op)
+            } else {
+                Opcode::MULL(cond, op)
+            }
+        } else if is_single_data_swap(inst) {
+            let op = SingleDataSwapOp::from(inst);
+            Opcode::SWP(cond, op)
+        } else if is_branch_and_exchange(inst) {
+            let op = BranchExchangeOp::from(inst);
+            Opcode::BX(cond, op)
+        } else if is_branch(inst) {
+            let op = BranchOp::from(inst);
+            if op.l {
+                Opcode::BL(cond, op)
+            } else {
+                Opcode::B(cond, op)
+            }
+        } else {
+            Opcode::Undef(inst)
+        }
+    }
+}
+
+impl Opcode {
+    pub fn string_repr(&self) -> String {
+        match self {
+            Opcode::AND(c, o)
+            | Opcode::EOR(c, o)
+            | Opcode::ORR(c, o)
+            | Opcode::BIC(c, o)
+            | Opcode::ADD(c, o)
+            | Opcode::SUB(c, o)
+            | Opcode::ADC(c, o)
+            | Opcode::SBC(c, o)
+            | Opcode::RSC(c, o)
+            | Opcode::RSB(c, o) => {
+                format!("{}{} {} r{} r{}, <{}>", self, c, o.s, o.rd, o.rn, o.operand)
+            }
+            Opcode::TST(c, o) | Opcode::TEQ(c, o) => {
+                format!("{}{} r{}, <{}>", self, c, o.rn, o.operand)
+            }
+            Opcode::CMP(c, o) | Opcode::CMN(c, o) => {
+                format!("{}{} r{}, <{}>", self, c, o.rd, o.operand)
+            }
+            Opcode::MOV(c, o) | Opcode::MVN(c, o) => {
+                format!("{}{} {} r{}, <{}>", self, c, o.s, o.rd, o.operand)
+            }
+            Opcode::MLA(c, o) => {
+                format!(
+                    "{}{} {} r{}, r{}, r{}, r{}",
+                    self, c, o.s, o.rd, o.rm, o.rs, o.rn
+                )
+            }
+            Opcode::MUL(c, o) => {
+                format!("{}{} {} r{}, r{}, r{}", self, c, o.s, o.rd, o.rm, o.rs)
+            }
+            Opcode::MULL(c, o) | Opcode::MLAL(c, o) => {
+                format!(
+                    "{}{} {} r{}, r{}, r{}, r{}",
+                    self, c, o.s, o.rd_hi, o.rd_lo, o.rm, o.rs
+                )
+            }
+            Opcode::B(c, o) | Opcode::BL(c, o) => {
+                format!("{}{} +{:x}", self, c, o.offset)
+            }
+            Opcode::BX(c, o) => {
+                format!("{}{} r{}", self, c, o.rn)
+            }
+            Opcode::SWP(c, o) => {
+                format!("{}{} {} r{}, r{}, r{}", self, c, o.b, o.rd, o.rm, o.rn)
+            }
+            _ => {
+                format!("undefined")
+            }
         }
     }
 }
 
 // TODO: Maybe rename this to DataOperation and use other structs
 // like branch operation
-pub struct CPUOperation {
-    cond: Conditional,
-    opcode: Opcode,
+#[derive(Debug, PartialEq)]
+pub struct DataProcessingOp {
     s: bool,
     rn: u8,
     rd: u8,
-    operand: u16
+    operand: u16,
 }
 
-impl From<u32> for CPUOperation {
+impl From<u32> for DataProcessingOp {
     fn from(inst: u32) -> Self {
-        CPUOperation {
-            cond: Conditional::from(inst),
-            opcode: Opcode::from(inst),
+        DataProcessingOp {
             s: (inst >> 19 & 0x1) == 0x1,
             rd: (inst >> 11 & 0xf) as u8,
             rn: (inst >> 15 & 0xf) as u8,
-            operand: (inst & 0xfff) as u16
+            operand: (inst & 0xfff) as u16,
         }
     }
 }
 
-// This Display would change over to the Opcode Enum that wraps the structs
-impl fmt::Display for CPUOperation {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        match self.opcode {
-            Opcode::AND | Opcode::EOR | Opcode::ORR | Opcode::BIC |
-            Opcode::ADD | Opcode::SUB | Opcode::ADC | Opcode::SBC |
-            Opcode::RSC | Opcode::RSB => {
-                write!(f, "{:?} {:?} {} r{} r{}, <{}>", self.opcode, self.cond, self.s, self.rd, self.rn, self.operand)
-            },
-            Opcode::TST | Opcode::TEQ => {
-                write!(f, "{:?} {:?} r{}, <{}>", self.opcode, self.cond, self.rn, self.operand)
-            },
-            Opcode::CMP | Opcode::CMN => {
-                write!(f, "{:?} {:?} r{}, <{}>", self.opcode, self.cond, self.rd, self.operand)
-            },
-            Opcode::MOV | Opcode::MVN => {
-                write!(f, "{:?} {:?} {} r{}, <{}>", self.opcode, self.cond, self.s, self.rd, self.operand)
-            },
+#[derive(Debug, PartialEq)]
+pub struct MultiplyOp {
+    // whether operation should accumulate
+    a: bool,
+    s: bool,
+    rd: u8,
+    rn: u8,
+    rs: u8,
+    rm: u8,
+}
+
+impl From<u32> for MultiplyOp {
+    fn from(inst: u32) -> Self {
+        Self {
+            a: (inst >> 20 & 0x1) == 0x1,
+            s: (inst >> 19 & 0x1) == 0x1,
+            rd: (inst >> 15 & 0xf) as u8,
+            rn: (inst >> 11 & 0xf) as u8,
+            rs: (inst >> 7 & 0xf) as u8,
+            rm: (inst & 0xf) as u8,
         }
     }
 }
 
-impl CPUOperation {
-    // TODO: impl Display instead and format the opcodes correctly, since some won't use all the
-    // parts
-    pub fn to_string(&self) -> String{
-        format!("{:?} {:?} r{} r{} {}", self.opcode, self.cond, self.rn, self.rd, self.operand)
+#[derive(Debug, PartialEq)]
+pub struct MultiplyLongOp {
+    // whether operation is signed or unsigned
+    u: bool,
+    // whether opeartion should accumulate
+    a: bool,
+    s: bool,
+    rd_hi: u8,
+    rd_lo: u8,
+    rs: u8,
+    rm: u8,
+}
+
+impl From<u32> for MultiplyLongOp {
+    fn from(inst: u32) -> Self {
+        Self {
+            u: (inst >> 21 & 0x1) == 0x1,
+            a: (inst >> 20 & 0x1) == 0x1,
+            s: (inst >> 19 & 0x1) == 0x1,
+            rd_hi: (inst >> 15 & 0xf) as u8,
+            rd_lo: (inst >> 11 & 0xf) as u8,
+            rs: (inst >> 7 & 0xf) as u8,
+            rm: (inst & 0xf) as u8,
+        }
+    }
+}
+
+#[derive(Debug, PartialEq)]
+pub struct SingleDataSwapOp {
+    b: bool,
+    rn: u8,
+    rd: u8,
+    rm: u8,
+}
+
+impl From<u32> for SingleDataSwapOp {
+    fn from(inst: u32) -> Self {
+        Self {
+            b: (inst >> 21 & 0x1) == 0x1,
+            rn: (inst >> 15 & 0xf) as u8,
+            rd: (inst >> 11 & 0xf) as u8,
+            rm: (inst & 0xf) as u8,
+        }
+    }
+}
+
+#[derive(Debug, PartialEq)]
+pub struct BranchExchangeOp {
+    rn: u8,
+}
+
+impl From<u32> for BranchExchangeOp {
+    fn from(inst: u32) -> Self {
+        Self {
+            rn: (inst & 0xf) as u8,
+        }
+    }
+}
+
+#[derive(Debug, PartialEq)]
+pub struct BranchOp {
+    l: bool,
+    offset: u32,
+}
+
+impl From<u32> for BranchOp {
+    fn from(inst: u32) -> Self {
+        Self {
+            l: (inst >> 24 & 0x1) == 0x1,
+            offset: (inst & 0xfffff) as u32,
+        }
     }
 }
 
@@ -186,7 +347,7 @@ pub fn is_block_data_tfx(inst: u32) -> bool {
 }
 
 pub fn is_branch(inst: u32) -> bool {
-    inst & 0x0e000000 == 0x09000000
+    inst & 0x0e000000 == 0x0a000000
 }
 
 pub fn is_coprocessor_data_tfx(inst: u32) -> bool {
@@ -205,3 +366,27 @@ pub fn is_software_interrupt(inst: u32) -> bool {
     inst & 0x0f000000 == 0x0f000000
 }
 
+mod test {
+    use super::*;
+
+    #[test]
+    fn test_branch_check() {
+        let inst: u32 = 0b11101010000000000000000000011000;
+        let branch = is_branch(inst);
+        assert_eq!(branch, true);
+    }
+
+    #[test]
+    fn test_branch_decode() {
+        let inst: u32 = 0b11101010000000000000000000011000;
+        let op = Opcode::from(inst);
+        let op2 = Opcode::B(
+            Conditional::AL,
+            BranchOp {
+                l: false,
+                offset: 0b11000,
+            },
+        );
+        assert_eq!(op, op2);
+    }
+}
