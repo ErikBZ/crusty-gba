@@ -87,6 +87,8 @@ impl From<u32> for Opcode {
     }
 }
 
+// TODO: Maybe rename this to DataOperation and use other structs
+// like branch operation
 pub struct CPUOperation {
     cond: Conditional,
     opcode: Opcode,
@@ -115,5 +117,65 @@ impl CPUOperation {
     pub fn to_string(&self) -> String{
         format!("{:?} {:?} r{} r{} {}", self.opcode, self.cond, self.rn, self.rd, self.operand)
     }
+}
+
+pub fn is_data_processing(inst: u32) -> bool {
+    inst & 0x0e000000 == 0x02000000
+}
+
+pub fn is_multiply(inst: u32) -> bool {
+    inst & 0x0fc000f0 == 0x00000090
+}
+
+pub fn is_multiply_long(inst: u32) -> bool {
+    inst & 0x0fc000f0 == 0x00800090
+}
+
+pub fn is_single_data_swap(inst: u32) -> bool {
+    inst & 0x0fb00ff0 == 0x01000090
+}
+
+pub fn is_branch_and_exchange(inst: u32) -> bool {
+    inst & 0x0ffffff0 == 0x012fff10
+}
+
+pub fn is_halfword_data_tfx_reg(inst: u32) -> bool {
+    inst & 0x0e400f90 == 0x00000090
+}
+
+pub fn is_halfword_data_tfx_imm(inst: u32) -> bool {
+    inst & 0x0e400090 == 0x00400090
+}
+
+pub fn is_single_data_tfx(inst: u32) -> bool {
+    inst & 0x0e000000 == 0x06000000
+}
+
+pub fn is_undefined(inst: u32) -> bool {
+    inst & 0x0e000010 == 0x06000010
+}
+
+pub fn is_block_data_tfx(inst: u32) -> bool {
+    inst & 0x0e000000 == 0x08000000
+}
+
+pub fn is_branch(inst: u32) -> bool {
+    inst & 0x0e000000 == 0x09000000
+}
+
+pub fn is_coprocessor_data_tfx(inst: u32) -> bool {
+    inst & 0x0e000000 == 0x0c000000
+}
+
+pub fn is_coprocessor_data_op(inst: u32) -> bool {
+    inst & 0x0f000010 == 0x0c000000
+}
+
+pub fn is_coprocessor_reg_tfx(inst: u32) -> bool {
+    inst & 0x0f000010 == 0x0c000010
+}
+
+pub fn is_software_interrupt(inst: u32) -> bool {
+    inst & 0x0f000000 == 0x0f000000
 }
 
