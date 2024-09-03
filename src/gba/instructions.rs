@@ -71,6 +71,11 @@ pub enum Opcode {
     B(Conditional, BranchOp),
     BL(Conditional, BranchOp),
     BX(Conditional, BranchExchangeOp),
+    SWI(Conditional),
+    LDR(Conditional, SingleDataTfx),
+    STR(Conditional, SingleDataTfx),
+    LDM(Conditional, BlockDataTransfer),
+    STM(Conditional, BlockDataTransfer),
     #[strum(to_string = "Undefined: {0}")]
     Undef(u32),
 }
@@ -126,6 +131,22 @@ impl From<u32> for Opcode {
             } else {
                 Opcode::B(cond, op)
             }
+        } else if is_software_interrupt(inst) {
+            Opcode::SWI(cond)
+        } else if is_single_data_tfx(inst) {
+            let op = SingleDataTfx::from(inst);
+            if op.l {
+                Opcode::LDR(cond, op)
+            } else {
+                Opcode::STR(cond, op)
+            }
+        } else if is_block_data_tfx(inst) {
+            let op = BlockDataTransfer::from(inst);
+            if op.l {
+                Opcode::LDM(cond, op)
+            } else {
+                Opcode::STM(cond, op)
+            }
         } else {
             Opcode::Undef(inst)
         }
@@ -180,7 +201,18 @@ impl Opcode {
             Opcode::SWP(c, o) => {
                 format!("{}{} {} r{}, r{}, r{}", self, c, o.b, o.rd, o.rm, o.rn)
             }
-            _ => {
+            Opcode::LDM(c, _) | Opcode::STM(c, _) => {
+                // TODO: This is actually more complicated
+                format!("{}{}", self, c)
+            }
+            Opcode::LDR(c, _) | Opcode::STR(c, _) => {
+                // TODO: This is actually more complicated
+                format!("{}{}", self, c)
+            }
+            Opcode::SWI(c) => {
+                format!("{}{}", self, c)
+            }
+            Opcode::Undef(_) => {
                 format!("undefined")
             }
         }
@@ -302,6 +334,197 @@ impl From<u32> for BranchOp {
         Self {
             l: (inst >> 24 & 0x1) == 0x1,
             offset: (inst & 0xfffff) as u32,
+        }
+    }
+}
+
+#[derive(Debug, PartialEq)]
+pub struct HalfwordRegOffset {
+    p: bool,
+    u: bool,
+    w: bool,
+    l: bool,
+    s: bool,
+    h: bool,
+    rn: u8,
+    rd: u8,
+    rm: u8
+}
+
+impl From<u32> for HalfwordRegOffset {
+    fn from(inst: u32) -> Self {
+        Self {
+            p: (inst >> 24 & 1) == 1,
+            u: (inst >> 23 & 1) == 1,
+            w: (inst >> 20 & 1) == 1,
+            l: (inst >> 19 & 1) == 1,
+            s: (inst >> 6 & 1) == 1,
+            h: (inst >> 5 & 1) == 1,
+            rn: (inst >> 15 & 0xf) as u8,
+            rd: (inst >> 11 & 0xf) as u8,
+            rm: (inst & 0xf) as u8,
+        }
+    }
+}
+
+#[derive(Debug, PartialEq)]
+pub struct HalfwordImmOffset {
+    p: bool,
+    u: bool,
+    w: bool,
+    l: bool,
+    s: bool,
+    h: bool,
+    rn: u8,
+    rd: u8,
+    offset_a: u8,
+    offset_b: u8
+}
+
+impl From<u32> for HalfwordImmOffset {
+    fn from(inst: u32) -> Self {
+        Self {
+            p: (inst >> 24 & 1) == 1,
+            u: (inst >> 23 & 1) == 1,
+            w: (inst >> 20 & 1) == 1,
+            l: (inst >> 19 & 1) == 1,
+            s: (inst >> 6 & 1) == 1,
+            h: (inst >> 5 & 1) == 1,
+            rn: (inst >> 15 & 0xf) as u8,
+            rd: (inst >> 11 & 0xf) as u8,
+            offset_a: (inst >> 7 & 0xf) as u8,
+            offset_b: (inst & 0xf) as u8,
+        }
+    }
+}
+
+#[derive(Debug, PartialEq)]
+pub struct SingleDataTfx {
+    i: bool,
+    p: bool,
+    u: bool,
+    b: bool,
+    w: bool,
+    l: bool,
+    rn: u8,
+    rd: u8,
+    offset: u16
+}
+
+impl From<u32> for SingleDataTfx {
+    fn from(inst: u32) -> Self {
+        Self {
+            i: (inst >> 24 & 1) == 1,
+            p: (inst >> 23 & 1) == 1,
+            u: (inst >> 22 & 1) == 1,
+            b: (inst >> 21 & 1) == 1,
+            w: (inst >> 20 & 1) == 1,
+            l: (inst >> 19 & 1) == 1,
+            rn: (inst >> 15 & 0xf) as u8,
+            rd: (inst >> 11 & 0xf) as u8,
+            offset: (inst >> 15 & 0xfff) as u16,
+        }
+    }
+}
+
+#[derive(Debug, PartialEq)]
+pub struct BlockDataTransfer {
+    p: bool,
+    u: bool,
+    s: bool,
+    w: bool,
+    l: bool,
+    rn: u8,
+    register_list: u16
+}
+
+impl From<u32> for BlockDataTransfer {
+    fn from(inst: u32) -> Self {
+        Self {
+            p: (inst >> 23 & 1) == 1,
+            u: (inst >> 22 & 1) == 1,
+            s: (inst >> 21 & 1) == 1,
+            w: (inst >> 20 & 1) == 1,
+            l: (inst >> 19 & 1) == 1,
+            rn: (inst >> 15 & 0xf) as u8,
+            register_list: (inst >> 15 & 0xffff) as u16,
+        }
+    }
+}
+
+#[derive(Debug, PartialEq)]
+pub struct CoprocessDataTfx {
+    p: bool,
+    u: bool,
+    n: bool,
+    w: bool,
+    l: bool,
+    rn: u8,
+    c_rd: u8,
+    cp_num: u8,
+    offset: u16,
+}
+
+impl From<u32> for CoprocessDataTfx {
+    fn from(inst: u32) -> Self {
+        Self {
+            p: (inst >> 23 & 1) == 1,
+            u: (inst >> 22 & 1) == 1,
+            n: (inst >> 21 & 1) == 1,
+            w: (inst >> 20 & 1) == 1,
+            l: (inst >> 19 & 1) == 1,
+            rn: (inst >> 15 & 0xf) as u8,
+            c_rd: (inst >> 11 & 0xf) as u8,
+            cp_num: (inst >> 7 & 0xf) as u8,
+            offset: (inst & 0xffff) as u16
+        }
+    }
+}
+
+#[derive(Debug, PartialEq)]
+pub struct CoprocessDataOp {
+    cp_opc: u8,
+    c_rn: u8,
+    c_rd: u8,
+    cp_num: u8,
+    cp: u8,
+    c_rm: u8,
+}
+
+impl From<u32> for CoprocessDataOp {
+    fn from(inst: u32) -> Self {
+        Self {
+            cp_opc: (inst >> 19 & 0xf) as u8,
+            c_rn: (inst >> 15 & 0xf) as u8,
+            c_rd: (inst >> 11 & 0xf) as u8,
+            cp_num: (inst >> 7 & 0xf) as u8,
+            cp: (inst >> 5 & 0x7) as u8,
+            c_rm: (inst & 0xf) as u8,
+        }
+    }
+}
+
+#[derive(Debug, PartialEq)]
+pub struct CoprocessRegTfx {
+    l: bool,
+    cp_opc: u8,
+    c_rn: u8,
+    c_rd: u8,
+    cp_num: u8,
+    cp: u8,
+    c_rm: u8,
+}
+
+impl From<u32> for CoprocessRegTfx {
+    fn from(inst: u32) -> Self {
+        Self {
+            l: (inst >> 19 & 1) == 1,
+            cp_opc: (inst >> 20 & 0xf) as u8,
+            c_rn: (inst >> 15 & 0xf) as u8,
+            c_rd: (inst >> 11 & 0xf) as u8,
+            cp_num: (inst >> 7 & 0xf) as u8,
+            cp: (inst >> 5 & 0x7) as u8,
+            c_rm: (inst & 0xf) as u8,
         }
     }
 }
