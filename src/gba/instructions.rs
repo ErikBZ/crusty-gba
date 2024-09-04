@@ -85,7 +85,7 @@ impl From<u32> for Opcode {
         let cond = Conditional::from(inst);
         if is_data_processing(inst) {
             let op = DataProcessingOp::from(inst);
-            let code = (inst >> 20) & 0xf;
+            let code = (inst >> 21) & 0xf;
             match code {
                 0 => Opcode::AND(cond, op),
                 1 => Opcode::EOR(cond, op),
@@ -166,16 +166,16 @@ impl Opcode {
             | Opcode::SBC(c, o)
             | Opcode::RSC(c, o)
             | Opcode::RSB(c, o) => {
-                format!("{}{} {} r{} r{}, <{}>", self, c, o.s, o.rd, o.rn, o.operand)
+                format!("{}{} {} r{} r{}, <{:#x}>", self, c, o.s, o.rd, o.rn, o.operand)
             }
             Opcode::TST(c, o) | Opcode::TEQ(c, o) => {
-                format!("{}{} r{}, <{}>", self, c, o.rn, o.operand)
+                format!("{}{} r{}, <{:#x}>", self, c, o.rn, o.operand)
             }
             Opcode::CMP(c, o) | Opcode::CMN(c, o) => {
-                format!("{}{} r{}, <{}>", self, c, o.rd, o.operand)
+                format!("{}{} r{}, <{:#x}>", self, c, o.rd, o.operand)
             }
             Opcode::MOV(c, o) | Opcode::MVN(c, o) => {
-                format!("{}{} {} r{}, <{}>", self, c, o.s, o.rd, o.operand)
+                format!("{}{} {} r{}, <{:#x}>", self, c, o.s, o.rd, o.operand)
             }
             Opcode::MLA(c, o) => {
                 format!(
@@ -193,7 +193,7 @@ impl Opcode {
                 )
             }
             Opcode::B(c, o) | Opcode::BL(c, o) => {
-                format!("{}{} +{:x}", self, c, o.offset)
+                format!("{}{} +{:#x}", self, c, o.offset)
             }
             Opcode::BX(c, o) => {
                 format!("{}{} r{}", self, c, o.rn)
@@ -201,10 +201,8 @@ impl Opcode {
             Opcode::SWP(c, o) => {
                 format!("{}{} {} r{}, r{}, r{}", self, c, o.b, o.rd, o.rm, o.rn)
             }
-            Opcode::LDM(c, o) | Opcode::STM(c, o) => {
-                println!("{:?}", o);
+            Opcode::LDM(c, _) | Opcode::STM(c, _) => {
                 // TODO: This is actually more complicated
-                println!("0000000000{:0b}", o.to_u32());
                 format!("{}{}", self, c)
             }
             Opcode::LDR(c, _) | Opcode::STR(c, _) => {
@@ -234,9 +232,9 @@ pub struct DataProcessingOp {
 impl From<u32> for DataProcessingOp {
     fn from(inst: u32) -> Self {
         DataProcessingOp {
-            s: (inst >> 19 & 0x1) == 0x1,
-            rd: (inst >> 11 & 0xf) as u8,
-            rn: (inst >> 15 & 0xf) as u8,
+            s: (inst >> 20 & 0x1) == 0x1,
+            rd: (inst >> 12 & 0xf) as u8,
+            rn: (inst >> 16 & 0xf) as u8,
             operand: (inst & 0xfff) as u16,
         }
     }
@@ -256,11 +254,11 @@ pub struct MultiplyOp {
 impl From<u32> for MultiplyOp {
     fn from(inst: u32) -> Self {
         Self {
-            a: (inst >> 20 & 0x1) == 0x1,
-            s: (inst >> 19 & 0x1) == 0x1,
-            rd: (inst >> 15 & 0xf) as u8,
-            rn: (inst >> 11 & 0xf) as u8,
-            rs: (inst >> 7 & 0xf) as u8,
+            a: (inst >> 21 & 0x1) == 0x1,
+            s: (inst >> 20 & 0x1) == 0x1,
+            rd: (inst >> 16 & 0xf) as u8,
+            rn: (inst >> 12 & 0xf) as u8,
+            rs: (inst >> 8 & 0xf) as u8,
             rm: (inst & 0xf) as u8,
         }
     }
@@ -282,12 +280,12 @@ pub struct MultiplyLongOp {
 impl From<u32> for MultiplyLongOp {
     fn from(inst: u32) -> Self {
         Self {
-            u: (inst >> 21 & 0x1) == 0x1,
-            a: (inst >> 20 & 0x1) == 0x1,
-            s: (inst >> 19 & 0x1) == 0x1,
-            rd_hi: (inst >> 15 & 0xf) as u8,
-            rd_lo: (inst >> 11 & 0xf) as u8,
-            rs: (inst >> 7 & 0xf) as u8,
+            u: (inst >> 22 & 0x1) == 0x1,
+            a: (inst >> 21 & 0x1) == 0x1,
+            s: (inst >> 20 & 0x1) == 0x1,
+            rd_hi: (inst >> 16 & 0xf) as u8,
+            rd_lo: (inst >> 12 & 0xf) as u8,
+            rs: (inst >> 8 & 0xf) as u8,
             rm: (inst & 0xf) as u8,
         }
     }
@@ -304,9 +302,9 @@ pub struct SingleDataSwapOp {
 impl From<u32> for SingleDataSwapOp {
     fn from(inst: u32) -> Self {
         Self {
-            b: (inst >> 21 & 0x1) == 0x1,
-            rn: (inst >> 15 & 0xf) as u8,
-            rd: (inst >> 11 & 0xf) as u8,
+            b: (inst >> 22 & 0x1) == 0x1,
+            rn: (inst >> 16 & 0xf) as u8,
+            rd: (inst >> 12 & 0xf) as u8,
             rm: (inst & 0xf) as u8,
         }
     }
@@ -334,8 +332,8 @@ pub struct BranchOp {
 impl From<u32> for BranchOp {
     fn from(inst: u32) -> Self {
         Self {
-            l: (inst >> 24 & 0x1) == 0x1,
-            offset: (inst & 0xfffff) as u32,
+            l: (inst >> 25 & 0x1) == 0x1,
+            offset: (inst & 0xffffff) as u32,
         }
     }
 }
@@ -358,8 +356,8 @@ impl From<u32> for HalfwordRegOffset {
         Self {
             p: (inst >> 24 & 1) == 1,
             u: (inst >> 23 & 1) == 1,
-            w: (inst >> 20 & 1) == 1,
-            l: (inst >> 19 & 1) == 1,
+            w: (inst >> 21 & 1) == 1,
+            l: (inst >> 20 & 1) == 1,
             s: (inst >> 6 & 1) == 1,
             h: (inst >> 5 & 1) == 1,
             rn: (inst >> 15 & 0xf) as u8,
@@ -388,13 +386,13 @@ impl From<u32> for HalfwordImmOffset {
         Self {
             p: (inst >> 24 & 1) == 1,
             u: (inst >> 23 & 1) == 1,
-            w: (inst >> 20 & 1) == 1,
-            l: (inst >> 19 & 1) == 1,
+            w: (inst >> 21 & 1) == 1,
+            l: (inst >> 20 & 1) == 1,
             s: (inst >> 6 & 1) == 1,
             h: (inst >> 5 & 1) == 1,
-            rn: (inst >> 15 & 0xf) as u8,
-            rd: (inst >> 11 & 0xf) as u8,
-            offset_a: (inst >> 7 & 0xf) as u8,
+            rn: (inst >> 16 & 0xf) as u8,
+            rd: (inst >> 12 & 0xf) as u8,
+            offset_a: (inst >> 8 & 0xf) as u8,
             offset_b: (inst & 0xf) as u8,
         }
     }
@@ -416,15 +414,15 @@ pub struct SingleDataTfx {
 impl From<u32> for SingleDataTfx {
     fn from(inst: u32) -> Self {
         Self {
-            i: (inst >> 24 & 1) == 1,
-            p: (inst >> 23 & 1) == 1,
-            u: (inst >> 22 & 1) == 1,
-            b: (inst >> 21 & 1) == 1,
-            w: (inst >> 20 & 1) == 1,
-            l: (inst >> 19 & 1) == 1,
-            rn: (inst >> 15 & 0xf) as u8,
-            rd: (inst >> 11 & 0xf) as u8,
-            offset: (inst >> 15 & 0xfff) as u16,
+            i: (inst >> 25 & 1) == 1,
+            p: (inst >> 24 & 1) == 1,
+            u: (inst >> 23 & 1) == 1,
+            b: (inst >> 22 & 1) == 1,
+            w: (inst >> 21 & 1) == 1,
+            l: (inst >> 20 & 1) == 1,
+            rn: (inst >> 16 & 0xf) as u8,
+            rd: (inst >> 12 & 0xf) as u8,
+            offset: (inst & 0xfff) as u16,
         }
     }
 }
@@ -443,12 +441,12 @@ pub struct BlockDataTransfer {
 impl From<u32> for BlockDataTransfer {
     fn from(inst: u32) -> Self {
         Self {
-            p: (inst >> 23 & 1) == 1,
-            u: (inst >> 22 & 1) == 1,
-            s: (inst >> 21 & 1) == 1,
-            w: (inst >> 20 & 1) == 1,
-            l: (inst >> 19 & 1) == 1,
-            rn: (inst >> 15 & 0xf) as u8,
+            p: (inst >> 24 & 1) == 1,
+            u: (inst >> 23 & 1) == 1,
+            s: (inst >> 22 & 1) == 1,
+            w: (inst >> 21 & 1) == 1,
+            l: (inst >> 20 & 1) == 1,
+            rn: (inst >> 16 & 0xf) as u8,
             register_list: (inst & 0xffff) as u16,
         }
     }
@@ -494,14 +492,14 @@ pub struct CoprocessDataTfx {
 impl From<u32> for CoprocessDataTfx {
     fn from(inst: u32) -> Self {
         Self {
-            p: (inst >> 23 & 1) == 1,
-            u: (inst >> 22 & 1) == 1,
-            n: (inst >> 21 & 1) == 1,
-            w: (inst >> 20 & 1) == 1,
-            l: (inst >> 19 & 1) == 1,
-            rn: (inst >> 15 & 0xf) as u8,
-            c_rd: (inst >> 11 & 0xf) as u8,
-            cp_num: (inst >> 7 & 0xf) as u8,
+            p: (inst >> 24 & 1) == 1,
+            u: (inst >> 23 & 1) == 1,
+            n: (inst >> 22 & 1) == 1,
+            w: (inst >> 21 & 1) == 1,
+            l: (inst >> 20 & 1) == 1,
+            rn: (inst >> 16 & 0xf) as u8,
+            c_rd: (inst >> 12 & 0xf) as u8,
+            cp_num: (inst >> 8 & 0xf) as u8,
             offset: (inst & 0xffff) as u16,
         }
     }
@@ -520,10 +518,10 @@ pub struct CoprocessDataOp {
 impl From<u32> for CoprocessDataOp {
     fn from(inst: u32) -> Self {
         Self {
-            cp_opc: (inst >> 19 & 0xf) as u8,
-            c_rn: (inst >> 15 & 0xf) as u8,
-            c_rd: (inst >> 11 & 0xf) as u8,
-            cp_num: (inst >> 7 & 0xf) as u8,
+            cp_opc: (inst >> 20 & 0xf) as u8,
+            c_rn: (inst >> 16 & 0xf) as u8,
+            c_rd: (inst >> 12 & 0xf) as u8,
+            cp_num: (inst >> 8 & 0xf) as u8,
             cp: (inst >> 5 & 0x7) as u8,
             c_rm: (inst & 0xf) as u8,
         }
@@ -544,11 +542,11 @@ pub struct CoprocessRegTfx {
 impl From<u32> for CoprocessRegTfx {
     fn from(inst: u32) -> Self {
         Self {
-            l: (inst >> 19 & 1) == 1,
-            cp_opc: (inst >> 20 & 0xf) as u8,
-            c_rn: (inst >> 15 & 0xf) as u8,
-            c_rd: (inst >> 11 & 0xf) as u8,
-            cp_num: (inst >> 7 & 0xf) as u8,
+            l: (inst >> 20 & 1) == 1,
+            cp_opc: (inst >> 21 & 0xf) as u8,
+            c_rn: (inst >> 16 & 0xf) as u8,
+            c_rd: (inst >> 12 & 0xf) as u8,
+            cp_num: (inst >> 8 & 0xf) as u8,
             cp: (inst >> 5 & 0x7) as u8,
             c_rm: (inst & 0xf) as u8,
         }
