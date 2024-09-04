@@ -76,6 +76,12 @@ pub enum Opcode {
     STR(Conditional, SingleDataTfx),
     LDM(Conditional, BlockDataTransfer),
     STM(Conditional, BlockDataTransfer),
+    CDP(Conditional, CoprocessDataOp),
+    LDC(Conditional, CoprocessDataTfx),
+    STC(Conditional, CoprocessDataTfx),
+    MRC(Conditional, CoprocessRegTfx),
+    MCR(Conditional, CoprocessRegTfx),
+    // TODO: Implement Half-word opcodes
     #[strum(to_string = "Undefined: {0}")]
     Undef(u32),
 }
@@ -147,6 +153,23 @@ impl From<u32> for Opcode {
             } else {
                 Opcode::STM(cond, op)
             }
+        } else if is_coprocessor_data_op(inst) {
+            let op = CoprocessDataOp::from(inst);
+            Opcode::CDP(cond, op)
+        } else if is_coprocessor_data_tfx(inst) {
+            let op = CoprocessDataTfx::from(inst);
+            if op.l {
+                Opcode::LDC(cond, op)
+            } else {
+                Opcode::STC(cond, op)
+            }
+        } else if is_coprocessor_reg_tfx(inst) {
+            let op = CoprocessRegTfx::from(inst);
+            if op.l {
+                Opcode::MRC(cond, op)
+            } else {
+                Opcode::MCR(cond, op)
+            }
         } else {
             Opcode::Undef(inst)
         }
@@ -201,17 +224,22 @@ impl Opcode {
             Opcode::SWP(c, o) => {
                 format!("{}{} {} r{}, r{}, r{}", self, c, o.b, o.rd, o.rm, o.rn)
             }
+            // TODO: Expand this
             Opcode::LDM(c, _) | Opcode::STM(c, _) => {
                 // TODO: This is actually more complicated
                 format!("{}{}", self, c)
             }
-            Opcode::LDR(c, _) | Opcode::STR(c, _) => {
+            // TODO: Expand this
+            Opcode::LDR(c, _) | Opcode::STR(c, _) |
+            Opcode::CDP(c, _) | Opcode::LDC(c, _) |
+            Opcode::STC(c, _) | Opcode::MRC(c, _) |
+            Opcode::MCR(c, _) => {
                 // TODO: This is actually more complicated
                 format!("{}{}", self, c)
             }
             Opcode::SWI(c) => {
                 format!("{}{}", self, c)
-            }
+            },
             Opcode::Undef(_) => {
                 format!("undefined")
             }
@@ -452,30 +480,6 @@ impl From<u32> for BlockDataTransfer {
     }
 }
 
-impl BlockDataTransfer {
-    fn to_u32(&self) -> u32 {
-        let mut sol = 0;
-        if self.p {
-            sol |= 1 << 23
-        }
-        if self.u {
-            sol |= 1 << 22
-        }
-        if self.s {
-            sol |= 1 << 21
-        }
-        if self.w {
-            sol |= 1 << 20
-        }
-        if self.l {
-            sol |= 1 << 19
-        }
-        sol |= (self.rn as u32) << 15;
-        sol |= self.register_list as u32;
-        sol
-    }
-}
-
 #[derive(Debug, PartialEq)]
 pub struct CoprocessDataTfx {
     p: bool,
@@ -574,7 +578,7 @@ pub fn is_branch_and_exchange(inst: u32) -> bool {
 }
 
 pub fn is_halfword_data_tfx_reg(inst: u32) -> bool {
-    inst & 0x0e400f90 == 0x00000090
+   inst & 0x0e400f90 == 0x00000090
 }
 
 pub fn is_halfword_data_tfx_imm(inst: u32) -> bool {
