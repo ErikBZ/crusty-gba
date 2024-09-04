@@ -21,9 +21,9 @@ fn main() {
     for i in 0..100 {
         let op = Opcode::from(codes[i]);
         if let Opcode::Undef(inst) = op {
-            println!("Undef: {:032b}", inst);
+            println!("{:0x}", inst);
         } else {
-            println!("{}", op.string_repr());
+            println!("{:0b} {:0x} {}", codes[i], codes[i], op.string_repr());
         }
     }
 }

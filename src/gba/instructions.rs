@@ -201,8 +201,10 @@ impl Opcode {
             Opcode::SWP(c, o) => {
                 format!("{}{} {} r{}, r{}, r{}", self, c, o.b, o.rd, o.rm, o.rn)
             }
-            Opcode::LDM(c, _) | Opcode::STM(c, _) => {
+            Opcode::LDM(c, o) | Opcode::STM(c, o) => {
+                println!("{:?}", o);
                 // TODO: This is actually more complicated
+                println!("0000000000{:0b}", o.to_u32());
                 format!("{}{}", self, c)
             }
             Opcode::LDR(c, _) | Opcode::STR(c, _) => {
@@ -348,7 +350,7 @@ pub struct HalfwordRegOffset {
     h: bool,
     rn: u8,
     rd: u8,
-    rm: u8
+    rm: u8,
 }
 
 impl From<u32> for HalfwordRegOffset {
@@ -378,7 +380,7 @@ pub struct HalfwordImmOffset {
     rn: u8,
     rd: u8,
     offset_a: u8,
-    offset_b: u8
+    offset_b: u8,
 }
 
 impl From<u32> for HalfwordImmOffset {
@@ -408,7 +410,7 @@ pub struct SingleDataTfx {
     l: bool,
     rn: u8,
     rd: u8,
-    offset: u16
+    offset: u16,
 }
 
 impl From<u32> for SingleDataTfx {
@@ -435,7 +437,7 @@ pub struct BlockDataTransfer {
     w: bool,
     l: bool,
     rn: u8,
-    register_list: u16
+    register_list: u16,
 }
 
 impl From<u32> for BlockDataTransfer {
@@ -447,8 +449,32 @@ impl From<u32> for BlockDataTransfer {
             w: (inst >> 20 & 1) == 1,
             l: (inst >> 19 & 1) == 1,
             rn: (inst >> 15 & 0xf) as u8,
-            register_list: (inst >> 15 & 0xffff) as u16,
+            register_list: (inst & 0xffff) as u16,
         }
+    }
+}
+
+impl BlockDataTransfer {
+    fn to_u32(&self) -> u32 {
+        let mut sol = 0;
+        if self.p {
+            sol |= 1 << 23
+        }
+        if self.u {
+            sol |= 1 << 22
+        }
+        if self.s {
+            sol |= 1 << 21
+        }
+        if self.w {
+            sol |= 1 << 20
+        }
+        if self.l {
+            sol |= 1 << 19
+        }
+        sol |= (self.rn as u32) << 15;
+        sol |= self.register_list as u32;
+        sol
     }
 }
 
@@ -476,7 +502,7 @@ impl From<u32> for CoprocessDataTfx {
             rn: (inst >> 15 & 0xf) as u8,
             c_rd: (inst >> 11 & 0xf) as u8,
             cp_num: (inst >> 7 & 0xf) as u8,
-            offset: (inst & 0xffff) as u16
+            offset: (inst & 0xffff) as u16,
         }
     }
 }
@@ -558,7 +584,7 @@ pub fn is_halfword_data_tfx_imm(inst: u32) -> bool {
 }
 
 pub fn is_single_data_tfx(inst: u32) -> bool {
-    inst & 0x0e000000 == 0x06000000
+    inst & 0x0c000000 == 0x04000000
 }
 
 pub fn is_undefined(inst: u32) -> bool {
