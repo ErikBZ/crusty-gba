@@ -4,7 +4,7 @@ use std::io::prelude::*;
 
 extern crate strum_macros;
 
-use gba::instructions::Opcode;
+use gba::arm::Opcode;
 
 fn main() {
     // TODO: Just put test.gba in the root dir

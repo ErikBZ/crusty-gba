@@ -1,2 +1,3 @@
 mod cpu;
-pub mod instructions;
+pub mod arm;
+pub mod thumb;

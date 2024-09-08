@@ -65,9 +65,12 @@ pub enum Opcode {
     MUL(Conditional, MultiplyOp),
     MLA(Conditional, MultiplyOp),
     // TODO: Change these to UMULL, UMLAL, SMULL, SMLAL
-    MULL(Conditional, MultiplyLongOp),
-    MLAL(Conditional, MultiplyLongOp),
+    UMULL(Conditional, MultiplyLongOp),
+    SMULL(Conditional, MultiplyLongOp),
+    UMLAL(Conditional, MultiplyLongOp),
+    SMLAL(Conditional, MultiplyLongOp),
     SWP(Conditional, SingleDataSwapOp),
+    SWPB(Conditional, SingleDataSwapOp),
     B(Conditional, BranchOp),
     BL(Conditional, BranchOp),
     BX(Conditional, BranchExchangeOp),
@@ -81,6 +84,8 @@ pub enum Opcode {
     STC(Conditional, CoprocessDataTfx),
     MRC(Conditional, CoprocessRegTfx),
     MCR(Conditional, CoprocessRegTfx),
+    MRS(Conditional, PsrTransferOp),
+    MSR(Conditional, PsrTransferOp),
     // TODO: Implement Half-word opcodes
     #[strum(to_string = "Undefined: {0}")]
     Undef(u32),
@@ -120,13 +125,25 @@ impl From<u32> for Opcode {
         } else if is_multiply_long(inst) {
             let op = MultiplyLongOp::from(inst);
             if op.a {
-                Opcode::MLAL(cond, op)
+                if op.s {
+                    Opcode::SMLAL(cond, op)
+                } else {
+                    Opcode::UMLAL(cond, op)
+                }
             } else {
-                Opcode::MULL(cond, op)
+                if op.s {
+                    Opcode::SMULL(cond, op)
+                } else {
+                    Opcode::UMULL(cond, op)
+                }
             }
         } else if is_single_data_swap(inst) {
             let op = SingleDataSwapOp::from(inst);
-            Opcode::SWP(cond, op)
+            if op.b {
+                Opcode::SWPB(cond, op)
+            } else {
+                Opcode::SWP(cond, op)
+            }
         } else if is_branch_and_exchange(inst) {
             let op = BranchExchangeOp::from(inst);
             Opcode::BX(cond, op)
@@ -170,6 +187,13 @@ impl From<u32> for Opcode {
             } else {
                 Opcode::MCR(cond, op)
             }
+        } else if is_psr_transfer(inst) {
+            let op = PsrTransferOp::from(inst);
+            if is_mrs_op(inst) {
+                Opcode::MRS(cond, op)
+            } else {
+                Opcode::MSR(cond, op)
+            }
         } else {
             Opcode::Undef(inst)
         }
@@ -209,7 +233,8 @@ impl Opcode {
             Opcode::MUL(c, o) => {
                 format!("{}{} {} r{}, r{}, r{}", self, c, o.s, o.rd, o.rm, o.rs)
             }
-            Opcode::MULL(c, o) | Opcode::MLAL(c, o) => {
+            Opcode::SMULL(c, o) | Opcode::SMLAL(c, o) |
+            Opcode::UMULL(c, o) | Opcode::UMLAL(c, o) => {
                 format!(
                     "{}{} {} r{}, r{}, r{}, r{}",
                     self, c, o.s, o.rd_hi, o.rd_lo, o.rm, o.rs
@@ -221,7 +246,7 @@ impl Opcode {
             Opcode::BX(c, o) => {
                 format!("{}{} r{}", self, c, o.rn)
             }
-            Opcode::SWP(c, o) => {
+            Opcode::SWP(c, o) | Opcode::SWPB(c, o) => {
                 format!("{}{} {} r{}, r{}, r{}", self, c, o.b, o.rd, o.rm, o.rn)
             }
             // TODO: Expand this
@@ -233,7 +258,8 @@ impl Opcode {
             Opcode::LDR(c, _) | Opcode::STR(c, _) |
             Opcode::CDP(c, _) | Opcode::LDC(c, _) |
             Opcode::STC(c, _) | Opcode::MRC(c, _) |
-            Opcode::MCR(c, _) => {
+            Opcode::MCR(c, _) | Opcode::MSR(c, _) |
+            Opcode::MRS(c, _) => {
                 // TODO: This is actually more complicated
                 format!("{}{}", self, c)
             }
@@ -360,7 +386,7 @@ pub struct BranchOp {
 impl From<u32> for BranchOp {
     fn from(inst: u32) -> Self {
         Self {
-            l: (inst >> 25 & 0x1) == 0x1,
+            l: (inst >> 24 & 0x1) == 0x1,
             offset: (inst & 0xffffff) as u32,
         }
     }
@@ -557,6 +583,29 @@ impl From<u32> for CoprocessRegTfx {
     }
 }
 
+#[derive(Debug, PartialEq)]
+pub struct PsrTransferOp {
+    i: bool,
+    p: bool,
+    rd: u8,
+    rm: u8,
+    rotate: u8,
+    imm: u8,
+}
+
+impl From<u32> for PsrTransferOp {
+    fn from(inst: u32) -> Self {
+        Self {
+            i: (inst >> 25 & 1) == 1,
+            p: (inst >> 22 & 1) == 1,
+            rd: (inst >> 12 & 0xf) as u8,
+            rm: (inst & 0xf) as u8,
+            rotate: (inst >> 8 & 0xf) as u8,
+            imm: (inst & 0xff) as u8
+        }
+    }
+}
+
 pub fn is_data_processing(inst: u32) -> bool {
     inst & 0x0e000000 == 0x02000000
 }
@@ -617,6 +666,16 @@ pub fn is_software_interrupt(inst: u32) -> bool {
     inst & 0x0f000000 == 0x0f000000
 }
 
+pub fn is_mrs_op(inst: u32) -> bool {
+    inst & 0x0fbf0fff == 0x010f0000
+}
+
+pub fn is_psr_transfer(inst: u32) -> bool {
+    (inst & 0x0fbffff0 == 0x010f0000) ||
+    (inst & 0x0fbf0fff == 0x010f0000) ||
+    (inst & 0x0dbff000 == 0x0128f000)
+}
+
 mod test {
     use super::*;
 
@@ -638,6 +697,15 @@ mod test {
                 offset: 0b11000,
             },
         );
+        println!("{:?}", op);
+        println!("{:?}", op2);
         assert_eq!(op, op2);
+    }
+
+    #[test]
+    fn test_mrs_op_check() {
+        let inst: u32 = 0xe14fc000;
+        let is_mrs = is_mrs_op(inst);
+        assert_eq!(is_mrs, true);
     }
 }
