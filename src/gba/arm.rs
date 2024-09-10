@@ -87,8 +87,22 @@ pub enum Opcode {
     MRS(Conditional, PsrTransferOp),
     MSR(Conditional, PsrTransferOp),
     // TODO: Implement Half-word opcodes
+    STRH(Conditional, HalfwordDataOp),
+    LDRH(Conditional, HalfwordDataOp),
+    LDRSB(Conditional, HalfwordDataOp),
     #[strum(to_string = "Undefined: {0}")]
     Undef(u32),
+}
+
+#[derive(Debug, PartialEq)]
+pub enum AddressingMode3 {
+    Imm { byte_offset: u8 },
+    PreIndexedImm { byte_offset: u8 },
+    PostIndexedImm { byte_offset: u8 },
+    Reg { rm: u8 },
+    PreIndexedReg { rm: u8 },
+    PostIndexedReg { rm: u8 },
+
 }
 
 impl From<u32> for Opcode {
@@ -194,6 +208,14 @@ impl From<u32> for Opcode {
             } else {
                 Opcode::MSR(cond, op)
             }
+        } else if is_halfword_data_tfx_imm(inst) || is_halfword_data_tfx_reg(inst) {
+            let op = HalfwordDataOp::from(inst);
+            match (op.l, op.h) {
+                (false, false) => unreachable!(),
+                (false, true) => Opcode::STRH(cond, op),
+                (true, false) => Opcode::LDRH(cond, op),
+                (true, true) => Opcode::LDRSB(cond, op),
+            }
         } else {
             Opcode::Undef(inst)
         }
@@ -268,6 +290,9 @@ impl Opcode {
             },
             Opcode::Undef(_) => {
                 format!("undefined")
+            }
+            _ => {
+                format!("Nothing")
             }
         }
     }
@@ -606,6 +631,46 @@ impl From<u32> for PsrTransferOp {
     }
 }
 
+#[derive(Debug, PartialEq)]
+pub struct HalfwordDataOp {
+    mode: AddressingMode3,
+    p: bool,
+    u: bool,
+    w: bool,
+    l: bool,
+    s: bool,
+    h: bool,
+    rn: u8,
+    rd: u8,
+}
+
+impl From<u32> for HalfwordDataOp {
+    fn from(inst: u32) -> Self {
+        let p = (inst >> 24 & 1) == 1;
+        let byte_offset = ((inst & 0xff) | (inst >> 8 & 0xff)) as u8;
+        let rm = (inst & 0xf) as u8;
+
+        let mode = match (is_halfword_data_tfx_imm(inst), p) {
+            (false, false) => AddressingMode3::PostIndexedReg { rm },
+            (false, true) => AddressingMode3::PreIndexedReg { rm },
+            (true, false) => AddressingMode3::PostIndexedImm { byte_offset },
+            (true, true) => AddressingMode3::PreIndexedImm { byte_offset },
+        };
+
+        Self {
+            p,
+            u: (inst >> 23 & 1) == 1,
+            w: (inst >> 21 & 1) == 1,
+            l: (inst >> 20 & 1) == 1,
+            s: (inst >> 6 & 1) == 1,
+            h: (inst >> 5 & 1) == 1,
+            rn: (inst >> 16 & 0xf) as u8,
+            rd: (inst >> 12 & 0xf) as u8,
+            mode,
+        }
+    }
+}
+
 pub fn is_data_processing(inst: u32) -> bool {
     inst & 0x0e000000 == 0x02000000
 }
@@ -707,5 +772,41 @@ mod test {
         let inst: u32 = 0xe14fc000;
         let is_mrs = is_mrs_op(inst);
         assert_eq!(is_mrs, true);
+    }
+
+    #[test]
+    fn test_strb_decode() {
+        let inst: u32 = 0xe5cc3301;
+        let op = Opcode::from(inst);
+        let op2 = Opcode::STR(Conditional::AL, SingleDataTfx {
+            i: false,
+            p: true,
+            u: true,
+            b: true,
+            w: false,
+            l: false,
+            rn: 12,
+            rd: 3,
+            offset: 0x301,
+        });
+        assert_eq!(op, op2);
+    }
+
+    #[test]
+    fn test_strh_decode() {
+        let inst: u32 = 0xe08180b3;
+        let op = Opcode::from(inst);
+        let op2 = Opcode::STRH(Conditional::AL, HalfwordDataOp{
+            p: false,
+            u: true,
+            w: false,
+            l: false,
+            h: true,
+            s: false,
+            rn: 1,
+            rd: 8,
+            mode: AddressingMode3::PostIndexedReg { rm: 3 },
+        });
+        assert_eq!(op, op2);
     }
 }
