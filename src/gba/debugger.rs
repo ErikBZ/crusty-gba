@@ -1,16 +1,29 @@
+use core::fmt;
+
 #[derive(Debug, PartialEq)]
 pub enum DebuggerCommand {
     BreakPoint(u32),
     Continue,
+    Info,
     Next,
     Quit,
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone)]
 pub enum CommandParseError {
     NoCommandGiven,
     CommandNotRecognized(String),
     CommandMissingArguments(String),
+}
+
+impl fmt::Display for CommandParseError {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            Self::NoCommandGiven => write!(f, ""),
+            Self::CommandNotRecognized(s) => write!(f, "Command not recognized: {s}"),
+            Self::CommandMissingArguments(s) => write!(f, "Command missing arguements: {s}"),
+        }
+    }
 }
 
 impl DebuggerCommand {
@@ -26,23 +39,24 @@ impl DebuggerCommand {
                 let point: Result<u32, _> = match cmd_iter.next() {
                     Some(n) => n.parse(),
                     None => return Err(
-                        CommandParseError::CommandMissingArguments("Break command missing instruction address".to_string())
+                        CommandParseError::CommandMissingArguments(command.to_string())
                     ),
                 };
 
                 let point = match point {
                     Ok(n) => n,
                     Err(_) => return Err(
-                        CommandParseError::CommandNotRecognized("Break command needs unsigned integer input".to_string())
+                        CommandParseError::CommandNotRecognized(command.to_string())
                     )
                 };
 
                 DebuggerCommand::BreakPoint(point)
             },
             "c" | "continue" => DebuggerCommand::Continue,
+            "i" | "info" => DebuggerCommand::Info,
             "n" | "next" => DebuggerCommand::Next,
             "q" | "quit" => DebuggerCommand::Quit,
-            _ => return Err(CommandParseError::CommandNotRecognized(cmd.to_string())),
+            _ => return Err(CommandParseError::CommandNotRecognized(command.to_string())),
         };
 
         if cmd_iter.count() > 0 {

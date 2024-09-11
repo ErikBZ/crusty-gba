@@ -1,4 +1,4 @@
-#[derive(Default)]
+#[derive(Default, Debug)]
 pub struct CPU {
     registers: [u32; 16],
     cpsr: u32,

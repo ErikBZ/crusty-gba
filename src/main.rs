@@ -25,6 +25,7 @@ fn main() {
 fn debug_bios(codes: Vec<u32>) {
     use std::io;
     let mut cpu = CPU::default();
+    let mut ram: [u32;128] = [0;128];
 
     loop {
         let mut input = String::new();
@@ -38,12 +39,22 @@ fn debug_bios(codes: Vec<u32>) {
 
         let cmd = match DebuggerCommand::parse(&input) {
             Ok(dc) => dc,
-            Err(e) => println!("{:?}", e),
+            Err(e) => {
+                println!("{}", e);
+                continue;
+            },
         };
+
+        match cmd {
+            DebuggerCommand::BreakPoint(_) => println!("Adding break point"),
+            DebuggerCommand::Continue => println!("Continuing"),
+            DebuggerCommand::Next => println!("Going to next instruction"),
+            DebuggerCommand::Info => println!("{:?}", cpu),
+            DebuggerCommand::Quit => break,
+        }
     }
 }
 
-#[warn(dead_code)]
 fn dump_opcodes(num_of_lines: usize, codes: Vec<u32>) -> Result<(), ()> {
     if num_of_lines < codes.len() {
         return Err(())

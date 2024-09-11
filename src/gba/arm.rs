@@ -226,6 +226,7 @@ impl From<u32> for ArmInstruction {
 }
 
 impl ArmInstruction {
+
     pub fn string_repr(&self) -> String {
         match self {
             ArmInstruction::AND(c, o)
