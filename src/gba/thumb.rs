@@ -1,5 +1,5 @@
 #[derive(Debug, PartialEq)]
-pub enum ThumbOpCode {
+pub enum ThumbInstruction {
     ADC{rd: u8, rs: u8},
     ADD(InnerAdd),
     AND{rd: u8, rs: u8},
@@ -136,7 +136,7 @@ fn get_triplet(value: u16, shift: u32) -> u8 {
     (value >> shift & 0x7) as u8
 }
 
-impl From<u16> for ThumbOpCode {
+impl From<u16> for ThumbInstruction {
     fn from(value: u16) -> Self {
         if value & 0xf800 == 0x1800 {
             let i: u8 = (value >> 10 & 0x1) as u8;
@@ -145,10 +145,10 @@ impl From<u16> for ThumbOpCode {
             let rs = get_triplet(value, 3);
             let rd = get_triplet(value, 0);
             match (i, op) {
-                (0, 0) => ThumbOpCode::ADD(InnerAdd::AddReg { rd, rs, rn: rn_offset }),
-                (0, 1) => ThumbOpCode::SUB(InnerSub::SubReg { rd, rs, rn: rn_offset }),
-                (1, 0) => ThumbOpCode::ADD(InnerAdd::AddImm { rd, rs, offset: rn_offset }),
-                (1, 1) => ThumbOpCode::SUB(InnerSub::SubImm { rd, rs, offset: rn_offset }),
+                (0, 0) => ThumbInstruction::ADD(InnerAdd::AddReg { rd, rs, rn: rn_offset }),
+                (0, 1) => ThumbInstruction::SUB(InnerSub::SubReg { rd, rs, rn: rn_offset }),
+                (1, 0) => ThumbInstruction::ADD(InnerAdd::AddImm { rd, rs, offset: rn_offset }),
+                (1, 1) => ThumbInstruction::SUB(InnerSub::SubImm { rd, rs, offset: rn_offset }),
                 // we're only testing 2 bits so anything other than above is impossible
                 (_, _) => unreachable!(),
             }
@@ -158,9 +158,9 @@ impl From<u16> for ThumbOpCode {
             let rs: u8 = (value >> 3 & 0x7) as u8;
             let rd: u8 = (value & 0x7) as u8;
             match opcode {
-                0 => ThumbOpCode::LSL(InnerShift::Reg { offset, rs, rd }),
-                1 => ThumbOpCode::LSR(InnerShift::Reg { offset, rs, rd }),
-                2 => ThumbOpCode::ASR(InnerShift::Reg { offset, rs, rd }),
+                0 => ThumbInstruction::LSL(InnerShift::Reg { offset, rs, rd }),
+                1 => ThumbInstruction::LSR(InnerShift::Reg { offset, rs, rd }),
+                2 => ThumbInstruction::ASR(InnerShift::Reg { offset, rs, rd }),
                 // The bits in opcode can be 0x3 but that means it isn't
                 // an LSL, LSR, or ASR it is an ADD/SUB
                 _ => unreachable!()
@@ -170,10 +170,10 @@ impl From<u16> for ThumbOpCode {
             let rd = get_triplet(value, 8);
             let offset = (value & 0xff) as u8;
             match op {
-                0 => ThumbOpCode::MOV(InnerMov::Offset{rd, offset}),
-                1 => ThumbOpCode::CMP(InnerCmp::CmpByteImm{rd, offset}),
-                2 => ThumbOpCode::ADD(InnerAdd::AddByteImm { rd, offset }),
-                3 => ThumbOpCode::SUB(InnerSub::SubByteImm { rd, offset }),
+                0 => ThumbInstruction::MOV(InnerMov::Offset{rd, offset}),
+                1 => ThumbInstruction::CMP(InnerCmp::CmpByteImm{rd, offset}),
+                2 => ThumbInstruction::ADD(InnerAdd::AddByteImm { rd, offset }),
+                3 => ThumbInstruction::SUB(InnerSub::SubByteImm { rd, offset }),
                 _ => unreachable!()
             }
         } else if value & 0xfc00 == 0x2000 {
@@ -181,22 +181,22 @@ impl From<u16> for ThumbOpCode {
             let rs = get_triplet(value, 3);
             let rd = get_triplet(value, 0);
             match op {
-                0 => ThumbOpCode::AND{rd, rs},
-                1 => ThumbOpCode::EOR{rd, rs},
-                2 => ThumbOpCode::LSL(InnerShift::Alu { rs, rd }),
-                3 => ThumbOpCode::LSR(InnerShift::Alu { rs, rd }),
-                4 => ThumbOpCode::ASR(InnerShift::Alu { rs, rd }),
-                5 => ThumbOpCode::ADC{rd, rs},
-                6 => ThumbOpCode::SBC{rd, rs},
-                7 => ThumbOpCode::ROR{rd, rs},
-                8 => ThumbOpCode::TST{rd, rs},
-                9 => ThumbOpCode::NEG{rd, rs},
-                10 => ThumbOpCode::CMP(InnerCmp::CmpAlu{rd, rs}),
-                11 => ThumbOpCode::CMN{rd, rs},
-                12 => ThumbOpCode::ORR{rd, rs},
-                13 => ThumbOpCode::MUL{rd, rs},
-                14 => ThumbOpCode::BIC{rd, rs},
-                15 => ThumbOpCode::MVN{rd, rs},
+                0 => ThumbInstruction::AND{rd, rs},
+                1 => ThumbInstruction::EOR{rd, rs},
+                2 => ThumbInstruction::LSL(InnerShift::Alu { rs, rd }),
+                3 => ThumbInstruction::LSR(InnerShift::Alu { rs, rd }),
+                4 => ThumbInstruction::ASR(InnerShift::Alu { rs, rd }),
+                5 => ThumbInstruction::ADC{rd, rs},
+                6 => ThumbInstruction::SBC{rd, rs},
+                7 => ThumbInstruction::ROR{rd, rs},
+                8 => ThumbInstruction::TST{rd, rs},
+                9 => ThumbInstruction::NEG{rd, rs},
+                10 => ThumbInstruction::CMP(InnerCmp::CmpAlu{rd, rs}),
+                11 => ThumbInstruction::CMN{rd, rs},
+                12 => ThumbInstruction::ORR{rd, rs},
+                13 => ThumbInstruction::MUL{rd, rs},
+                14 => ThumbInstruction::BIC{rd, rs},
+                15 => ThumbInstruction::MVN{rd, rs},
                 _ => unreachable!()
             }
         } else if value & 0xfc00 == 0x4400 {
@@ -206,23 +206,23 @@ impl From<u16> for ThumbOpCode {
             let rs = get_triplet(value, 3);
             let rd = get_triplet(value, 0);
             match (op, h1, h2) {
-                (0, 0, 1) => ThumbOpCode::ADD(InnerAdd::AddHiToLow { rd, hs: rs + 8 }),
-                (0, 1, 0) => ThumbOpCode::ADD(InnerAdd::AddLowToHi { hd: rd + 8, rs }),
-                (0, 1, 1) => ThumbOpCode::ADD(InnerAdd::AddHiToHi { hd: rd + 8, hs: rs + 8}),
-                (1, 0, 1) => ThumbOpCode::CMP(InnerCmp::CmpHiToLow { rd, hs: rs + 8}),
-                (1, 1, 0) => ThumbOpCode::CMP(InnerCmp::CmpLowToHi  { hd: rd + 8, rs }),
-                (1, 1, 1) => ThumbOpCode::CMP(InnerCmp::CmpHiToHi { hd: rd + 8, hs: rs + 8}),
-                (2, 0, 1) => ThumbOpCode::MOV(InnerMov::HiToLow { rd, hs: rs + 8}),
-                (2, 1, 0) => ThumbOpCode::MOV(InnerMov::LowToHi { hd: rd + 8, rs }),
-                (2, 1, 1) => ThumbOpCode::MOV(InnerMov::HiToHi { hd: rd + 8, hs: rs + 8}),
-                (3, 0, 0) => ThumbOpCode::BX(InnerBranchEx::Low { rs }),
-                (3, 0, 1) => ThumbOpCode::BX(InnerBranchEx::Hi { hs: rs + 8 }),
+                (0, 0, 1) => ThumbInstruction::ADD(InnerAdd::AddHiToLow { rd, hs: rs + 8 }),
+                (0, 1, 0) => ThumbInstruction::ADD(InnerAdd::AddLowToHi { hd: rd + 8, rs }),
+                (0, 1, 1) => ThumbInstruction::ADD(InnerAdd::AddHiToHi { hd: rd + 8, hs: rs + 8}),
+                (1, 0, 1) => ThumbInstruction::CMP(InnerCmp::CmpHiToLow { rd, hs: rs + 8}),
+                (1, 1, 0) => ThumbInstruction::CMP(InnerCmp::CmpLowToHi  { hd: rd + 8, rs }),
+                (1, 1, 1) => ThumbInstruction::CMP(InnerCmp::CmpHiToHi { hd: rd + 8, hs: rs + 8}),
+                (2, 0, 1) => ThumbInstruction::MOV(InnerMov::HiToLow { rd, hs: rs + 8}),
+                (2, 1, 0) => ThumbInstruction::MOV(InnerMov::LowToHi { hd: rd + 8, rs }),
+                (2, 1, 1) => ThumbInstruction::MOV(InnerMov::HiToHi { hd: rd + 8, hs: rs + 8}),
+                (3, 0, 0) => ThumbInstruction::BX(InnerBranchEx::Low { rs }),
+                (3, 0, 1) => ThumbInstruction::BX(InnerBranchEx::Hi { hs: rs + 8 }),
                 (_, _, _) => unreachable!()
             }
         } else if value & 0xf800 == 0x4800 {
             let rd = get_triplet(value, 8);
             let offset = (value & 0xff) as u8;
-            ThumbOpCode::LDR(InnerLdr::PC { rd, word: offset })
+            ThumbInstruction::LDR(InnerLdr::PC { rd, word: offset })
         } else if value & 0xf200 == 0x5000 {
             let l = (value >> 11 & 1) == 1;
             let b = (value >> 10 & 1) == 1;
@@ -230,10 +230,10 @@ impl From<u16> for ThumbOpCode {
             let rb = get_triplet(value, 3);
             let rd = get_triplet(value, 0);
             match (l, b) {
-                (false, false) => ThumbOpCode::STR(InnerStr::Reg{rd, rb, ro}),
-                (false, true) => ThumbOpCode::STRB(InnerStoreLoadByte::Reg{ rd, rb ,ro }),
-                (true, false) => ThumbOpCode::LDR(InnerLdr::Reg { rd, rb, ro }),
-                (true, true) => ThumbOpCode::LDRB(InnerStoreLoadByte::Reg { rd, rb, ro }),
+                (false, false) => ThumbInstruction::STR(InnerStr::Reg{rd, rb, ro}),
+                (false, true) => ThumbInstruction::STRB(InnerStoreLoadByte::Reg{ rd, rb ,ro }),
+                (true, false) => ThumbInstruction::LDR(InnerLdr::Reg { rd, rb, ro }),
+                (true, true) => ThumbInstruction::LDRB(InnerStoreLoadByte::Reg { rd, rb, ro }),
             }
 
         } else if value & 0xf200 == 0x5200 {
@@ -243,10 +243,10 @@ impl From<u16> for ThumbOpCode {
             let rb = get_triplet(value, 3);
             let rd = get_triplet(value, 0);
             match (h, s) {
-                (false, false) => ThumbOpCode::STRH(InnerStoreLoadByte::Reg{ rd, rb, ro }),
-                (false, true) => ThumbOpCode::LDRH(InnerStoreLoadByte::Reg{ rd, rb ,ro }),
-                (true, false) => ThumbOpCode::LDSB { rd, rb, ro },
-                (true, true) => ThumbOpCode::LDSH { rd, rb, ro },
+                (false, false) => ThumbInstruction::STRH(InnerStoreLoadByte::Reg{ rd, rb, ro }),
+                (false, true) => ThumbInstruction::LDRH(InnerStoreLoadByte::Reg{ rd, rb ,ro }),
+                (true, false) => ThumbInstruction::LDSB { rd, rb, ro },
+                (true, true) => ThumbInstruction::LDSH { rd, rb, ro },
             }
         } else if value & 0xe000 == 0x6000 {
             let b = (value >> 12 & 1) == 1;
@@ -255,10 +255,10 @@ impl From<u16> for ThumbOpCode {
             let rb = get_triplet(value, 3);
             let rd = get_triplet(value, 0);
             match (l, b) {
-                (false, false) => ThumbOpCode::STR(InnerStr::Offset { offset, rb, rd }),
-                (false, true) => ThumbOpCode::STRB(InnerStoreLoadByte::Offset { offset, rb, rd }),
-                (true, false) => ThumbOpCode::LDR(InnerLdr::Offset { offset, rb, rd }),
-                (true, true) => ThumbOpCode::LDRB(InnerStoreLoadByte::Offset { offset, rb, rd }),
+                (false, false) => ThumbInstruction::STR(InnerStr::Offset { offset, rb, rd }),
+                (false, true) => ThumbInstruction::STRB(InnerStoreLoadByte::Offset { offset, rb, rd }),
+                (true, false) => ThumbInstruction::LDR(InnerLdr::Offset { offset, rb, rd }),
+                (true, true) => ThumbInstruction::LDRB(InnerStoreLoadByte::Offset { offset, rb, rd }),
             }
         } else if value & 0xf000 == 0x8000 {
             let l = (value >> 11 & 1) == 1;
@@ -266,45 +266,45 @@ impl From<u16> for ThumbOpCode {
             let rb = get_triplet(value, 3);
             let rd = get_triplet(value, 0);
             if l {
-                ThumbOpCode::LDRH(InnerStoreLoadByte::Offset { offset, rb, rd })
+                ThumbInstruction::LDRH(InnerStoreLoadByte::Offset { offset, rb, rd })
             } else {
-                ThumbOpCode::STRH(InnerStoreLoadByte::Offset { offset, rb, rd })
+                ThumbInstruction::STRH(InnerStoreLoadByte::Offset { offset, rb, rd })
             }
         } else if value & 0xf000 == 0x9000 {
             let l = (value >> 11 & 1) == 1;
             let rd = get_triplet(value, 8);
             let word = (value & 0xff << 2) as u16;
             if l {
-                ThumbOpCode::LDR(InnerLdr::SP { word, rd })
+                ThumbInstruction::LDR(InnerLdr::SP { word, rd })
             } else {
-                ThumbOpCode::STR(InnerStr::SP { word, rd })
+                ThumbInstruction::STR(InnerStr::SP { word, rd })
             }
         } else if value & 0xf000 == 0xa000 {
             let sp = (value >> 11 & 0x1) == 1;
             let rd = get_triplet(value, 8);
             let word = (value & 0xff << 2) as u16;
             if sp {
-                ThumbOpCode::ADD(InnerAdd::Sp10Bit { rd, word })
+                ThumbInstruction::ADD(InnerAdd::Sp10Bit { rd, word })
             } else {
-                ThumbOpCode::ADD(InnerAdd::PC { rd, word })
+                ThumbInstruction::ADD(InnerAdd::PC { rd, word })
             }
         } else if value & 0xff00 == 0xb000 {
             let s = (value >> 7 & 1) == 1;
             let word = (value & 0x7f << 2) as u16;
             if s {
-                ThumbOpCode::ADD(InnerAdd::Sp9Bit { word })
+                ThumbInstruction::ADD(InnerAdd::Sp9Bit { word })
             } else {
-                ThumbOpCode::ADD(InnerAdd::SpNeg { word })
+                ThumbInstruction::ADD(InnerAdd::SpNeg { word })
             }
         } else if value & 0xf600 == 0xb400 {
             let l = value >> 11 & 1;
             let r = value >> 8 & 1;
             let r_list = (value & 0xff) as u8;
             match (l, r) {
-                (0, 0) => ThumbOpCode::PUSH(InnerStack::RList(r_list)),
-                (0, 1) => ThumbOpCode::PUSH(InnerStack::LrPc(r_list)),
-                (1, 0) => ThumbOpCode::POP(InnerStack::RList(r_list)),
-                (1, 1) => ThumbOpCode::POP(InnerStack::LrPc(r_list)),
+                (0, 0) => ThumbInstruction::PUSH(InnerStack::RList(r_list)),
+                (0, 1) => ThumbInstruction::PUSH(InnerStack::LrPc(r_list)),
+                (1, 0) => ThumbInstruction::POP(InnerStack::RList(r_list)),
+                (1, 1) => ThumbInstruction::POP(InnerStack::LrPc(r_list)),
                 (_, _) => unreachable!()
             }
         } else if value & 0xf000 == 0xc000 {
@@ -312,40 +312,40 @@ impl From<u16> for ThumbOpCode {
             let rb = get_triplet(value, 8);
             let r_list = (value & 0xff) as u8;
             if l {
-                ThumbOpCode::LDMIA { rb, r_list }
+                ThumbInstruction::LDMIA { rb, r_list }
             } else {
-                ThumbOpCode::STMIA { rb, r_list }
+                ThumbInstruction::STMIA { rb, r_list }
             }
         } else if value & 0xf000 == 0xd000 {
             let cond = (value >> 8 & 0xf) as u8;
             let offset = (value & 0xff) as u8;
             match cond {
-                0 => ThumbOpCode::BEQ(offset),
-                1 => ThumbOpCode::BNE(offset),
-                2 => ThumbOpCode::BCS(offset),
-                3 => ThumbOpCode::BCC(offset),
-                4 => ThumbOpCode::BMI(offset),
-                5 => ThumbOpCode::BPL(offset),
-                6 => ThumbOpCode::BVS(offset),
-                7 => ThumbOpCode::BVC(offset),
-                8 => ThumbOpCode::BHI(offset),
-                9 => ThumbOpCode::BLS(offset),
-                10 => ThumbOpCode::BGE(offset),
-                11 => ThumbOpCode::BLT(offset),
-                12 => ThumbOpCode::BGT(offset),
-                13 => ThumbOpCode::BLE(offset),
-                15 => ThumbOpCode::SWI(offset),
+                0 => ThumbInstruction::BEQ(offset),
+                1 => ThumbInstruction::BNE(offset),
+                2 => ThumbInstruction::BCS(offset),
+                3 => ThumbInstruction::BCC(offset),
+                4 => ThumbInstruction::BMI(offset),
+                5 => ThumbInstruction::BPL(offset),
+                6 => ThumbInstruction::BVS(offset),
+                7 => ThumbInstruction::BVC(offset),
+                8 => ThumbInstruction::BHI(offset),
+                9 => ThumbInstruction::BLS(offset),
+                10 => ThumbInstruction::BGE(offset),
+                11 => ThumbInstruction::BLT(offset),
+                12 => ThumbInstruction::BGT(offset),
+                13 => ThumbInstruction::BLE(offset),
+                15 => ThumbInstruction::SWI(offset),
                 _ => unreachable!()
             }
         } else if value & 0xf800 == 0xe000 {
             let offset = (value & 0x7ff) << 1;
-            ThumbOpCode::B(offset)
+            ThumbInstruction::B(offset)
         } else if value & 0xf000 == 0xf000 {
             let h = (value >> 11 & 1) == 1;
             let offset = (value & 0x7ff) as u8;
-            ThumbOpCode::BL{h, offset}
+            ThumbInstruction::BL{h, offset}
         } else {
-            ThumbOpCode::Undefined
+            ThumbInstruction::Undefined
         }
     }
 }
@@ -356,99 +356,99 @@ mod test {
     #[test]
     fn test_lsl_decode() {
         let inst: u16 = 0x0636;
-        let op = ThumbOpCode::from(inst);
-        assert_eq!(op, ThumbOpCode::LSL(InnerShift::Reg { rd: 6, rs: 6, offset: 0x18 }));
+        let op = ThumbInstruction::from(inst);
+        assert_eq!(op, ThumbInstruction::LSL(InnerShift::Reg { rd: 6, rs: 6, offset: 0x18 }));
     }
 
     #[test]
     fn test_add_reg_variant() {
         let inst: u16 = 0x19ad;
-        let op = ThumbOpCode::from(inst);
-        assert_eq!(op, ThumbOpCode::ADD(InnerAdd::AddReg { rd: 5, rs: 5, rn: 6 }))
+        let op = ThumbInstruction::from(inst);
+        assert_eq!(op, ThumbInstruction::ADD(InnerAdd::AddReg { rd: 5, rs: 5, rn: 6 }))
     }
 
     #[test]
     fn test_sub_imm_variant() {
         let inst: u16 = 0x1e68;
-        let op = ThumbOpCode::from(inst);
-        assert_eq!(op, ThumbOpCode::SUB(InnerSub::SubImm { rd: 0, rs: 5, offset: 1 }))
+        let op = ThumbInstruction::from(inst);
+        assert_eq!(op, ThumbInstruction::SUB(InnerSub::SubImm { rd: 0, rs: 5, offset: 1 }))
     }
 
     #[test]
     fn test_add_imm_variant() {
         let inst: u16 = 0x1c22;
-        let op = ThumbOpCode::from(inst);
-        assert_eq!(op, ThumbOpCode::ADD(InnerAdd::AddImm { rd: 2, rs: 4, offset: 0 }))
+        let op = ThumbInstruction::from(inst);
+        assert_eq!(op, ThumbInstruction::ADD(InnerAdd::AddImm { rd: 2, rs: 4, offset: 0 }))
     }
 
     #[test]
     fn test_mov_imm_variant() {
         let inst: u16 = 0x2400;
-        let op = ThumbOpCode::from(inst);
-        assert_eq!(op, ThumbOpCode::MOV(InnerMov::Offset{rd: 4, offset: 0}));
+        let op = ThumbInstruction::from(inst);
+        assert_eq!(op, ThumbInstruction::MOV(InnerMov::Offset{rd: 4, offset: 0}));
     }
 
     #[test]
     fn test_add_byte_imm_vairant() {
         let inst = 0x3210;
-        let op = ThumbOpCode::from(inst);
-        assert_eq!(op, ThumbOpCode::ADD(InnerAdd::AddByteImm { rd: 2, offset: 0x10 }))
+        let op = ThumbInstruction::from(inst);
+        assert_eq!(op, ThumbInstruction::ADD(InnerAdd::AddByteImm { rd: 2, offset: 0x10 }))
     }
 
     #[test]
     fn test_bx_variant_one() {
         let inst = 0x4770;
-        let op = ThumbOpCode::from(inst);
-        assert_eq!(op, ThumbOpCode::BX(InnerBranchEx::Hi { hs: 14 }))
+        let op = ThumbInstruction::from(inst);
+        assert_eq!(op, ThumbInstruction::BX(InnerBranchEx::Hi { hs: 14 }))
     }
 
     #[test]
     fn test_bx_variant_two() {
         let inst = 0x4718;
-        let op = ThumbOpCode::from(inst);
-        assert_eq!(op, ThumbOpCode::BX(InnerBranchEx::Low { rs: 3 }))
+        let op = ThumbInstruction::from(inst);
+        assert_eq!(op, ThumbInstruction::BX(InnerBranchEx::Low { rs: 3 }))
     }
 
     #[test]
     fn test_ldr_decode() {
         let inst = 0x49f8;
-        let op = ThumbOpCode::from(inst);
+        let op = ThumbInstruction::from(inst);
         // TODO: in ghidra this is DAT_0000ac0
-        assert_eq!(op, ThumbOpCode::LDR(InnerLdr::PC{rd: 1, word: 0xf8}));
+        assert_eq!(op, ThumbInstruction::LDR(InnerLdr::PC{rd: 1, word: 0xf8}));
     }
 
     #[test]
     fn test_ldrb_decode() {
         let inst = 0x5d82;
-        let op = ThumbOpCode::from(inst);
-        assert_eq!(op, ThumbOpCode::LDRB(InnerStoreLoadByte::Reg{ rd: 2, rb: 0, ro: 6 }));
+        let op = ThumbInstruction::from(inst);
+        assert_eq!(op, ThumbInstruction::LDRB(InnerStoreLoadByte::Reg{ rd: 2, rb: 0, ro: 6 }));
     }
 
     #[test]
     fn test_strh_decode() {
         let inst = 0x81bb;
-        let op = ThumbOpCode::from(inst);
-        assert_eq!(op, ThumbOpCode::STRH(InnerStoreLoadByte::Offset { offset: 0xc, rb: 7, rd: 3 }));
+        let op = ThumbInstruction::from(inst);
+        assert_eq!(op, ThumbInstruction::STRH(InnerStoreLoadByte::Offset { offset: 0xc, rb: 7, rd: 3 }));
     }
 
     #[test]
     fn test_b_decode() {
         let inst = 0xe3a0;
-        let op = ThumbOpCode::from(inst);
-        assert_eq!(op, ThumbOpCode::B(0x740));
+        let op = ThumbInstruction::from(inst);
+        assert_eq!(op, ThumbInstruction::B(0x740));
     }
 
     #[test]
     fn test_push_decode() {
         let inst = 0xb578;
-        let op = ThumbOpCode::from(inst);
-        assert_eq!(op, ThumbOpCode::PUSH(InnerStack::LrPc(0b1111000)));
+        let op = ThumbInstruction::from(inst);
+        assert_eq!(op, ThumbInstruction::PUSH(InnerStack::LrPc(0b1111000)));
     }
 
     #[test]
     fn test_strh_decode_two() {
         let inst = 0x7090;
-        let op = ThumbOpCode::from(inst);
-        assert_eq!(op, ThumbOpCode::STRB(InnerStoreLoadByte::Offset{rd: 0, rb: 2, offset: 2}));
+        let op = ThumbInstruction::from(inst);
+        assert_eq!(op, ThumbInstruction::STRB(InnerStoreLoadByte::Offset{rd: 0, rb: 2, offset: 2}));
     }
 }

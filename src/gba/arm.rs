@@ -45,7 +45,7 @@ impl From<u32> for Conditional {
 
 // S might be better place in the Enum, rather than the op struct
 #[derive(Debug, strum_macros::Display, PartialEq)]
-pub enum Opcode {
+pub enum ArmInstruction {
     AND(Conditional, DataProcessingOp),
     EOR(Conditional, DataProcessingOp),
     SUB(Conditional, DataProcessingOp),
@@ -105,190 +105,190 @@ pub enum AddressingMode3 {
 
 }
 
-impl From<u32> for Opcode {
+impl From<u32> for ArmInstruction {
     fn from(inst: u32) -> Self {
         let cond = Conditional::from(inst);
         if is_data_processing(inst) {
             let op = DataProcessingOp::from(inst);
             let code = (inst >> 21) & 0xf;
             match code {
-                0 => Opcode::AND(cond, op),
-                1 => Opcode::EOR(cond, op),
-                2 => Opcode::SUB(cond, op),
-                3 => Opcode::RSB(cond, op),
-                4 => Opcode::ADD(cond, op),
-                5 => Opcode::ADC(cond, op),
-                6 => Opcode::SBC(cond, op),
-                7 => Opcode::RSC(cond, op),
-                8 => Opcode::TST(cond, op),
-                9 => Opcode::TEQ(cond, op),
-                10 => Opcode::CMP(cond, op),
-                11 => Opcode::CMN(cond, op),
-                12 => Opcode::ORR(cond, op),
-                13 => Opcode::MOV(cond, op),
-                14 => Opcode::BIC(cond, op),
-                _ => Opcode::MVN(cond, op),
+                0 => ArmInstruction::AND(cond, op),
+                1 => ArmInstruction::EOR(cond, op),
+                2 => ArmInstruction::SUB(cond, op),
+                3 => ArmInstruction::RSB(cond, op),
+                4 => ArmInstruction::ADD(cond, op),
+                5 => ArmInstruction::ADC(cond, op),
+                6 => ArmInstruction::SBC(cond, op),
+                7 => ArmInstruction::RSC(cond, op),
+                8 => ArmInstruction::TST(cond, op),
+                9 => ArmInstruction::TEQ(cond, op),
+                10 => ArmInstruction::CMP(cond, op),
+                11 => ArmInstruction::CMN(cond, op),
+                12 => ArmInstruction::ORR(cond, op),
+                13 => ArmInstruction::MOV(cond, op),
+                14 => ArmInstruction::BIC(cond, op),
+                _ => ArmInstruction::MVN(cond, op),
             }
         } else if is_multiply(inst) {
             let op = MultiplyOp::from(inst);
             if op.a {
-                Opcode::MLA(cond, op)
+                ArmInstruction::MLA(cond, op)
             } else {
-                Opcode::MUL(cond, op)
+                ArmInstruction::MUL(cond, op)
             }
         } else if is_multiply_long(inst) {
             let op = MultiplyLongOp::from(inst);
             if op.a {
                 if op.s {
-                    Opcode::SMLAL(cond, op)
+                    ArmInstruction::SMLAL(cond, op)
                 } else {
-                    Opcode::UMLAL(cond, op)
+                    ArmInstruction::UMLAL(cond, op)
                 }
             } else {
                 if op.s {
-                    Opcode::SMULL(cond, op)
+                    ArmInstruction::SMULL(cond, op)
                 } else {
-                    Opcode::UMULL(cond, op)
+                    ArmInstruction::UMULL(cond, op)
                 }
             }
         } else if is_single_data_swap(inst) {
             let op = SingleDataSwapOp::from(inst);
             if op.b {
-                Opcode::SWPB(cond, op)
+                ArmInstruction::SWPB(cond, op)
             } else {
-                Opcode::SWP(cond, op)
+                ArmInstruction::SWP(cond, op)
             }
         } else if is_branch_and_exchange(inst) {
             let op = BranchExchangeOp::from(inst);
-            Opcode::BX(cond, op)
+            ArmInstruction::BX(cond, op)
         } else if is_branch(inst) {
             let op = BranchOp::from(inst);
             if op.l {
-                Opcode::BL(cond, op)
+                ArmInstruction::BL(cond, op)
             } else {
-                Opcode::B(cond, op)
+                ArmInstruction::B(cond, op)
             }
         } else if is_software_interrupt(inst) {
-            Opcode::SWI(cond)
+            ArmInstruction::SWI(cond)
         } else if is_single_data_tfx(inst) {
             let op = SingleDataTfx::from(inst);
             if op.l {
-                Opcode::LDR(cond, op)
+                ArmInstruction::LDR(cond, op)
             } else {
-                Opcode::STR(cond, op)
+                ArmInstruction::STR(cond, op)
             }
         } else if is_block_data_tfx(inst) {
             let op = BlockDataTransfer::from(inst);
             if op.l {
-                Opcode::LDM(cond, op)
+                ArmInstruction::LDM(cond, op)
             } else {
-                Opcode::STM(cond, op)
+                ArmInstruction::STM(cond, op)
             }
         } else if is_coprocessor_data_op(inst) {
             let op = CoprocessDataOp::from(inst);
-            Opcode::CDP(cond, op)
+            ArmInstruction::CDP(cond, op)
         } else if is_coprocessor_data_tfx(inst) {
             let op = CoprocessDataTfx::from(inst);
             if op.l {
-                Opcode::LDC(cond, op)
+                ArmInstruction::LDC(cond, op)
             } else {
-                Opcode::STC(cond, op)
+                ArmInstruction::STC(cond, op)
             }
         } else if is_coprocessor_reg_tfx(inst) {
             let op = CoprocessRegTfx::from(inst);
             if op.l {
-                Opcode::MRC(cond, op)
+                ArmInstruction::MRC(cond, op)
             } else {
-                Opcode::MCR(cond, op)
+                ArmInstruction::MCR(cond, op)
             }
         } else if is_psr_transfer(inst) {
             let op = PsrTransferOp::from(inst);
             if is_mrs_op(inst) {
-                Opcode::MRS(cond, op)
+                ArmInstruction::MRS(cond, op)
             } else {
-                Opcode::MSR(cond, op)
+                ArmInstruction::MSR(cond, op)
             }
         } else if is_halfword_data_tfx_imm(inst) || is_halfword_data_tfx_reg(inst) {
             let op = HalfwordDataOp::from(inst);
             match (op.l, op.h) {
                 (false, false) => unreachable!(),
-                (false, true) => Opcode::STRH(cond, op),
-                (true, false) => Opcode::LDRH(cond, op),
-                (true, true) => Opcode::LDRSB(cond, op),
+                (false, true) => ArmInstruction::STRH(cond, op),
+                (true, false) => ArmInstruction::LDRH(cond, op),
+                (true, true) => ArmInstruction::LDRSB(cond, op),
             }
         } else {
-            Opcode::Undef(inst)
+            ArmInstruction::Undef(inst)
         }
     }
 }
 
-impl Opcode {
+impl ArmInstruction {
     pub fn string_repr(&self) -> String {
         match self {
-            Opcode::AND(c, o)
-            | Opcode::EOR(c, o)
-            | Opcode::ORR(c, o)
-            | Opcode::BIC(c, o)
-            | Opcode::ADD(c, o)
-            | Opcode::SUB(c, o)
-            | Opcode::ADC(c, o)
-            | Opcode::SBC(c, o)
-            | Opcode::RSC(c, o)
-            | Opcode::RSB(c, o) => {
+            ArmInstruction::AND(c, o)
+            | ArmInstruction::EOR(c, o)
+            | ArmInstruction::ORR(c, o)
+            | ArmInstruction::BIC(c, o)
+            | ArmInstruction::ADD(c, o)
+            | ArmInstruction::SUB(c, o)
+            | ArmInstruction::ADC(c, o)
+            | ArmInstruction::SBC(c, o)
+            | ArmInstruction::RSC(c, o)
+            | ArmInstruction::RSB(c, o) => {
                 format!("{}{} {} r{} r{}, <{:#x}>", self, c, o.s, o.rd, o.rn, o.operand)
             }
-            Opcode::TST(c, o) | Opcode::TEQ(c, o) => {
+            ArmInstruction::TST(c, o) | ArmInstruction::TEQ(c, o) => {
                 format!("{}{} r{}, <{:#x}>", self, c, o.rn, o.operand)
             }
-            Opcode::CMP(c, o) | Opcode::CMN(c, o) => {
+            ArmInstruction::CMP(c, o) | ArmInstruction::CMN(c, o) => {
                 format!("{}{} r{}, <{:#x}>", self, c, o.rd, o.operand)
             }
-            Opcode::MOV(c, o) | Opcode::MVN(c, o) => {
+            ArmInstruction::MOV(c, o) | ArmInstruction::MVN(c, o) => {
                 format!("{}{} {} r{}, <{:#x}>", self, c, o.s, o.rd, o.operand)
             }
-            Opcode::MLA(c, o) => {
+            ArmInstruction::MLA(c, o) => {
                 format!(
                     "{}{} {} r{}, r{}, r{}, r{}",
                     self, c, o.s, o.rd, o.rm, o.rs, o.rn
                 )
             }
-            Opcode::MUL(c, o) => {
+            ArmInstruction::MUL(c, o) => {
                 format!("{}{} {} r{}, r{}, r{}", self, c, o.s, o.rd, o.rm, o.rs)
             }
-            Opcode::SMULL(c, o) | Opcode::SMLAL(c, o) |
-            Opcode::UMULL(c, o) | Opcode::UMLAL(c, o) => {
+            ArmInstruction::SMULL(c, o) | ArmInstruction::SMLAL(c, o) |
+            ArmInstruction::UMULL(c, o) | ArmInstruction::UMLAL(c, o) => {
                 format!(
                     "{}{} {} r{}, r{}, r{}, r{}",
                     self, c, o.s, o.rd_hi, o.rd_lo, o.rm, o.rs
                 )
             }
-            Opcode::B(c, o) | Opcode::BL(c, o) => {
+            ArmInstruction::B(c, o) | ArmInstruction::BL(c, o) => {
                 format!("{}{} +{:#x}", self, c, o.offset)
             }
-            Opcode::BX(c, o) => {
+            ArmInstruction::BX(c, o) => {
                 format!("{}{} r{}", self, c, o.rn)
             }
-            Opcode::SWP(c, o) | Opcode::SWPB(c, o) => {
+            ArmInstruction::SWP(c, o) | ArmInstruction::SWPB(c, o) => {
                 format!("{}{} {} r{}, r{}, r{}", self, c, o.b, o.rd, o.rm, o.rn)
             }
             // TODO: Expand this
-            Opcode::LDM(c, _) | Opcode::STM(c, _) => {
+            ArmInstruction::LDM(c, _) | ArmInstruction::STM(c, _) => {
                 // TODO: This is actually more complicated
                 format!("{}{}", self, c)
             }
             // TODO: Expand this
-            Opcode::LDR(c, _) | Opcode::STR(c, _) |
-            Opcode::CDP(c, _) | Opcode::LDC(c, _) |
-            Opcode::STC(c, _) | Opcode::MRC(c, _) |
-            Opcode::MCR(c, _) | Opcode::MSR(c, _) |
-            Opcode::MRS(c, _) => {
+            ArmInstruction::LDR(c, _) | ArmInstruction::STR(c, _) |
+            ArmInstruction::CDP(c, _) | ArmInstruction::LDC(c, _) |
+            ArmInstruction::STC(c, _) | ArmInstruction::MRC(c, _) |
+            ArmInstruction::MCR(c, _) | ArmInstruction::MSR(c, _) |
+            ArmInstruction::MRS(c, _) => {
                 // TODO: This is actually more complicated
                 format!("{}{}", self, c)
             }
-            Opcode::SWI(c) => {
+            ArmInstruction::SWI(c) => {
                 format!("{}{}", self, c)
             },
-            Opcode::Undef(_) => {
+            ArmInstruction::Undef(_) => {
                 format!("undefined")
             }
             _ => {
@@ -754,8 +754,8 @@ mod test {
     #[test]
     fn test_branch_decode() {
         let inst: u32 = 0b11101010000000000000000000011000;
-        let op = Opcode::from(inst);
-        let op2 = Opcode::B(
+        let op = ArmInstruction::from(inst);
+        let op2 = ArmInstruction::B(
             Conditional::AL,
             BranchOp {
                 l: false,
@@ -777,8 +777,8 @@ mod test {
     #[test]
     fn test_strb_decode() {
         let inst: u32 = 0xe5cc3301;
-        let op = Opcode::from(inst);
-        let op2 = Opcode::STR(Conditional::AL, SingleDataTfx {
+        let op = ArmInstruction::from(inst);
+        let op2 = ArmInstruction::STR(Conditional::AL, SingleDataTfx {
             i: false,
             p: true,
             u: true,
@@ -795,8 +795,8 @@ mod test {
     #[test]
     fn test_strh_decode() {
         let inst: u32 = 0xe08180b3;
-        let op = Opcode::from(inst);
-        let op2 = Opcode::STRH(Conditional::AL, HalfwordDataOp{
+        let op = ArmInstruction::from(inst);
+        let op2 = ArmInstruction::STRH(Conditional::AL, HalfwordDataOp{
             p: false,
             u: true,
             w: false,
