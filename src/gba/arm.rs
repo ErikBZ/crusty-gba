@@ -1,3 +1,6 @@
+// TODO: Possible alternative to this is to have all 15
+// operation structs be a trait "Operable", that takes a CPU
+// and modifies it based on it's instruction
 #[derive(Debug, strum_macros::Display, PartialEq)]
 pub enum Conditional {
     EQ,
