@@ -25,6 +25,7 @@ fn main() {
 fn debug_bios(codes: Vec<u32>) {
     use std::io;
     let mut cpu = CPU::default();
+    cpu.set_pc(0x68);
     let mut ram: [u32;128] = [0;128];
 
     loop {

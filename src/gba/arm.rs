@@ -46,6 +46,12 @@ impl From<u32> for Conditional {
     }
 }
 
+impl Conditional {
+    pub fn should_run(&self, cpsr: u32) -> bool {
+        todo!()
+    }
+}
+
 // S might be better place in the Enum, rather than the op struct
 #[derive(Debug, strum_macros::Display, PartialEq)]
 pub enum ArmInstruction {
@@ -799,6 +805,24 @@ mod test {
     #[test]
     fn test_strh_decode() {
         let inst: u32 = 0xe08180b3;
+        let op = ArmInstruction::from(inst);
+        let op2 = ArmInstruction::STRH(Conditional::AL, HalfwordDataOp{
+            p: false,
+            u: true,
+            w: false,
+            l: false,
+            h: true,
+            s: false,
+            rn: 1,
+            rd: 8,
+            mode: AddressingMode3::PostIndexedReg { rm: 3 },
+        });
+        assert_eq!(op, op2);
+    }
+
+    #[test]
+    fn test_andeq_decode() {
+        let inst: u32 = 0x00000000;
         let op = ArmInstruction::from(inst);
         let op2 = ArmInstruction::STRH(Conditional::AL, HalfwordDataOp{
             p: false,
