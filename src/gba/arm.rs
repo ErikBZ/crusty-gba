@@ -312,15 +312,17 @@ impl ArmInstruction {
 // like branch operation
 #[derive(Debug, PartialEq)]
 pub struct DataProcessingOp {
-    s: bool,
-    rn: u8,
-    rd: u8,
-    operand: u16,
+    pub s: bool,
+    pub i: bool,
+    pub rn: u8,
+    pub rd: u8,
+    pub operand: u16,
 }
 
 impl From<u32> for DataProcessingOp {
     fn from(inst: u32) -> Self {
         DataProcessingOp {
+            i: (inst >> 25 & 0x1) == 0x1,
             s: (inst >> 20 & 0x1) == 0x1,
             rd: (inst >> 12 & 0xf) as u8,
             rn: (inst >> 16 & 0xf) as u8,

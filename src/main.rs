@@ -25,7 +25,6 @@ fn main() {
 fn debug_bios(codes: Vec<u32>) {
     use std::io;
     let mut cpu = CPU::default();
-    cpu.set_pc(0x68);
     let mut ram: [u32;128] = [0;128];
 
     loop {
@@ -49,8 +48,27 @@ fn debug_bios(codes: Vec<u32>) {
         match cmd {
             DebuggerCommand::BreakPoint(_) => println!("Adding break point"),
             DebuggerCommand::Continue => println!("Continuing"),
-            DebuggerCommand::Next => println!("Going to next instruction"),
-            DebuggerCommand::Info => println!("{:?}", cpu),
+            DebuggerCommand::Next => {
+                let i = (cpu.pc() >> 2) as usize;
+                if i < codes.len() {
+                    let inst = codes[(cpu.pc() >> 2) as usize];
+                    cpu.run_instruction(inst, &mut ram);
+                } else {
+                    println!("Address it not within ROM");
+                    continue;
+                }
+            },
+            DebuggerCommand::Info => {
+                let i = (cpu.pc() >> 2) as usize;
+                let op = if i < codes.len() {
+                    ArmInstruction::from(codes[(cpu.pc() >> 2) as usize])
+                } else {
+                    println!("Address it not within ROM");
+                    continue;
+                };
+                println!("{}", cpu);
+                println!("{:?}", op);
+            },
             DebuggerCommand::Quit => break,
         }
     }
