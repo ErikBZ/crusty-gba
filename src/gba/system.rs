@@ -51,20 +51,22 @@ impl Default for SystemMemory {
 impl SystemMemory {
     pub fn write_to_mem(&mut self, address: usize, block: u32) -> Result<(), MemoryError> {
         let ram: &mut Vec<u32> = self.memory_map(address)?;
-        if address > ram.len() {
-            Err(MemoryError::OutOfBounds(address))
+        let mem_address = address & 0xfffff;
+        if mem_address > ram.len() {
+            Err(MemoryError::OutOfBounds(mem_address))
         } else {
-            ram[address] = block;
+            ram[mem_address] = block;
             Ok(())
         }
     }
 
     pub fn read_from_mem(&mut self, address: usize) -> Result<u32, MemoryError> {
         let ram: &Vec<u32> = self.memory_map(address)?;
-        if address > ram.len() {
-            Err(MemoryError::OutOfBounds(address))
+        let mem_address = address & 0xfffff;
+        if mem_address > ram.len() {
+            Err(MemoryError::OutOfBounds(mem_address))
         } else {
-            Ok(ram[address])
+            Ok(ram[mem_address])
         }
     }
     
