@@ -8,6 +8,7 @@ use gba::arm::ArmInstruction;
 use gba::thumb::ThumbInstruction;
 use gba::cpu::CPU;
 use gba::debugger::DebuggerCommand;
+use gba::system::SystemMemory;
 
 fn main() {
     // TODO: Just put test.gba in the root dir
@@ -25,7 +26,8 @@ fn main() {
 fn debug_bios(codes: Vec<u32>) {
     use std::io;
     let mut cpu = CPU::default();
-    let mut ram: [u32;128] = [0;128];
+    let mut ram: [u32;1024 * 400] = [0;1024 * 400];
+    let mut memory =  SystemMemory::default();
 
     loop {
         let mut input = String::new();

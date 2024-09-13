@@ -1,10 +1,10 @@
 use core::fmt;
-use std::fmt::write;
 
-use super::arm::ArmInstruction;
+use super::arm::{ArmInstruction, Conditional};
+use super::system::SystemMemory;
 
-const CPSR_Z: u32 = 0x60000000;
-const CPSR_C: u32 = 0x20000000;
+pub const CPSR_Z: u32 = 0x60000000;
+pub const CPSR_C: u32 = 0x20000000;
 const PC: usize = 15;
 
 #[derive(Debug)]
@@ -55,26 +55,60 @@ impl CPU {
         self.registers[PC] = pc;
     }
 
-    pub fn run_instruction(&mut self, inst: u32, ram: &mut [u32; 128]) {
+    pub fn run_instruction(&mut self, inst: u32, ram: &mut SystemMemory) {
+        let cond = Conditional::from(inst);
         let op = ArmInstruction::from(inst);
+        self.registers[PC] += 4;
+
+        if !cond.should_run(self.cpsr) {
+            return;
+        }
 
         match op {
             ArmInstruction::CMP(_, o) =>  {
-                let operand2 = if o.i {
-                    let rotate = o.operand >> 8 & 0xf;
-                    ((o.operand & 0xff) << rotate) as u32
-                }
-                else {
-                    self.registers[o.rd as usize]
-                };
-
+                let operand2 = o.get_operand2(self.registers);
                 let res = self.registers[o.rn as usize] - operand2;
                 self.cpsr |= CPSR_C & (res >> 2);
                 self.cpsr |= CPSR_Z & !res;
-        }
+            },
+            ArmInstruction::MOV(_, o) => {
+                let operand2 = o.get_operand2(self.registers);
+                self.registers[o.rd as usize] = operand2;
+            },
+            ArmInstruction::LDR(_, o) => {
+                // TODO: add write back check somewhere
+                let offset = o.get_offset(self.registers);
+                let mut tfx_add = offset;
+                tfx_add >>= 2;
+
+                if o.p {
+                    if o.u {
+                        tfx_add += self.registers[o.rn as usize];
+                    } else {
+                        tfx_add -= self.registers[o.rn as usize];
+                    }
+                }
+
+                let block_from_mem = match ram.read_from_mem(tfx_add as usize) {
+                    Ok(n) => n,
+                    Err(e) => {
+                        println!("{}", e);
+                        panic!()
+                    },
+                };
+
+                self.registers[o.rd as usize] = if o.b {
+                    block_from_mem
+                } else {
+                    block_from_mem & 0xff
+                };
+
+                // NOTE: for L i don't think this matters
+                if !o.p {
+
+                }
+            },
             _ => todo!(),
         }
-
-        self.registers[PC] += 4;
     }
 }

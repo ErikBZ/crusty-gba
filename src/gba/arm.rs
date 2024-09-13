@@ -1,3 +1,4 @@
+use super::cpu::{CPSR_Z, CPSR_C};
 // TODO: Possible alternative to this is to have all 15
 // operation structs be a trait "Operable", that takes a CPU
 // and modifies it based on it's instruction
@@ -48,7 +49,12 @@ impl From<u32> for Conditional {
 
 impl Conditional {
     pub fn should_run(&self, cpsr: u32) -> bool {
-        todo!()
+        match self {
+            Conditional::EQ => {
+                (cpsr & CPSR_Z) == CPSR_Z
+            },
+            _ => false,
+        }
     }
 }
 
@@ -316,7 +322,7 @@ pub struct DataProcessingOp {
     pub i: bool,
     pub rn: u8,
     pub rd: u8,
-    pub operand: u16,
+    pub operand: u32,
 }
 
 impl From<u32> for DataProcessingOp {
@@ -326,7 +332,22 @@ impl From<u32> for DataProcessingOp {
             s: (inst >> 20 & 0x1) == 0x1,
             rd: (inst >> 12 & 0xf) as u8,
             rn: (inst >> 16 & 0xf) as u8,
-            operand: (inst & 0xfff) as u16,
+            operand: (inst & 0xfff) as u32,
+        }
+    }
+}
+
+impl DataProcessingOp {
+    pub fn get_operand2(&self, registers: [u32;16]) -> u32 {
+        if self.i {
+            let rotate = (self.operand >> 8 & 0xf) as u32;
+            let op = (self.operand & 0xff) as u32;
+            // we gotta rotate by twice the amount
+            op.rotate_right(rotate * 2)
+        }
+        else {
+            let shift = (self.operand >> 4 & 0xff) as u32;
+            registers[self.rd as usize] << shift
         }
     }
 }
@@ -491,15 +512,15 @@ impl From<u32> for HalfwordImmOffset {
 
 #[derive(Debug, PartialEq)]
 pub struct SingleDataTfx {
-    i: bool,
-    p: bool,
-    u: bool,
-    b: bool,
-    w: bool,
-    l: bool,
-    rn: u8,
-    rd: u8,
-    offset: u16,
+    pub i: bool,
+    pub p: bool,
+    pub u: bool,
+    pub b: bool,
+    pub w: bool,
+    pub l: bool,
+    pub rn: u8,
+    pub rd: u8,
+    pub offset: u16,
 }
 
 impl From<u32> for SingleDataTfx {
@@ -514,6 +535,18 @@ impl From<u32> for SingleDataTfx {
             rn: (inst >> 16 & 0xf) as u8,
             rd: (inst >> 12 & 0xf) as u8,
             offset: (inst & 0xfff) as u16,
+        }
+    }
+}
+
+impl SingleDataTfx {
+    pub fn get_offset(&self, registers: [u32;16]) -> u32 {
+        if self.i {
+            let shift = (self.offset >> 4) & 0xff;
+            println!("{}", shift);
+            (registers[(self.offset & 0xf) as usize] << shift) as u32
+        } else {
+            self.offset as u32
         }
     }
 }

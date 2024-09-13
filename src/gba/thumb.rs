@@ -136,6 +136,15 @@ fn get_triplet(value: u16, shift: u32) -> u8 {
     (value >> shift & 0x7) as u8
 }
 
+impl From<u32> for ThumbInstruction {
+    // Takes the bottom half-word to create an opcode
+    // callers should shift their u32 to deocde the correct half
+    fn from(value: u32) -> Self {
+        let lower_half = (value & 0xffff) as u16;
+        ThumbInstruction::from(lower_half)
+    }
+}
+
 impl From<u16> for ThumbInstruction {
     fn from(value: u16) -> Self {
         if value & 0xf800 == 0x1800 {
