@@ -26,7 +26,6 @@ fn main() {
 fn debug_bios(codes: Vec<u32>) {
     use std::io;
     let mut cpu = CPU::default();
-    let mut ram: [u32;1024 * 400] = [0;1024 * 400];
     let mut memory =  SystemMemory::default();
 
     loop {
@@ -54,7 +53,7 @@ fn debug_bios(codes: Vec<u32>) {
                 let i = (cpu.pc() >> 2) as usize;
                 if i < codes.len() {
                     let inst = codes[(cpu.pc() >> 2) as usize];
-                    cpu.run_instruction(inst, &mut ram);
+                    cpu.run_instruction(inst, &mut memory);
                 } else {
                     println!("Address it not within ROM");
                     continue;
