@@ -3,14 +3,17 @@ use core::fmt;
 use super::arm::{ArmInstruction, Conditional};
 use super::system::SystemMemory;
 
+pub const CPSR_N: u32 = 0x80000000;
 pub const CPSR_Z: u32 = 0x60000000;
 pub const CPSR_C: u32 = 0x20000000;
+pub const CPSR_V: u32 = 0x10000000;
 const PC: usize = 15;
 
 #[derive(Debug)]
 pub struct CPU {
     registers: [u32; 16],
     cpsr: u32,
+    spsr: u32,
 }
 
 impl Default for CPU {
@@ -18,6 +21,8 @@ impl Default for CPU {
         Self {
             registers: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0x68],
             cpsr: 0x1f,
+            // TODO: Check if spsr is zero'd out at execution start
+            spsr: 0x0,
         }
     }
 }
@@ -104,8 +109,42 @@ impl CPU {
                 };
 
                 // NOTE: for L i don't think this matters
+                // for LDR
                 if !o.p {
+                    todo!()
+                }
+            },
+            ArmInstruction::TEQ(_, o) => {
+                let operand2 = o.get_operand2(self.registers);
+                let res = self.registers[o.rn as usize] ^ operand2;
+                self.cpsr |= CPSR_C & (res >> 2);
+                self.cpsr |= CPSR_Z & !res;
+            },
+            ArmInstruction::ORR(_, o) => {
+                let operand2 = o.get_operand2(self.registers);
+                let res = self.registers[o.rn as usize] | operand2;
+                self.cpsr |= CPSR_C & (res >> 2);
+                self.cpsr |= CPSR_Z & !res;
+            },
+            ArmInstruction::MRS(_, o) => {
+                if o.is_cspr() {
+                    self.registers[o.rd as usize] = self.cpsr;
+                } else {
+                    self.registers[o.rd as usize] = self.spsr;
+                }
+            },
+            ArmInstruction::MSR(_, o) => {
+                let operand = o.get_operand(self.registers);
+                let mask: u32 = if o.is_bit_flag_only() {
+                    0xf0000000
+                } else {
+                    0xffffffff
+                };
 
+                if o.is_cspr() {
+                    self.cpsr = (self.cpsr & !mask) | (operand & mask)
+                } else {
+                    self.spsr = (self.spsr & !mask) | (operand & mask)
                 }
             },
             _ => todo!(),

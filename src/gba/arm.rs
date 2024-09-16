@@ -1,4 +1,4 @@
-use super::cpu::{CPSR_Z, CPSR_C};
+use super::cpu::{CPSR_Z, CPSR_C, CPSR_N, CPSR_V};
 // TODO: Possible alternative to this is to have all 15
 // operation structs be a trait "Operable", that takes a CPU
 // and modifies it based on it's instruction
@@ -52,6 +52,48 @@ impl Conditional {
         match self {
             Conditional::EQ => {
                 (cpsr & CPSR_Z) == CPSR_Z
+            },
+            Conditional::NE => {
+                (cpsr & CPSR_Z) == 0
+            },
+            Conditional::CS => {
+                (cpsr & CPSR_C) == CPSR_C
+            },
+            Conditional::CC => {
+                (cpsr & CPSR_C) == 0
+            },
+            Conditional::MI => {
+                (cpsr & CPSR_N) == CPSR_N
+            },
+            Conditional::PL => {
+                (cpsr & CPSR_N) == 0
+            },
+            Conditional::VS => {
+                (cpsr & CPSR_V) == CPSR_V
+            },
+            Conditional::VC => {
+                (cpsr & CPSR_V) == 0
+            },
+            Conditional::HI => {
+                (cpsr & CPSR_C) == CPSR_C && (cpsr & CPSR_Z) == 0
+            },
+            Conditional::LS => {
+                (cpsr & CPSR_C) == 0 && (cpsr & CPSR_Z) == CPSR_Z
+            },
+            Conditional::GE => {
+                (cpsr & CPSR_N) == (cpsr & CPSR_V << 3)
+            },
+            Conditional::LT => {
+                (cpsr & CPSR_N) != (cpsr & CPSR_V << 3)
+            },
+            Conditional::GT => {
+                (cpsr & CPSR_Z) == 0 && (cpsr & CPSR_N == cpsr & CPSR_V << 3)
+            },
+            Conditional::LE => {
+                (cpsr & CPSR_Z) == CPSR_Z || (cpsr & CPSR_N != cpsr & CPSR_V << 3)
+            },
+            Conditional::AL => {
+                true
             },
             _ => false,
         }
@@ -657,7 +699,8 @@ impl From<u32> for CoprocessRegTfx {
 pub struct PsrTransferOp {
     i: bool,
     p: bool,
-    rd: u8,
+    bit_flags_only: bool,
+    pub rd: u8,
     rm: u8,
     rotate: u8,
     imm: u8,
@@ -668,11 +711,31 @@ impl From<u32> for PsrTransferOp {
         Self {
             i: (inst >> 25 & 1) == 1,
             p: (inst >> 22 & 1) == 1,
+            bit_flags_only: is_psr_flag_bits_only(inst),
             rd: (inst >> 12 & 0xf) as u8,
             rm: (inst & 0xf) as u8,
             rotate: (inst >> 8 & 0xf) as u8,
             imm: (inst & 0xff) as u8
         }
+    }
+}
+
+impl PsrTransferOp {
+    pub fn get_operand(&self, registers: [u32;16]) -> u32 {
+        if self.i {
+            let imm = self.imm as u32;
+            imm.rotate_right((self.rotate as u32) * 2)
+        } else {
+            registers[self.rm as usize]
+        }
+    }
+
+    pub fn is_cspr(&self) -> bool {
+        !self.p
+    }
+
+    pub fn is_bit_flag_only(&self) -> bool {
+        self.bit_flags_only
     }
 }
 
@@ -784,6 +847,10 @@ pub fn is_psr_transfer(inst: u32) -> bool {
     (inst & 0x0fbffff0 == 0x010f0000) ||
     (inst & 0x0fbf0fff == 0x010f0000) ||
     (inst & 0x0dbff000 == 0x0128f000)
+}
+
+fn is_psr_flag_bits_only(inst: u32) -> bool {
+    (inst & 0x0dbff000) == 0x0128f000
 }
 
 mod test {
