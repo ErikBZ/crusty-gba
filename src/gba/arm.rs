@@ -492,6 +492,17 @@ impl From<u32> for BranchOp {
     }
 }
 
+impl BranchOp {
+    pub fn get_offset(&self) -> i32 {
+        // offset is shifted left by 2, and then sign extended to 32 bits
+        if self.offset & (1 << 24) == (1 << 24) {
+            ((self.offset << 2) | 0xffc00000) as i32
+        } else {
+            (self.offset << 2) as i32
+        }
+    }
+}
+
 #[derive(Debug, PartialEq)]
 pub struct HalfwordRegOffset {
     p: bool,
@@ -844,8 +855,8 @@ pub fn is_mrs_op(inst: u32) -> bool {
 }
 
 pub fn is_psr_transfer(inst: u32) -> bool {
-    (inst & 0x0fbffff0 == 0x010f0000) ||
     (inst & 0x0fbf0fff == 0x010f0000) ||
+    (inst & 0x0fbffff0 == 0x0129f000) ||
     (inst & 0x0dbff000 == 0x0128f000)
 }
 
@@ -936,6 +947,22 @@ mod test {
             rn: 1,
             rd: 8,
             mode: AddressingMode3::PostIndexedReg { rm: 3 },
+        });
+        assert_eq!(op, op2);
+    }
+
+    #[test]
+    fn test_msreq_decode() {
+        let inst: u32 = 0x0129f00c;
+        let op = ArmInstruction::from(inst);
+        let op2 = ArmInstruction::MSR(Conditional::EQ, PsrTransferOp{
+            i: false,
+            imm: 12,
+            bit_flags_only: false,
+            p: false,
+            rd: 15,
+            rm: 12,
+            rotate: 0,
         });
         assert_eq!(op, op2);
     }

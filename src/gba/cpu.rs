@@ -60,6 +60,18 @@ impl CPU {
         self.registers[PC] = pc;
     }
 
+    pub fn update_cpsr(&mut self, res: u32) {
+        let zero = if res == 0 {
+            CPSR_Z
+        } else {
+            0
+        };
+
+        self.cpsr &= 0x0fffffff;
+        self.cpsr |= CPSR_C & (res >> 2);
+        self.cpsr |= zero;
+    }
+
     pub fn run_instruction(&mut self, inst: u32, ram: &mut SystemMemory) {
         let cond = Conditional::from(inst);
         let op = ArmInstruction::from(inst);
@@ -73,12 +85,32 @@ impl CPU {
             ArmInstruction::CMP(_, o) =>  {
                 let operand2 = o.get_operand2(self.registers);
                 let res = self.registers[o.rn as usize] - operand2;
-                self.cpsr |= CPSR_C & (res >> 2);
-                self.cpsr |= CPSR_Z & !res;
+                self.update_cpsr(res);
             },
             ArmInstruction::MOV(_, o) => {
                 let operand2 = o.get_operand2(self.registers);
                 self.registers[o.rd as usize] = operand2;
+            },
+            ArmInstruction::TEQ(_, o) => {
+                let operand2 = o.get_operand2(self.registers);
+                let res = self.registers[o.rn as usize] ^ operand2;
+                println!("{:032b}", res);
+                self.update_cpsr(res);
+            },
+            ArmInstruction::ORR(_, o) => {
+                let operand2 = o.get_operand2(self.registers);
+                let res = self.registers[o.rn as usize] | operand2;
+                self.update_cpsr(res);
+            },
+            ArmInstruction::B(_, o) => {
+                let offset = o.get_offset();
+                let offset_abs: u32 = u32::try_from(offset.abs()).unwrap_or(0);
+
+                if offset < 0 {
+                    self.registers[PC] -= offset_abs;
+                } else {
+                    self.registers[PC] += offset_abs;
+                }
             },
             ArmInstruction::LDR(_, o) => {
                 // TODO: add write back check somewhere
@@ -113,18 +145,6 @@ impl CPU {
                 if !o.p {
                     todo!()
                 }
-            },
-            ArmInstruction::TEQ(_, o) => {
-                let operand2 = o.get_operand2(self.registers);
-                let res = self.registers[o.rn as usize] ^ operand2;
-                self.cpsr |= CPSR_C & (res >> 2);
-                self.cpsr |= CPSR_Z & !res;
-            },
-            ArmInstruction::ORR(_, o) => {
-                let operand2 = o.get_operand2(self.registers);
-                let res = self.registers[o.rn as usize] | operand2;
-                self.cpsr |= CPSR_C & (res >> 2);
-                self.cpsr |= CPSR_Z & !res;
             },
             ArmInstruction::MRS(_, o) => {
                 if o.is_cspr() {

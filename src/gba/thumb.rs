@@ -399,28 +399,28 @@ mod test {
 
     #[test]
     fn test_add_byte_imm_vairant() {
-        let inst = 0x3210;
+        let inst: u16 = 0x3210;
         let op = ThumbInstruction::from(inst);
         assert_eq!(op, ThumbInstruction::ADD(InnerAdd::AddByteImm { rd: 2, offset: 0x10 }))
     }
 
     #[test]
     fn test_bx_variant_one() {
-        let inst = 0x4770;
+        let inst: u16 = 0x4770;
         let op = ThumbInstruction::from(inst);
         assert_eq!(op, ThumbInstruction::BX(InnerBranchEx::Hi { hs: 14 }))
     }
 
     #[test]
     fn test_bx_variant_two() {
-        let inst = 0x4718;
+        let inst: u16 = 0x4718;
         let op = ThumbInstruction::from(inst);
         assert_eq!(op, ThumbInstruction::BX(InnerBranchEx::Low { rs: 3 }))
     }
 
     #[test]
     fn test_ldr_decode() {
-        let inst = 0x49f8;
+        let inst: u16 = 0x49f8;
         let op = ThumbInstruction::from(inst);
         // TODO: in ghidra this is DAT_0000ac0
         assert_eq!(op, ThumbInstruction::LDR(InnerLdr::PC{rd: 1, word: 0xf8}));
@@ -428,35 +428,35 @@ mod test {
 
     #[test]
     fn test_ldrb_decode() {
-        let inst = 0x5d82;
+        let inst: u16 = 0x5d82;
         let op = ThumbInstruction::from(inst);
         assert_eq!(op, ThumbInstruction::LDRB(InnerStoreLoadByte::Reg{ rd: 2, rb: 0, ro: 6 }));
     }
 
     #[test]
     fn test_strh_decode() {
-        let inst = 0x81bb;
+        let inst: u16 = 0x81bb;
         let op = ThumbInstruction::from(inst);
         assert_eq!(op, ThumbInstruction::STRH(InnerStoreLoadByte::Offset { offset: 0xc, rb: 7, rd: 3 }));
     }
 
     #[test]
     fn test_b_decode() {
-        let inst = 0xe3a0;
+        let inst: u16 = 0xe3a0;
         let op = ThumbInstruction::from(inst);
         assert_eq!(op, ThumbInstruction::B(0x740));
     }
 
     #[test]
     fn test_push_decode() {
-        let inst = 0xb578;
+        let inst: u16 = 0xb578;
         let op = ThumbInstruction::from(inst);
         assert_eq!(op, ThumbInstruction::PUSH(InnerStack::LrPc(0b1111000)));
     }
 
     #[test]
     fn test_strh_decode_two() {
-        let inst = 0x7090;
+        let inst: u16 = 0x7090;
         let op = ThumbInstruction::from(inst);
         assert_eq!(op, ThumbInstruction::STRB(InnerStoreLoadByte::Offset{rd: 0, rb: 2, offset: 2}));
     }
