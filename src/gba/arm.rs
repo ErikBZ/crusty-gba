@@ -389,7 +389,25 @@ impl DataProcessingOp {
         }
         else {
             let shift = (self.operand >> 4 & 0xff) as u32;
-            registers[self.rd as usize] << shift
+
+            let (s, s_type) = if shift & 1 == 1 {
+                (registers[(shift >> 4) as usize], (shift >> 1) & 3)
+            } else if shift & 1 == 0 {
+                (shift >> 3, (shift >> 1) & 3)
+            } else {
+                unreachable!()
+            };
+
+            let rm = (self.operand & 0xf) as usize;
+
+            // TODO: Change this to enum?
+            match s_type {
+                0 => registers[rm] << s,
+                1 => registers[rm] >> s,
+                2 => ((registers[rm] as i32) >> s) as u32,
+                3 => registers[rm].rotate_right(s),
+                _ => unreachable!()
+            }
         }
     }
 }

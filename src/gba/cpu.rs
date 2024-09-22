@@ -67,7 +67,7 @@ impl CPU {
             0
         };
 
-        self.cpsr &= 0x0fffffff;
+        self.cpsr &= 0x2fffffff;
         self.cpsr |= CPSR_C & (res >> 2);
         self.cpsr |= zero;
     }
@@ -94,13 +94,17 @@ impl CPU {
             ArmInstruction::TEQ(_, o) => {
                 let operand2 = o.get_operand2(self.registers);
                 let res = self.registers[o.rn as usize] ^ operand2;
+                println!("{}", operand2);
+                println!("{}", self.registers[o.rn as usize]);
                 println!("{:032b}", res);
                 self.update_cpsr(res);
             },
             ArmInstruction::ORR(_, o) => {
                 let operand2 = o.get_operand2(self.registers);
                 let res = self.registers[o.rn as usize] | operand2;
-                self.update_cpsr(res);
+                if o.s {
+                    self.update_cpsr(res);
+                }
             },
             ArmInstruction::B(_, o) => {
                 let offset = o.get_offset();
@@ -145,6 +149,20 @@ impl CPU {
                 if !o.p {
                     todo!()
                 }
+            },
+            ArmInstruction::STR(_, o) => {
+                let offset = o.get_offset(self.registers);
+                let mut tfx_add = offset;
+                tfx_add >>= 2;
+
+                if o.p {
+                    if o.u {
+                        tfx_add += self.registers[o.rn as usize];
+                    } else {
+                        tfx_add -= self.registers[o.rn as usize];
+                    }
+                }
+
             },
             ArmInstruction::MRS(_, o) => {
                 if o.is_cspr() {
