@@ -1,102 +1,58 @@
-use super::cpu::{CPSR_Z, CPSR_C, CPSR_N, CPSR_V};
+use super::cpu::CPU;
+use super::Conditional;
+use super::Operation;
 // TODO: Possible alternative to this is to have all 15
 // operation structs be a trait "Operable", that takes a CPU
 // and modifies it based on it's instruction
-#[derive(Debug, strum_macros::Display, PartialEq)]
-pub enum Conditional {
-    EQ,
-    NE,
-    CS,
-    CC,
-    MI,
-    PL,
-    VS,
-    VC,
-    HI,
-    LS,
-    GE,
-    LT,
-    GT,
-    LE,
-    #[strum(to_string = "")]
-    AL,
-    NV,
+
+pub fn decode_as_arm(inst: u32) -> impl Operation {
+    DataProcessingOp::from(inst)
+    //if is_data_processing(inst) {
+    //    DataProcessingOp::from(inst)
+    //} else {
+    //    MultiplyOp::from(inst)
+    //}
+    //    MultiplyOp::from(inst)
+    //} else if is_multiply_long(inst) {
+    //    MultiplyLongOp::from(inst)
+    //} else if is_single_data_swap(inst) {
+    //    SingleDataSwapOp::from(inst)
+    //} else if is_branch_and_exchange(inst) {
+    //    BranchExchangeOp::from(inst)
+    //} else if is_branch(inst) {
+    //    BranchOp::from(inst)
+    //} else if is_software_interrupt(inst) {
+    //    todo!()
+    //} else if is_single_data_tfx(inst) {
+    //    SingleDataTfx::from(inst)
+    //} else if is_block_data_tfx(inst) {
+    //    BlockDataTransfer::from(inst)
+    //} else if is_coprocessor_data_op(inst) {
+    //    CoprocessDataOp::from(inst)
+    //} else if is_coprocessor_data_tfx(inst) {
+    //    CoprocessDataTfx::from(inst)
+    //} else if is_coprocessor_reg_tfx(inst) {
+    //    CoprocessRegTfx::from(inst)
+    //} else if is_psr_transfer(inst) {
+    //    PsrTransferOp::from(inst)
+    //} else if is_halfword_data_tfx_imm(inst) || is_halfword_data_tfx_reg(inst) {
+    //    HalfwordDataOp::from(inst)
+    //} else {
+    //    UndefinedInstruction
+    //}
 }
 
-impl From<u32> for Conditional {
-    fn from(instruction: u32) -> Self {
-        let conditional = instruction >> 28;
-        match conditional {
-            0 => Conditional::EQ,
-            1 => Conditional::NE,
-            2 => Conditional::CS,
-            3 => Conditional::CC,
-            4 => Conditional::MI,
-            5 => Conditional::PL,
-            6 => Conditional::VS,
-            7 => Conditional::VC,
-            8 => Conditional::HI,
-            9 => Conditional::LS,
-            10 => Conditional::GE,
-            11 => Conditional::LT,
-            12 => Conditional::GT,
-            13 => Conditional::LE,
-            14 => Conditional::AL,
-            _ => Conditional::NV,
-        }
+struct UndefinedInstruction;
+impl Operation for UndefinedInstruction {
+    fn run(&self, _cpu: &mut CPU) {
+        unreachable!()
     }
 }
 
-impl Conditional {
-    pub fn should_run(&self, cpsr: u32) -> bool {
-        match self {
-            Conditional::EQ => {
-                (cpsr & CPSR_Z) == CPSR_Z
-            },
-            Conditional::NE => {
-                (cpsr & CPSR_Z) == 0
-            },
-            Conditional::CS => {
-                (cpsr & CPSR_C) == CPSR_C
-            },
-            Conditional::CC => {
-                (cpsr & CPSR_C) == 0
-            },
-            Conditional::MI => {
-                (cpsr & CPSR_N) == CPSR_N
-            },
-            Conditional::PL => {
-                (cpsr & CPSR_N) == 0
-            },
-            Conditional::VS => {
-                (cpsr & CPSR_V) == CPSR_V
-            },
-            Conditional::VC => {
-                (cpsr & CPSR_V) == 0
-            },
-            Conditional::HI => {
-                (cpsr & CPSR_C) == CPSR_C && (cpsr & CPSR_Z) == 0
-            },
-            Conditional::LS => {
-                (cpsr & CPSR_C) == 0 && (cpsr & CPSR_Z) == CPSR_Z
-            },
-            Conditional::GE => {
-                (cpsr & CPSR_N) == (cpsr & CPSR_V << 3)
-            },
-            Conditional::LT => {
-                (cpsr & CPSR_N) != (cpsr & CPSR_V << 3)
-            },
-            Conditional::GT => {
-                (cpsr & CPSR_Z) == 0 && (cpsr & CPSR_N == cpsr & CPSR_V << 3)
-            },
-            Conditional::LE => {
-                (cpsr & CPSR_Z) == CPSR_Z || (cpsr & CPSR_N != cpsr & CPSR_V << 3)
-            },
-            Conditional::AL => {
-                true
-            },
-            _ => false,
-        }
+struct SoftwareInterruptOp;
+impl Operation for SoftwareInterruptOp {
+    fn run(&self, _cpu: &mut CPU) {
+        todo!()
     }
 }
 
@@ -159,7 +115,6 @@ pub enum AddressingMode3 {
     Reg { rm: u8 },
     PreIndexedReg { rm: u8 },
     PostIndexedReg { rm: u8 },
-
 }
 
 impl From<u32> for ArmInstruction {
@@ -379,6 +334,12 @@ impl From<u32> for DataProcessingOp {
     }
 }
 
+impl Operation for DataProcessingOp {
+    fn run(&self, cpu: &mut CPU) {
+        todo!()
+    }
+}
+
 impl DataProcessingOp {
     pub fn get_operand2(&self, registers: [u32;16]) -> u32 {
         if self.i {
@@ -423,6 +384,12 @@ pub struct MultiplyOp {
     rm: u8,
 }
 
+impl Operation for MultiplyOp{
+    fn run(&self, _cpu: &mut CPU) {
+        todo!()
+    }
+}
+
 impl From<u32> for MultiplyOp {
     fn from(inst: u32) -> Self {
         Self {
@@ -449,6 +416,12 @@ pub struct MultiplyLongOp {
     rm: u8,
 }
 
+impl Operation for MultiplyLongOp {
+    fn run(&self, _cpu: &mut CPU) {
+        todo!()
+    }
+}
+
 impl From<u32> for MultiplyLongOp {
     fn from(inst: u32) -> Self {
         Self {
@@ -471,6 +444,12 @@ pub struct SingleDataSwapOp {
     rm: u8,
 }
 
+impl Operation for SingleDataSwapOp {
+    fn run(&self, _cpu: &mut CPU) {
+        todo!()
+    }
+}
+
 impl From<u32> for SingleDataSwapOp {
     fn from(inst: u32) -> Self {
         Self {
@@ -487,6 +466,12 @@ pub struct BranchExchangeOp {
     rn: u8,
 }
 
+impl Operation for BranchExchangeOp {
+    fn run(&self, _cpu: &mut CPU) {
+        todo!()
+    }
+}
+
 impl From<u32> for BranchExchangeOp {
     fn from(inst: u32) -> Self {
         Self {
@@ -499,6 +484,12 @@ impl From<u32> for BranchExchangeOp {
 pub struct BranchOp {
     l: bool,
     offset: u32,
+}
+
+impl Operation for BranchOp {
+    fn run(&self, _cpu: &mut CPU) {
+        todo!()
+    }
 }
 
 impl From<u32> for BranchOp {
@@ -534,6 +525,12 @@ pub struct HalfwordRegOffset {
     rm: u8,
 }
 
+impl Operation for HalfwordRegOffset {
+    fn run(&self, _cpu: &mut CPU) {
+        todo!()
+    }
+}
+
 impl From<u32> for HalfwordRegOffset {
     fn from(inst: u32) -> Self {
         Self {
@@ -564,6 +561,12 @@ pub struct HalfwordImmOffset {
     offset_b: u8,
 }
 
+impl Operation for HalfwordImmOffset {
+    fn run(&self, _cpu: &mut CPU) {
+        todo!()
+    }
+}
+
 impl From<u32> for HalfwordImmOffset {
     fn from(inst: u32) -> Self {
         Self {
@@ -592,6 +595,12 @@ pub struct SingleDataTfx {
     pub rn: u8,
     pub rd: u8,
     pub offset: u16,
+}
+
+impl Operation for SingleDataTfx {
+    fn run(&self, _cpu: &mut CPU) {
+        todo!()
+    }
 }
 
 impl From<u32> for SingleDataTfx {
@@ -633,6 +642,12 @@ pub struct BlockDataTransfer {
     register_list: u16,
 }
 
+impl Operation for BlockDataTransfer {
+    fn run(&self, _cpu: &mut CPU) {
+        todo!()
+    }
+}
+
 impl From<u32> for BlockDataTransfer {
     fn from(inst: u32) -> Self {
         Self {
@@ -658,6 +673,12 @@ pub struct CoprocessDataTfx {
     c_rd: u8,
     cp_num: u8,
     offset: u16,
+}
+
+impl Operation for CoprocessDataTfx {
+    fn run(&self, _cpu: &mut CPU) {
+        todo!()
+    }
 }
 
 impl From<u32> for CoprocessDataTfx {
@@ -686,6 +707,12 @@ pub struct CoprocessDataOp {
     c_rm: u8,
 }
 
+impl Operation for CoprocessDataOp {
+    fn run(&self, _cpu: &mut CPU) {
+        todo!()
+    }
+}
+
 impl From<u32> for CoprocessDataOp {
     fn from(inst: u32) -> Self {
         Self {
@@ -708,6 +735,12 @@ pub struct CoprocessRegTfx {
     cp_num: u8,
     cp: u8,
     c_rm: u8,
+}
+
+impl Operation for CoprocessRegTfx {
+    fn run(&self, _cpu: &mut CPU) {
+        todo!()
+    }
 }
 
 impl From<u32> for CoprocessRegTfx {
@@ -733,6 +766,12 @@ pub struct PsrTransferOp {
     rm: u8,
     rotate: u8,
     imm: u8,
+}
+
+impl Operation for PsrTransferOp {
+    fn run(&self, _cpu: &mut CPU) {
+        todo!()
+    }
 }
 
 impl From<u32> for PsrTransferOp {
@@ -779,6 +818,12 @@ pub struct HalfwordDataOp {
     h: bool,
     rn: u8,
     rd: u8,
+}
+
+impl Operation for HalfwordDataOp {
+    fn run(&self, _cpu: &mut CPU) {
+        todo!()
+    }
 }
 
 impl From<u32> for HalfwordDataOp {

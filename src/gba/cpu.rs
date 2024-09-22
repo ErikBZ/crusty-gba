@@ -1,12 +1,9 @@
 use core::fmt;
 
-use super::arm::{ArmInstruction, Conditional};
+use super::arm::ArmInstruction;
+use super::{Conditional, CPSR_Z, CPSR_V, CPSR_N, CPSR_C};
 use super::system::SystemMemory;
 
-pub const CPSR_N: u32 = 0x80000000;
-pub const CPSR_Z: u32 = 0x60000000;
-pub const CPSR_C: u32 = 0x20000000;
-pub const CPSR_V: u32 = 0x10000000;
 const PC: usize = 15;
 
 #[derive(Debug)]
@@ -58,6 +55,14 @@ impl CPU {
     }
     pub fn set_pc(&mut self, pc: u32) {
         self.registers[PC] = pc;
+    }
+
+    pub fn get_instruction_at_pc(&self) {
+
+    }
+
+    pub fn get_instruction_address(&self, address: u32) {
+
     }
 
     pub fn update_cpsr(&mut self, res: u32) {
