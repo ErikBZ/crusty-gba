@@ -9,9 +9,11 @@ pub const CPSR_Z: u32 = 0x60000000;
 pub const CPSR_C: u32 = 0x20000000;
 pub const CPSR_V: u32 = 0x10000000;
 
+use crate::SystemMemory;
+
 // Operations can be ARM or Thumb instructions
 pub trait Operation {
-    fn run(&self, cpu: &mut cpu::CPU);
+    fn run(&self, cpu: &mut cpu::CPU, mem: &mut SystemMemory);
 }
 
 #[derive(Debug, strum_macros::Display, PartialEq)]

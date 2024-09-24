@@ -1,57 +1,58 @@
 use super::cpu::CPU;
 use super::Conditional;
 use super::Operation;
+use super::SystemMemory;
+
+use super::cpu::PC;
+
 // TODO: Possible alternative to this is to have all 15
 // operation structs be a trait "Operable", that takes a CPU
 // and modifies it based on it's instruction
 
-pub fn decode_as_arm(inst: u32) -> impl Operation {
-    DataProcessingOp::from(inst)
-    //if is_data_processing(inst) {
-    //    DataProcessingOp::from(inst)
-    //} else {
-    //    MultiplyOp::from(inst)
-    //}
-    //    MultiplyOp::from(inst)
-    //} else if is_multiply_long(inst) {
-    //    MultiplyLongOp::from(inst)
-    //} else if is_single_data_swap(inst) {
-    //    SingleDataSwapOp::from(inst)
-    //} else if is_branch_and_exchange(inst) {
-    //    BranchExchangeOp::from(inst)
-    //} else if is_branch(inst) {
-    //    BranchOp::from(inst)
-    //} else if is_software_interrupt(inst) {
-    //    todo!()
-    //} else if is_single_data_tfx(inst) {
-    //    SingleDataTfx::from(inst)
-    //} else if is_block_data_tfx(inst) {
-    //    BlockDataTransfer::from(inst)
-    //} else if is_coprocessor_data_op(inst) {
-    //    CoprocessDataOp::from(inst)
-    //} else if is_coprocessor_data_tfx(inst) {
-    //    CoprocessDataTfx::from(inst)
-    //} else if is_coprocessor_reg_tfx(inst) {
-    //    CoprocessRegTfx::from(inst)
-    //} else if is_psr_transfer(inst) {
-    //    PsrTransferOp::from(inst)
-    //} else if is_halfword_data_tfx_imm(inst) || is_halfword_data_tfx_reg(inst) {
-    //    HalfwordDataOp::from(inst)
-    //} else {
-    //    UndefinedInstruction
-    //}
+pub fn decode_as_arm(inst: u32) -> Box<dyn Operation> {
+    if is_data_processing(inst) {
+       Box::new(DataProcessingOp::from(inst))
+    } else if is_multiply(inst) {
+       Box::new(MultiplyOp::from(inst))
+    } else if is_multiply_long(inst) {
+       Box::new(MultiplyLongOp::from(inst))
+    } else if is_single_data_swap(inst) {
+       Box::new(SingleDataSwapOp::from(inst))
+    } else if is_branch_and_exchange(inst) {
+       Box::new(BranchExchangeOp::from(inst))
+    } else if is_branch(inst) {
+       Box::new(BranchOp::from(inst))
+    } else if is_software_interrupt(inst) {
+        Box::new(SoftwareInterruptOp)
+    } else if is_single_data_tfx(inst) {
+       Box::new(SingleDataTfx::from(inst))
+    } else if is_block_data_tfx(inst) {
+       Box::new(BlockDataTransfer::from(inst))
+    } else if is_coprocessor_data_op(inst) {
+       Box::new(CoprocessDataOp::from(inst))
+    } else if is_coprocessor_data_tfx(inst) {
+       Box::new(CoprocessDataTfx::from(inst))
+    } else if is_coprocessor_reg_tfx(inst) {
+       Box::new(CoprocessRegTfx::from(inst))
+    } else if is_psr_transfer(inst) {
+       Box::new(PsrTransferOp::from(inst))
+    } else if is_halfword_data_tfx_imm(inst) || is_halfword_data_tfx_reg(inst) {
+       Box::new(HalfwordDataOp::from(inst))
+    } else {
+       Box::new(UndefinedInstruction)
+    }
 }
 
 struct UndefinedInstruction;
 impl Operation for UndefinedInstruction {
-    fn run(&self, _cpu: &mut CPU) {
+    fn run(&self, _cpu: &mut CPU, _mem: &mut SystemMemory) {
         unreachable!()
     }
 }
 
 struct SoftwareInterruptOp;
 impl Operation for SoftwareInterruptOp {
-    fn run(&self, _cpu: &mut CPU) {
+    fn run(&self, _cpu: &mut CPU, _mem: &mut SystemMemory) {
         todo!()
     }
 }
@@ -320,23 +321,85 @@ pub struct DataProcessingOp {
     pub rn: u8,
     pub rd: u8,
     pub operand: u32,
+    opcode: DataProcessingType,
+}
+
+#[derive(Debug, PartialEq)]
+enum DataProcessingType{
+    AND,
+    EOR,
+    SUB,
+    RSB,
+    ADD,
+    ADC,
+    SBC,
+    RSC,
+    TST,
+    TEQ,
+    CMP,
+    CMN,
+    ORR,
+    MOV,
+    BIC,
+    MVN,
 }
 
 impl From<u32> for DataProcessingOp {
     fn from(inst: u32) -> Self {
+        let opcode = match (inst >> 21 & 0xff) {
+            0 => DataProcessingType::AND,
+            1 => DataProcessingType::EOR,
+            2 => DataProcessingType::SUB,
+            3 => DataProcessingType::RSB,
+            4 => DataProcessingType::ADD,
+            5 => DataProcessingType::ADC,
+            6 => DataProcessingType::SBC,
+            7 => DataProcessingType::RSC,
+            8 => DataProcessingType::TST,
+            9 => DataProcessingType::TEQ,
+            10 => DataProcessingType::CMP,
+            11 => DataProcessingType::CMN,
+            12 => DataProcessingType::ORR,
+            13 => DataProcessingType::MOV,
+            14 => DataProcessingType::BIC,
+            _ => DataProcessingType::MVN,
+        };
         DataProcessingOp {
             i: (inst >> 25 & 0x1) == 0x1,
             s: (inst >> 20 & 0x1) == 0x1,
             rd: (inst >> 12 & 0xf) as u8,
             rn: (inst >> 16 & 0xf) as u8,
             operand: (inst & 0xfff) as u32,
+            opcode
         }
     }
 }
 
 impl Operation for DataProcessingOp {
-    fn run(&self, cpu: &mut CPU) {
-        todo!()
+    fn run(&self, cpu: &mut CPU, _mem: &mut SystemMemory) {
+        let operand2 = self.get_operand2(cpu.registers);
+        let rn_value = cpu.registers[self.rn as usize];
+
+        let res = match self.opcode {
+            DataProcessingType::MOV => {
+                cpu.registers[self.rd as usize] = operand2;
+                operand2
+            },
+            DataProcessingType::CMP => {
+                rn_value - operand2
+            },
+            DataProcessingType::TEQ => {
+                rn_value ^ operand2
+            },
+            DataProcessingType::ORR => {
+                rn_value | operand2
+            }
+            _ => todo!()
+        };
+
+        if self.s {
+            cpu.update_cpsr(res);
+        }
     }
 }
 
@@ -385,7 +448,7 @@ pub struct MultiplyOp {
 }
 
 impl Operation for MultiplyOp{
-    fn run(&self, _cpu: &mut CPU) {
+    fn run(&self, _cpu: &mut CPU, _mem: &mut SystemMemory) {
         todo!()
     }
 }
@@ -417,7 +480,7 @@ pub struct MultiplyLongOp {
 }
 
 impl Operation for MultiplyLongOp {
-    fn run(&self, _cpu: &mut CPU) {
+    fn run(&self, _cpu: &mut CPU, _mem: &mut SystemMemory) {
         todo!()
     }
 }
@@ -445,7 +508,7 @@ pub struct SingleDataSwapOp {
 }
 
 impl Operation for SingleDataSwapOp {
-    fn run(&self, _cpu: &mut CPU) {
+    fn run(&self, _cpu: &mut CPU, _mem: &mut SystemMemory) {
         todo!()
     }
 }
@@ -467,7 +530,7 @@ pub struct BranchExchangeOp {
 }
 
 impl Operation for BranchExchangeOp {
-    fn run(&self, _cpu: &mut CPU) {
+    fn run(&self, _cpu: &mut CPU, _mem: &mut SystemMemory) {
         todo!()
     }
 }
@@ -487,8 +550,15 @@ pub struct BranchOp {
 }
 
 impl Operation for BranchOp {
-    fn run(&self, _cpu: &mut CPU) {
-        todo!()
+    fn run(&self, cpu: &mut CPU, _mem: &mut SystemMemory) {
+        let offset = self.get_offset();
+        let offset_abs: u32 = u32::try_from(offset.abs()).unwrap_or(0);
+
+        if offset < 0 {
+            cpu.registers[PC] -= offset_abs;
+        } else {
+            cpu.registers[PC] += offset_abs;
+        }
     }
 }
 
@@ -526,7 +596,7 @@ pub struct HalfwordRegOffset {
 }
 
 impl Operation for HalfwordRegOffset {
-    fn run(&self, _cpu: &mut CPU) {
+    fn run(&self, _cpu: &mut CPU, _mem: &mut SystemMemory) {
         todo!()
     }
 }
@@ -562,7 +632,7 @@ pub struct HalfwordImmOffset {
 }
 
 impl Operation for HalfwordImmOffset {
-    fn run(&self, _cpu: &mut CPU) {
+    fn run(&self, _cpu: &mut CPU, _mem: &mut SystemMemory) {
         todo!()
     }
 }
@@ -598,8 +668,43 @@ pub struct SingleDataTfx {
 }
 
 impl Operation for SingleDataTfx {
-    fn run(&self, _cpu: &mut CPU) {
-        todo!()
+    fn run(&self, cpu: &mut CPU, mem: &mut SystemMemory) {
+        if self.l {
+            // TODO: add write back check somewhere
+            let offset = self.get_offset(cpu.registers);
+            let mut tfx_add = offset;
+            tfx_add >>= 2;
+
+            if self.p {
+                if self.u {
+                    tfx_add += cpu.registers[self.rn as usize];
+                } else {
+                    tfx_add -= cpu.registers[self.rn as usize];
+                }
+            }
+
+            let block_from_mem = match mem.read_from_mem(tfx_add as usize) {
+                Ok(n) => n,
+                Err(e) => {
+                    println!("{}", e);
+                    panic!()
+                },
+            };
+
+            cpu.registers[self.rd as usize] = if self.b {
+                block_from_mem
+            } else {
+                block_from_mem & 0xff
+            };
+
+            // NOTE: for L i don't think this matters
+            // for LDR
+            if !self.p {
+                todo!()
+            }
+        } else {
+
+        }
     }
 }
 
@@ -643,7 +748,7 @@ pub struct BlockDataTransfer {
 }
 
 impl Operation for BlockDataTransfer {
-    fn run(&self, _cpu: &mut CPU) {
+    fn run(&self, _cpu: &mut CPU, _mem: &mut SystemMemory) {
         todo!()
     }
 }
@@ -676,7 +781,7 @@ pub struct CoprocessDataTfx {
 }
 
 impl Operation for CoprocessDataTfx {
-    fn run(&self, _cpu: &mut CPU) {
+    fn run(&self, _cpu: &mut CPU, _mem: &mut SystemMemory) {
         todo!()
     }
 }
@@ -708,7 +813,7 @@ pub struct CoprocessDataOp {
 }
 
 impl Operation for CoprocessDataOp {
-    fn run(&self, _cpu: &mut CPU) {
+    fn run(&self, _cpu: &mut CPU, _mem: &mut SystemMemory) {
         todo!()
     }
 }
@@ -738,7 +843,7 @@ pub struct CoprocessRegTfx {
 }
 
 impl Operation for CoprocessRegTfx {
-    fn run(&self, _cpu: &mut CPU) {
+    fn run(&self, _cpu: &mut CPU, _mem: &mut SystemMemory) {
         todo!()
     }
 }
@@ -766,16 +871,52 @@ pub struct PsrTransferOp {
     rm: u8,
     rotate: u8,
     imm: u8,
+    op: PsrTranferType,
+}
+
+#[derive(Debug, PartialEq)]
+enum PsrTranferType {
+    MSR,
+    MRS
 }
 
 impl Operation for PsrTransferOp {
-    fn run(&self, _cpu: &mut CPU) {
-        todo!()
+    fn run(&self, cpu: &mut CPU, _mem: &mut SystemMemory) {
+        match self.op {
+            PsrTranferType::MSR => {
+                let operand = self.get_operand(cpu.registers);
+                let mask: u32 = if self.is_bit_flag_only() {
+                    0xf0000000
+                } else {
+                    0xffffffff
+                };
+
+                if self.is_cspr() {
+                    cpu.cpsr = (cpu.cpsr & !mask) | (operand & mask)
+                } else {
+                    cpu.spsr = (cpu.spsr & !mask) | (operand & mask)
+                }
+            },
+            PsrTranferType::MRS => {
+                if self.is_cspr() {
+                    cpu.registers[self.rd as usize] = cpu.cpsr;
+                } else {
+                    cpu.registers[self.rd as usize] = cpu.spsr;
+                }
+            },
+        }
     }
 }
 
 impl From<u32> for PsrTransferOp {
+
     fn from(inst: u32) -> Self {
+        let op = if is_mrs_op(inst) {
+            PsrTranferType::MRS
+        } else {
+            PsrTranferType::MSR
+        };
+
         Self {
             i: (inst >> 25 & 1) == 1,
             p: (inst >> 22 & 1) == 1,
@@ -783,7 +924,8 @@ impl From<u32> for PsrTransferOp {
             rd: (inst >> 12 & 0xf) as u8,
             rm: (inst & 0xf) as u8,
             rotate: (inst >> 8 & 0xf) as u8,
-            imm: (inst & 0xff) as u8
+            imm: (inst & 0xff) as u8,
+            op
         }
     }
 }
@@ -821,7 +963,7 @@ pub struct HalfwordDataOp {
 }
 
 impl Operation for HalfwordDataOp {
-    fn run(&self, _cpu: &mut CPU) {
+    fn run(&self, _cpu: &mut CPU, _mem: &mut SystemMemory) {
         todo!()
     }
 }

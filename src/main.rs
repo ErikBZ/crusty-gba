@@ -56,7 +56,7 @@ fn debug_bios(codes: Vec<u32>) {
                     let op = ArmInstruction::from(inst);
                     println!("{}", cpu);
                     println!("{:?}", op);
-                    cpu.run_instruction(inst, &mut memory);
+                    cpu.run_instruction_v2(inst, &mut memory);
                 } else {
                     println!("Address it not within ROM");
                     continue;

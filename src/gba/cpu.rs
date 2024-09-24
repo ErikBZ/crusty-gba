@@ -1,16 +1,16 @@
 use core::fmt;
 
-use super::arm::ArmInstruction;
+use super::arm::{decode_as_arm, ArmInstruction};
 use super::{Conditional, CPSR_Z, CPSR_V, CPSR_N, CPSR_C};
 use super::system::SystemMemory;
 
-const PC: usize = 15;
+pub const PC: usize = 15;
 
 #[derive(Debug)]
 pub struct CPU {
-    registers: [u32; 16],
-    cpsr: u32,
-    spsr: u32,
+    pub registers: [u32; 16],
+    pub cpsr: u32,
+    pub spsr: u32,
 }
 
 impl Default for CPU {
@@ -77,6 +77,14 @@ impl CPU {
         self.cpsr |= zero;
     }
 
+    pub fn run_instruction_v2(&mut self, inst: u32, ram: &mut SystemMemory) {
+        let cond = Conditional::from(inst);
+        let op = decode_as_arm(inst);
+        self.registers[PC] += 4;
+
+        op.run(self, ram);
+    }
+
     pub fn run_instruction(&mut self, inst: u32, ram: &mut SystemMemory) {
         let cond = Conditional::from(inst);
         let op = ArmInstruction::from(inst);
@@ -99,9 +107,6 @@ impl CPU {
             ArmInstruction::TEQ(_, o) => {
                 let operand2 = o.get_operand2(self.registers);
                 let res = self.registers[o.rn as usize] ^ operand2;
-                println!("{}", operand2);
-                println!("{}", self.registers[o.rn as usize]);
-                println!("{:032b}", res);
                 self.update_cpsr(res);
             },
             ArmInstruction::ORR(_, o) => {
