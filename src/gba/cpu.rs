@@ -1,6 +1,6 @@
 use core::fmt;
 
-use super::arm::{decode_as_arm, ArmInstruction};
+use super::arm::decode_as_arm;
 use super::{Conditional, CPSR_Z, CPSR_V, CPSR_N, CPSR_C};
 use super::system::SystemMemory;
 
@@ -37,32 +37,17 @@ impl fmt::Display for CPU {
 }
 
 impl CPU {
-    // TODO: Make these mutable pointers?
-
-    // Stack Pointer
-    pub fn sp(&self) -> u32 {
-        self.registers[13]
-    }
-
-    // Link Register
-    pub fn lr(&self) -> u32 {
-        self.registers[14]
-    }
-
     // Program Counter
     pub fn pc(&self) -> u32 {
         self.registers[PC]
     }
-    pub fn set_pc(&mut self, pc: u32) {
-        self.registers[PC] = pc;
-    }
 
     pub fn get_instruction_at_pc(&self) {
-
+        todo!()
     }
 
     pub fn get_instruction_address(&self, address: u32) {
-
+        todo!()
     }
 
     pub fn update_cpsr(&mut self, res: u32) {
@@ -77,7 +62,7 @@ impl CPU {
         self.cpsr |= zero;
     }
 
-    pub fn run_instruction_v2(&mut self, inst: u32, ram: &mut SystemMemory) {
+    pub fn run_instruction(&mut self, inst: u32, ram: &mut SystemMemory) {
         self.registers[PC] += 4;
 
         let cond = Conditional::from(inst);
@@ -87,119 +72,5 @@ impl CPU {
 
         let op = decode_as_arm(inst);
         op.run(self, ram);
-    }
-
-    pub fn run_instruction(&mut self, inst: u32, ram: &mut SystemMemory) {
-        let cond = Conditional::from(inst);
-        let op = ArmInstruction::from(inst);
-        self.registers[PC] += 4;
-
-        if !cond.should_run(self.cpsr) {
-            return;
-        }
-
-        match op {
-            ArmInstruction::CMP(_, o) =>  {
-                let operand2 = o.get_operand2(self.registers);
-                let res = self.registers[o.rn as usize] - operand2;
-                self.update_cpsr(res);
-            },
-            ArmInstruction::MOV(_, o) => {
-                let operand2 = o.get_operand2(self.registers);
-                self.registers[o.rd as usize] = operand2;
-            },
-            ArmInstruction::TEQ(_, o) => {
-                let operand2 = o.get_operand2(self.registers);
-                let res = self.registers[o.rn as usize] ^ operand2;
-                self.update_cpsr(res);
-            },
-            ArmInstruction::ORR(_, o) => {
-                let operand2 = o.get_operand2(self.registers);
-                let res = self.registers[o.rn as usize] | operand2;
-                if o.s {
-                    self.update_cpsr(res);
-                }
-            },
-            ArmInstruction::B(_, o) => {
-                let offset = o.get_offset();
-                let offset_abs: u32 = u32::try_from(offset.abs()).unwrap_or(0);
-
-                if offset < 0 {
-                    self.registers[PC] -= offset_abs;
-                } else {
-                    self.registers[PC] += offset_abs;
-                }
-            },
-            ArmInstruction::LDR(_, o) => {
-                // TODO: add write back check somewhere
-                let offset = o.get_offset(self.registers);
-                let mut tfx_add = offset;
-                tfx_add >>= 2;
-
-                if o.p {
-                    if o.u {
-                        tfx_add += self.registers[o.rn as usize];
-                    } else {
-                        tfx_add -= self.registers[o.rn as usize];
-                    }
-                }
-
-                let block_from_mem = match ram.read_from_mem(tfx_add as usize) {
-                    Ok(n) => n,
-                    Err(e) => {
-                        println!("{}", e);
-                        panic!()
-                    },
-                };
-
-                self.registers[o.rd as usize] = if o.b {
-                    block_from_mem
-                } else {
-                    block_from_mem & 0xff
-                };
-
-                // NOTE: for L i don't think this matters
-                // for LDR
-                if !o.p {
-                    todo!()
-                }
-            },
-            ArmInstruction::STR(_, o) => {
-                let offset = o.get_offset(self.registers);
-                let mut tfx_add = offset;
-                tfx_add >>= 2;
-
-                if o.p {
-                    if o.u {
-                        tfx_add += self.registers[o.rn as usize];
-                    } else {
-                        tfx_add -= self.registers[o.rn as usize];
-                    }
-                }
-
-            },
-            ArmInstruction::MRS(_, o) => {
-                if o.is_cspr() {
-                    self.registers[o.rd as usize] = self.cpsr;
-                } else {
-                    self.registers[o.rd as usize] = self.spsr;
-                }
-            },
-            ArmInstruction::MSR(_, o) => {
-                let operand = o.get_operand(self.registers);
-                let mask: u32 = if o.is_bit_flag_only() {
-                    0xf0000000
-                } else {
-                    0xffffffff
-                };
-
-                if o.is_cspr() {
-                    self.cpsr = (self.cpsr & !mask) | (operand & mask)
-                } else {
-                    self.spsr = (self.spsr & !mask) | (operand & mask)
-                }
-            },
-            _ => todo!(),
-        }
     }
 }
