@@ -78,10 +78,14 @@ impl CPU {
     }
 
     pub fn run_instruction_v2(&mut self, inst: u32, ram: &mut SystemMemory) {
-        let cond = Conditional::from(inst);
-        let op = decode_as_arm(inst);
         self.registers[PC] += 4;
 
+        let cond = Conditional::from(inst);
+        if !cond.should_run(self.cpsr) {
+            return;
+        }
+
+        let op = decode_as_arm(inst);
         op.run(self, ram);
     }
 

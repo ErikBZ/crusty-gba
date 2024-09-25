@@ -9,6 +9,7 @@ use gba::thumb::ThumbInstruction;
 use gba::cpu::CPU;
 use gba::debugger::DebuggerCommand;
 use gba::system::SystemMemory;
+use gba::arm::decode_as_arm;
 
 fn main() {
     // TODO: Just put test.gba in the root dir
@@ -53,7 +54,7 @@ fn debug_bios(codes: Vec<u32>) {
                 let i = (cpu.pc() >> 2) as usize;
                 if i < codes.len() {
                     let inst = codes[(cpu.pc() >> 2) as usize];
-                    let op = ArmInstruction::from(inst);
+                    let op = decode_as_arm(inst);
                     println!("{}", cpu);
                     println!("{:?}", op);
                     cpu.run_instruction_v2(inst, &mut memory);

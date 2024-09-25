@@ -43,6 +43,7 @@ pub fn decode_as_arm(inst: u32) -> Box<dyn Operation> {
     }
 }
 
+#[derive(Debug)]
 struct UndefinedInstruction;
 impl Operation for UndefinedInstruction {
     fn run(&self, _cpu: &mut CPU, _mem: &mut SystemMemory) {
@@ -50,6 +51,7 @@ impl Operation for UndefinedInstruction {
     }
 }
 
+#[derive(Debug)]
 struct SoftwareInterruptOp;
 impl Operation for SoftwareInterruptOp {
     fn run(&self, _cpu: &mut CPU, _mem: &mut SystemMemory) {
@@ -346,7 +348,7 @@ enum DataProcessingType{
 
 impl From<u32> for DataProcessingOp {
     fn from(inst: u32) -> Self {
-        let opcode = match (inst >> 21 & 0xff) {
+        let opcode = match (inst >> 21 & 0xf) {
             0 => DataProcessingType::AND,
             1 => DataProcessingType::EOR,
             2 => DataProcessingType::SUB,
@@ -871,11 +873,11 @@ pub struct PsrTransferOp {
     rm: u8,
     rotate: u8,
     imm: u8,
-    op: PsrTranferType,
+    op: PsrTransferType,
 }
 
 #[derive(Debug, PartialEq)]
-enum PsrTranferType {
+enum PsrTransferType {
     MSR,
     MRS
 }
@@ -883,7 +885,7 @@ enum PsrTranferType {
 impl Operation for PsrTransferOp {
     fn run(&self, cpu: &mut CPU, _mem: &mut SystemMemory) {
         match self.op {
-            PsrTranferType::MSR => {
+            PsrTransferType::MSR => {
                 let operand = self.get_operand(cpu.registers);
                 let mask: u32 = if self.is_bit_flag_only() {
                     0xf0000000
@@ -897,7 +899,7 @@ impl Operation for PsrTransferOp {
                     cpu.spsr = (cpu.spsr & !mask) | (operand & mask)
                 }
             },
-            PsrTranferType::MRS => {
+            PsrTransferType::MRS => {
                 if self.is_cspr() {
                     cpu.registers[self.rd as usize] = cpu.cpsr;
                 } else {
@@ -912,9 +914,9 @@ impl From<u32> for PsrTransferOp {
 
     fn from(inst: u32) -> Self {
         let op = if is_mrs_op(inst) {
-            PsrTranferType::MRS
+            PsrTransferType::MRS
         } else {
-            PsrTranferType::MSR
+            PsrTransferType::MSR
         };
 
         Self {
@@ -1082,16 +1084,12 @@ mod test {
     #[test]
     fn test_branch_decode() {
         let inst: u32 = 0b11101010000000000000000000011000;
-        let op = ArmInstruction::from(inst);
-        let op2 = ArmInstruction::B(
-            Conditional::AL,
-            BranchOp {
-                l: false,
-                offset: 0b11000,
-            },
-        );
-        println!("{:?}", op);
-        println!("{:?}", op2);
+        let op = BranchOp::from(inst);
+        let op2 = BranchOp {
+            l: false,
+            offset: 0b11000,
+        };
+
         assert_eq!(op, op2);
     }
 
@@ -1105,8 +1103,8 @@ mod test {
     #[test]
     fn test_strb_decode() {
         let inst: u32 = 0xe5cc3301;
-        let op = ArmInstruction::from(inst);
-        let op2 = ArmInstruction::STR(Conditional::AL, SingleDataTfx {
+        let op = SingleDataTfx::from(inst);
+        let op2 = SingleDataTfx {
             i: false,
             p: true,
             u: true,
@@ -1116,15 +1114,15 @@ mod test {
             rn: 12,
             rd: 3,
             offset: 0x301,
-        });
+        };
         assert_eq!(op, op2);
     }
 
     #[test]
     fn test_strh_decode() {
         let inst: u32 = 0xe08180b3;
-        let op = ArmInstruction::from(inst);
-        let op2 = ArmInstruction::STRH(Conditional::AL, HalfwordDataOp{
+        let op = HalfwordDataOp::from(inst);
+        let op2 = HalfwordDataOp {
             p: false,
             u: true,
             w: false,
@@ -1134,7 +1132,7 @@ mod test {
             rn: 1,
             rd: 8,
             mode: AddressingMode3::PostIndexedReg { rm: 3 },
-        });
+        };
         assert_eq!(op, op2);
     }
 
@@ -1159,8 +1157,8 @@ mod test {
     #[test]
     fn test_msreq_decode() {
         let inst: u32 = 0x0129f00c;
-        let op = ArmInstruction::from(inst);
-        let op2 = ArmInstruction::MSR(Conditional::EQ, PsrTransferOp{
+        let op = PsrTransferOp::from(inst);
+        let op2 = PsrTransferOp{
             i: false,
             imm: 12,
             bit_flags_only: false,
@@ -1168,7 +1166,8 @@ mod test {
             rd: 15,
             rm: 12,
             rotate: 0,
-        });
+            op: PsrTransferType::MSR
+        };
         assert_eq!(op, op2);
     }
 }

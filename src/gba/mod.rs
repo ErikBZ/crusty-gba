@@ -12,7 +12,7 @@ pub const CPSR_V: u32 = 0x10000000;
 use crate::SystemMemory;
 
 // Operations can be ARM or Thumb instructions
-pub trait Operation {
+pub trait Operation: std::fmt::Debug {
     fn run(&self, cpu: &mut cpu::CPU, mem: &mut SystemMemory);
 }
 
