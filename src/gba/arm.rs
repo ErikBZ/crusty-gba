@@ -1,154 +1,61 @@
-use super::cpu::{CPSR_Z, CPSR_C, CPSR_N, CPSR_V};
+use super::cpu::CPU;
+use super::Operation;
+use super::SystemMemory;
+
+use super::cpu::PC;
+
 // TODO: Possible alternative to this is to have all 15
 // operation structs be a trait "Operable", that takes a CPU
 // and modifies it based on it's instruction
-#[derive(Debug, strum_macros::Display, PartialEq)]
-pub enum Conditional {
-    EQ,
-    NE,
-    CS,
-    CC,
-    MI,
-    PL,
-    VS,
-    VC,
-    HI,
-    LS,
-    GE,
-    LT,
-    GT,
-    LE,
-    #[strum(to_string = "")]
-    AL,
-    NV,
-}
 
-impl From<u32> for Conditional {
-    fn from(instruction: u32) -> Self {
-        let conditional = instruction >> 28;
-        match conditional {
-            0 => Conditional::EQ,
-            1 => Conditional::NE,
-            2 => Conditional::CS,
-            3 => Conditional::CC,
-            4 => Conditional::MI,
-            5 => Conditional::PL,
-            6 => Conditional::VS,
-            7 => Conditional::VC,
-            8 => Conditional::HI,
-            9 => Conditional::LS,
-            10 => Conditional::GE,
-            11 => Conditional::LT,
-            12 => Conditional::GT,
-            13 => Conditional::LE,
-            14 => Conditional::AL,
-            _ => Conditional::NV,
-        }
+pub fn decode_as_arm(inst: u32) -> Box<dyn Operation> {
+    if is_data_processing(inst) {
+       Box::new(DataProcessingOp::from(inst))
+    } else if is_multiply(inst) {
+       Box::new(MultiplyOp::from(inst))
+    } else if is_multiply_long(inst) {
+       Box::new(MultiplyLongOp::from(inst))
+    } else if is_single_data_swap(inst) {
+       Box::new(SingleDataSwapOp::from(inst))
+    } else if is_branch_and_exchange(inst) {
+       Box::new(BranchExchangeOp::from(inst))
+    } else if is_branch(inst) {
+       Box::new(BranchOp::from(inst))
+    } else if is_software_interrupt(inst) {
+        Box::new(SoftwareInterruptOp)
+    } else if is_single_data_tfx(inst) {
+       Box::new(SingleDataTfx::from(inst))
+    } else if is_block_data_tfx(inst) {
+       Box::new(BlockDataTransfer::from(inst))
+    } else if is_coprocessor_data_op(inst) {
+       Box::new(CoprocessDataOp::from(inst))
+    } else if is_coprocessor_data_tfx(inst) {
+       Box::new(CoprocessDataTfx::from(inst))
+    } else if is_coprocessor_reg_tfx(inst) {
+       Box::new(CoprocessRegTfx::from(inst))
+    } else if is_psr_transfer(inst) {
+       Box::new(PsrTransferOp::from(inst))
+    } else if is_halfword_data_tfx_imm(inst) || is_halfword_data_tfx_reg(inst) {
+       Box::new(HalfwordDataOp::from(inst))
+    } else {
+       Box::new(UndefinedInstruction)
     }
 }
 
-impl Conditional {
-    pub fn should_run(&self, cpsr: u32) -> bool {
-        match self {
-            Conditional::EQ => {
-                (cpsr & CPSR_Z) == CPSR_Z
-            },
-            Conditional::NE => {
-                (cpsr & CPSR_Z) == 0
-            },
-            Conditional::CS => {
-                (cpsr & CPSR_C) == CPSR_C
-            },
-            Conditional::CC => {
-                (cpsr & CPSR_C) == 0
-            },
-            Conditional::MI => {
-                (cpsr & CPSR_N) == CPSR_N
-            },
-            Conditional::PL => {
-                (cpsr & CPSR_N) == 0
-            },
-            Conditional::VS => {
-                (cpsr & CPSR_V) == CPSR_V
-            },
-            Conditional::VC => {
-                (cpsr & CPSR_V) == 0
-            },
-            Conditional::HI => {
-                (cpsr & CPSR_C) == CPSR_C && (cpsr & CPSR_Z) == 0
-            },
-            Conditional::LS => {
-                (cpsr & CPSR_C) == 0 && (cpsr & CPSR_Z) == CPSR_Z
-            },
-            Conditional::GE => {
-                (cpsr & CPSR_N) == (cpsr & CPSR_V << 3)
-            },
-            Conditional::LT => {
-                (cpsr & CPSR_N) != (cpsr & CPSR_V << 3)
-            },
-            Conditional::GT => {
-                (cpsr & CPSR_Z) == 0 && (cpsr & CPSR_N == cpsr & CPSR_V << 3)
-            },
-            Conditional::LE => {
-                (cpsr & CPSR_Z) == CPSR_Z || (cpsr & CPSR_N != cpsr & CPSR_V << 3)
-            },
-            Conditional::AL => {
-                true
-            },
-            _ => false,
-        }
+#[derive(Debug)]
+struct UndefinedInstruction;
+impl Operation for UndefinedInstruction {
+    fn run(&self, _cpu: &mut CPU, _mem: &mut SystemMemory) {
+        unreachable!()
     }
 }
 
-// S might be better place in the Enum, rather than the op struct
-#[derive(Debug, strum_macros::Display, PartialEq)]
-pub enum ArmInstruction {
-    AND(Conditional, DataProcessingOp),
-    EOR(Conditional, DataProcessingOp),
-    SUB(Conditional, DataProcessingOp),
-    RSB(Conditional, DataProcessingOp),
-    ADD(Conditional, DataProcessingOp),
-    ADC(Conditional, DataProcessingOp),
-    SBC(Conditional, DataProcessingOp),
-    RSC(Conditional, DataProcessingOp),
-    TST(Conditional, DataProcessingOp),
-    TEQ(Conditional, DataProcessingOp),
-    CMP(Conditional, DataProcessingOp),
-    CMN(Conditional, DataProcessingOp),
-    ORR(Conditional, DataProcessingOp),
-    MOV(Conditional, DataProcessingOp),
-    BIC(Conditional, DataProcessingOp),
-    MVN(Conditional, DataProcessingOp),
-    MUL(Conditional, MultiplyOp),
-    MLA(Conditional, MultiplyOp),
-    // TODO: Change these to UMULL, UMLAL, SMULL, SMLAL
-    UMULL(Conditional, MultiplyLongOp),
-    SMULL(Conditional, MultiplyLongOp),
-    UMLAL(Conditional, MultiplyLongOp),
-    SMLAL(Conditional, MultiplyLongOp),
-    SWP(Conditional, SingleDataSwapOp),
-    SWPB(Conditional, SingleDataSwapOp),
-    B(Conditional, BranchOp),
-    BL(Conditional, BranchOp),
-    BX(Conditional, BranchExchangeOp),
-    SWI(Conditional),
-    LDR(Conditional, SingleDataTfx),
-    STR(Conditional, SingleDataTfx),
-    LDM(Conditional, BlockDataTransfer),
-    STM(Conditional, BlockDataTransfer),
-    CDP(Conditional, CoprocessDataOp),
-    LDC(Conditional, CoprocessDataTfx),
-    STC(Conditional, CoprocessDataTfx),
-    MRC(Conditional, CoprocessRegTfx),
-    MCR(Conditional, CoprocessRegTfx),
-    MRS(Conditional, PsrTransferOp),
-    MSR(Conditional, PsrTransferOp),
-    // TODO: Implement Half-word opcodes
-    STRH(Conditional, HalfwordDataOp),
-    LDRH(Conditional, HalfwordDataOp),
-    LDRSB(Conditional, HalfwordDataOp),
-    #[strum(to_string = "Undefined: {0}")]
-    Undef(u32),
+#[derive(Debug)]
+struct SoftwareInterruptOp;
+impl Operation for SoftwareInterruptOp {
+    fn run(&self, _cpu: &mut CPU, _mem: &mut SystemMemory) {
+        todo!()
+    }
 }
 
 #[derive(Debug, PartialEq)]
@@ -159,201 +66,6 @@ pub enum AddressingMode3 {
     Reg { rm: u8 },
     PreIndexedReg { rm: u8 },
     PostIndexedReg { rm: u8 },
-
-}
-
-impl From<u32> for ArmInstruction {
-    fn from(inst: u32) -> Self {
-        let cond = Conditional::from(inst);
-        if is_data_processing(inst) {
-            let op = DataProcessingOp::from(inst);
-            let code = (inst >> 21) & 0xf;
-            match code {
-                0 => ArmInstruction::AND(cond, op),
-                1 => ArmInstruction::EOR(cond, op),
-                2 => ArmInstruction::SUB(cond, op),
-                3 => ArmInstruction::RSB(cond, op),
-                4 => ArmInstruction::ADD(cond, op),
-                5 => ArmInstruction::ADC(cond, op),
-                6 => ArmInstruction::SBC(cond, op),
-                7 => ArmInstruction::RSC(cond, op),
-                8 => ArmInstruction::TST(cond, op),
-                9 => ArmInstruction::TEQ(cond, op),
-                10 => ArmInstruction::CMP(cond, op),
-                11 => ArmInstruction::CMN(cond, op),
-                12 => ArmInstruction::ORR(cond, op),
-                13 => ArmInstruction::MOV(cond, op),
-                14 => ArmInstruction::BIC(cond, op),
-                _ => ArmInstruction::MVN(cond, op),
-            }
-        } else if is_multiply(inst) {
-            let op = MultiplyOp::from(inst);
-            if op.a {
-                ArmInstruction::MLA(cond, op)
-            } else {
-                ArmInstruction::MUL(cond, op)
-            }
-        } else if is_multiply_long(inst) {
-            let op = MultiplyLongOp::from(inst);
-            if op.a {
-                if op.s {
-                    ArmInstruction::SMLAL(cond, op)
-                } else {
-                    ArmInstruction::UMLAL(cond, op)
-                }
-            } else {
-                if op.s {
-                    ArmInstruction::SMULL(cond, op)
-                } else {
-                    ArmInstruction::UMULL(cond, op)
-                }
-            }
-        } else if is_single_data_swap(inst) {
-            let op = SingleDataSwapOp::from(inst);
-            if op.b {
-                ArmInstruction::SWPB(cond, op)
-            } else {
-                ArmInstruction::SWP(cond, op)
-            }
-        } else if is_branch_and_exchange(inst) {
-            let op = BranchExchangeOp::from(inst);
-            ArmInstruction::BX(cond, op)
-        } else if is_branch(inst) {
-            let op = BranchOp::from(inst);
-            if op.l {
-                ArmInstruction::BL(cond, op)
-            } else {
-                ArmInstruction::B(cond, op)
-            }
-        } else if is_software_interrupt(inst) {
-            ArmInstruction::SWI(cond)
-        } else if is_single_data_tfx(inst) {
-            let op = SingleDataTfx::from(inst);
-            if op.l {
-                ArmInstruction::LDR(cond, op)
-            } else {
-                ArmInstruction::STR(cond, op)
-            }
-        } else if is_block_data_tfx(inst) {
-            let op = BlockDataTransfer::from(inst);
-            if op.l {
-                ArmInstruction::LDM(cond, op)
-            } else {
-                ArmInstruction::STM(cond, op)
-            }
-        } else if is_coprocessor_data_op(inst) {
-            let op = CoprocessDataOp::from(inst);
-            ArmInstruction::CDP(cond, op)
-        } else if is_coprocessor_data_tfx(inst) {
-            let op = CoprocessDataTfx::from(inst);
-            if op.l {
-                ArmInstruction::LDC(cond, op)
-            } else {
-                ArmInstruction::STC(cond, op)
-            }
-        } else if is_coprocessor_reg_tfx(inst) {
-            let op = CoprocessRegTfx::from(inst);
-            if op.l {
-                ArmInstruction::MRC(cond, op)
-            } else {
-                ArmInstruction::MCR(cond, op)
-            }
-        } else if is_psr_transfer(inst) {
-            let op = PsrTransferOp::from(inst);
-            if is_mrs_op(inst) {
-                ArmInstruction::MRS(cond, op)
-            } else {
-                ArmInstruction::MSR(cond, op)
-            }
-        } else if is_halfword_data_tfx_imm(inst) || is_halfword_data_tfx_reg(inst) {
-            let op = HalfwordDataOp::from(inst);
-            match (op.l, op.h) {
-                (false, false) => unreachable!(),
-                (false, true) => ArmInstruction::STRH(cond, op),
-                (true, false) => ArmInstruction::LDRH(cond, op),
-                (true, true) => ArmInstruction::LDRSB(cond, op),
-            }
-        } else {
-            ArmInstruction::Undef(inst)
-        }
-    }
-}
-
-impl ArmInstruction {
-
-    pub fn string_repr(&self) -> String {
-        match self {
-            ArmInstruction::AND(c, o)
-            | ArmInstruction::EOR(c, o)
-            | ArmInstruction::ORR(c, o)
-            | ArmInstruction::BIC(c, o)
-            | ArmInstruction::ADD(c, o)
-            | ArmInstruction::SUB(c, o)
-            | ArmInstruction::ADC(c, o)
-            | ArmInstruction::SBC(c, o)
-            | ArmInstruction::RSC(c, o)
-            | ArmInstruction::RSB(c, o) => {
-                format!("{}{} {} r{} r{}, <{:#x}>", self, c, o.s, o.rd, o.rn, o.operand)
-            }
-            ArmInstruction::TST(c, o) | ArmInstruction::TEQ(c, o) => {
-                format!("{}{} r{}, <{:#x}>", self, c, o.rn, o.operand)
-            }
-            ArmInstruction::CMP(c, o) | ArmInstruction::CMN(c, o) => {
-                format!("{}{} r{}, <{:#x}>", self, c, o.rd, o.operand)
-            }
-            ArmInstruction::MOV(c, o) | ArmInstruction::MVN(c, o) => {
-                format!("{}{} {} r{}, <{:#x}>", self, c, o.s, o.rd, o.operand)
-            }
-            ArmInstruction::MLA(c, o) => {
-                format!(
-                    "{}{} {} r{}, r{}, r{}, r{}",
-                    self, c, o.s, o.rd, o.rm, o.rs, o.rn
-                )
-            }
-            ArmInstruction::MUL(c, o) => {
-                format!("{}{} {} r{}, r{}, r{}", self, c, o.s, o.rd, o.rm, o.rs)
-            }
-            ArmInstruction::SMULL(c, o) | ArmInstruction::SMLAL(c, o) |
-            ArmInstruction::UMULL(c, o) | ArmInstruction::UMLAL(c, o) => {
-                format!(
-                    "{}{} {} r{}, r{}, r{}, r{}",
-                    self, c, o.s, o.rd_hi, o.rd_lo, o.rm, o.rs
-                )
-            }
-            ArmInstruction::B(c, o) | ArmInstruction::BL(c, o) => {
-                format!("{}{} +{:#x}", self, c, o.offset)
-            }
-            ArmInstruction::BX(c, o) => {
-                format!("{}{} r{}", self, c, o.rn)
-            }
-            ArmInstruction::SWP(c, o) | ArmInstruction::SWPB(c, o) => {
-                format!("{}{} {} r{}, r{}, r{}", self, c, o.b, o.rd, o.rm, o.rn)
-            }
-            // TODO: Expand this
-            ArmInstruction::LDM(c, _) | ArmInstruction::STM(c, _) => {
-                // TODO: This is actually more complicated
-                format!("{}{}", self, c)
-            }
-            // TODO: Expand this
-            ArmInstruction::LDR(c, _) | ArmInstruction::STR(c, _) |
-            ArmInstruction::CDP(c, _) | ArmInstruction::LDC(c, _) |
-            ArmInstruction::STC(c, _) | ArmInstruction::MRC(c, _) |
-            ArmInstruction::MCR(c, _) | ArmInstruction::MSR(c, _) |
-            ArmInstruction::MRS(c, _) => {
-                // TODO: This is actually more complicated
-                format!("{}{}", self, c)
-            }
-            ArmInstruction::SWI(c) => {
-                format!("{}{}", self, c)
-            },
-            ArmInstruction::Undef(_) => {
-                format!("undefined")
-            }
-            _ => {
-                format!("Nothing")
-            }
-        }
-    }
 }
 
 // TODO: Maybe rename this to DataOperation and use other structs
@@ -365,16 +77,84 @@ pub struct DataProcessingOp {
     pub rn: u8,
     pub rd: u8,
     pub operand: u32,
+    opcode: DataProcessingType,
+}
+
+#[derive(Debug, PartialEq)]
+enum DataProcessingType{
+    AND,
+    EOR,
+    SUB,
+    RSB,
+    ADD,
+    ADC,
+    SBC,
+    RSC,
+    TST,
+    TEQ,
+    CMP,
+    CMN,
+    ORR,
+    MOV,
+    BIC,
+    MVN,
 }
 
 impl From<u32> for DataProcessingOp {
     fn from(inst: u32) -> Self {
+        let opcode = match inst >> 21 & 0xf {
+            0 => DataProcessingType::AND,
+            1 => DataProcessingType::EOR,
+            2 => DataProcessingType::SUB,
+            3 => DataProcessingType::RSB,
+            4 => DataProcessingType::ADD,
+            5 => DataProcessingType::ADC,
+            6 => DataProcessingType::SBC,
+            7 => DataProcessingType::RSC,
+            8 => DataProcessingType::TST,
+            9 => DataProcessingType::TEQ,
+            10 => DataProcessingType::CMP,
+            11 => DataProcessingType::CMN,
+            12 => DataProcessingType::ORR,
+            13 => DataProcessingType::MOV,
+            14 => DataProcessingType::BIC,
+            _ => DataProcessingType::MVN,
+        };
         DataProcessingOp {
             i: (inst >> 25 & 0x1) == 0x1,
             s: (inst >> 20 & 0x1) == 0x1,
             rd: (inst >> 12 & 0xf) as u8,
             rn: (inst >> 16 & 0xf) as u8,
             operand: (inst & 0xfff) as u32,
+            opcode
+        }
+    }
+}
+
+impl Operation for DataProcessingOp {
+    fn run(&self, cpu: &mut CPU, _mem: &mut SystemMemory) {
+        let operand2 = self.get_operand2(cpu.registers);
+        let rn_value = cpu.registers[self.rn as usize];
+
+        let res = match self.opcode {
+            DataProcessingType::MOV => {
+                cpu.registers[self.rd as usize] = operand2;
+                operand2
+            },
+            DataProcessingType::CMP => {
+                rn_value - operand2
+            },
+            DataProcessingType::TEQ => {
+                rn_value ^ operand2
+            },
+            DataProcessingType::ORR => {
+                rn_value | operand2
+            }
+            _ => todo!()
+        };
+
+        if self.s {
+            cpu.update_cpsr(res);
         }
     }
 }
@@ -423,6 +203,12 @@ pub struct MultiplyOp {
     rm: u8,
 }
 
+impl Operation for MultiplyOp{
+    fn run(&self, _cpu: &mut CPU, _mem: &mut SystemMemory) {
+        todo!()
+    }
+}
+
 impl From<u32> for MultiplyOp {
     fn from(inst: u32) -> Self {
         Self {
@@ -449,6 +235,12 @@ pub struct MultiplyLongOp {
     rm: u8,
 }
 
+impl Operation for MultiplyLongOp {
+    fn run(&self, _cpu: &mut CPU, _mem: &mut SystemMemory) {
+        todo!()
+    }
+}
+
 impl From<u32> for MultiplyLongOp {
     fn from(inst: u32) -> Self {
         Self {
@@ -471,6 +263,12 @@ pub struct SingleDataSwapOp {
     rm: u8,
 }
 
+impl Operation for SingleDataSwapOp {
+    fn run(&self, _cpu: &mut CPU, _mem: &mut SystemMemory) {
+        todo!()
+    }
+}
+
 impl From<u32> for SingleDataSwapOp {
     fn from(inst: u32) -> Self {
         Self {
@@ -487,6 +285,12 @@ pub struct BranchExchangeOp {
     rn: u8,
 }
 
+impl Operation for BranchExchangeOp {
+    fn run(&self, _cpu: &mut CPU, _mem: &mut SystemMemory) {
+        todo!()
+    }
+}
+
 impl From<u32> for BranchExchangeOp {
     fn from(inst: u32) -> Self {
         Self {
@@ -499,6 +303,19 @@ impl From<u32> for BranchExchangeOp {
 pub struct BranchOp {
     l: bool,
     offset: u32,
+}
+
+impl Operation for BranchOp {
+    fn run(&self, cpu: &mut CPU, _mem: &mut SystemMemory) {
+        let offset = self.get_offset();
+        let offset_abs: u32 = u32::try_from(offset.abs()).unwrap_or(0);
+
+        if offset < 0 {
+            cpu.registers[PC] -= offset_abs;
+        } else {
+            cpu.registers[PC] += offset_abs;
+        }
+    }
 }
 
 impl From<u32> for BranchOp {
@@ -534,6 +351,12 @@ pub struct HalfwordRegOffset {
     rm: u8,
 }
 
+impl Operation for HalfwordRegOffset {
+    fn run(&self, _cpu: &mut CPU, _mem: &mut SystemMemory) {
+        todo!()
+    }
+}
+
 impl From<u32> for HalfwordRegOffset {
     fn from(inst: u32) -> Self {
         Self {
@@ -564,6 +387,12 @@ pub struct HalfwordImmOffset {
     offset_b: u8,
 }
 
+impl Operation for HalfwordImmOffset {
+    fn run(&self, _cpu: &mut CPU, _mem: &mut SystemMemory) {
+        todo!()
+    }
+}
+
 impl From<u32> for HalfwordImmOffset {
     fn from(inst: u32) -> Self {
         Self {
@@ -592,6 +421,47 @@ pub struct SingleDataTfx {
     pub rn: u8,
     pub rd: u8,
     pub offset: u16,
+}
+
+impl Operation for SingleDataTfx {
+    fn run(&self, cpu: &mut CPU, mem: &mut SystemMemory) {
+        if self.l {
+            // TODO: add write back check somewhere
+            let offset = self.get_offset(cpu.registers);
+            let mut tfx_add = offset;
+            tfx_add >>= 2;
+
+            if self.p {
+                if self.u {
+                    tfx_add += cpu.registers[self.rn as usize];
+                } else {
+                    tfx_add -= cpu.registers[self.rn as usize];
+                }
+            }
+
+            let block_from_mem = match mem.read_from_mem(tfx_add as usize) {
+                Ok(n) => n,
+                Err(e) => {
+                    println!("{}", e);
+                    panic!()
+                },
+            };
+
+            cpu.registers[self.rd as usize] = if self.b {
+                block_from_mem
+            } else {
+                block_from_mem & 0xff
+            };
+
+            // NOTE: for L i don't think this matters
+            // for LDR
+            if !self.p {
+                todo!()
+            }
+        } else {
+
+        }
+    }
 }
 
 impl From<u32> for SingleDataTfx {
@@ -633,6 +503,12 @@ pub struct BlockDataTransfer {
     register_list: u16,
 }
 
+impl Operation for BlockDataTransfer {
+    fn run(&self, _cpu: &mut CPU, _mem: &mut SystemMemory) {
+        todo!()
+    }
+}
+
 impl From<u32> for BlockDataTransfer {
     fn from(inst: u32) -> Self {
         Self {
@@ -658,6 +534,12 @@ pub struct CoprocessDataTfx {
     c_rd: u8,
     cp_num: u8,
     offset: u16,
+}
+
+impl Operation for CoprocessDataTfx {
+    fn run(&self, _cpu: &mut CPU, _mem: &mut SystemMemory) {
+        todo!()
+    }
 }
 
 impl From<u32> for CoprocessDataTfx {
@@ -686,6 +568,12 @@ pub struct CoprocessDataOp {
     c_rm: u8,
 }
 
+impl Operation for CoprocessDataOp {
+    fn run(&self, _cpu: &mut CPU, _mem: &mut SystemMemory) {
+        todo!()
+    }
+}
+
 impl From<u32> for CoprocessDataOp {
     fn from(inst: u32) -> Self {
         Self {
@@ -708,6 +596,12 @@ pub struct CoprocessRegTfx {
     cp_num: u8,
     cp: u8,
     c_rm: u8,
+}
+
+impl Operation for CoprocessRegTfx {
+    fn run(&self, _cpu: &mut CPU, _mem: &mut SystemMemory) {
+        todo!()
+    }
 }
 
 impl From<u32> for CoprocessRegTfx {
@@ -733,10 +627,52 @@ pub struct PsrTransferOp {
     rm: u8,
     rotate: u8,
     imm: u8,
+    op: PsrTransferType,
+}
+
+#[derive(Debug, PartialEq)]
+enum PsrTransferType {
+    MSR,
+    MRS
+}
+
+impl Operation for PsrTransferOp {
+    fn run(&self, cpu: &mut CPU, _mem: &mut SystemMemory) {
+        match self.op {
+            PsrTransferType::MSR => {
+                let operand = self.get_operand(cpu.registers);
+                let mask: u32 = if self.is_bit_flag_only() {
+                    0xf0000000
+                } else {
+                    0xffffffff
+                };
+
+                if self.is_cspr() {
+                    cpu.cpsr = (cpu.cpsr & !mask) | (operand & mask)
+                } else {
+                    cpu.spsr = (cpu.spsr & !mask) | (operand & mask)
+                }
+            },
+            PsrTransferType::MRS => {
+                if self.is_cspr() {
+                    cpu.registers[self.rd as usize] = cpu.cpsr;
+                } else {
+                    cpu.registers[self.rd as usize] = cpu.spsr;
+                }
+            },
+        }
+    }
 }
 
 impl From<u32> for PsrTransferOp {
+
     fn from(inst: u32) -> Self {
+        let op = if is_mrs_op(inst) {
+            PsrTransferType::MRS
+        } else {
+            PsrTransferType::MSR
+        };
+
         Self {
             i: (inst >> 25 & 1) == 1,
             p: (inst >> 22 & 1) == 1,
@@ -744,7 +680,8 @@ impl From<u32> for PsrTransferOp {
             rd: (inst >> 12 & 0xf) as u8,
             rm: (inst & 0xf) as u8,
             rotate: (inst >> 8 & 0xf) as u8,
-            imm: (inst & 0xff) as u8
+            imm: (inst & 0xff) as u8,
+            op
         }
     }
 }
@@ -779,6 +716,12 @@ pub struct HalfwordDataOp {
     h: bool,
     rn: u8,
     rd: u8,
+}
+
+impl Operation for HalfwordDataOp {
+    fn run(&self, _cpu: &mut CPU, _mem: &mut SystemMemory) {
+        todo!()
+    }
 }
 
 impl From<u32> for HalfwordDataOp {
@@ -840,10 +783,6 @@ pub fn is_single_data_tfx(inst: u32) -> bool {
     inst & 0x0c000000 == 0x04000000
 }
 
-pub fn is_undefined(inst: u32) -> bool {
-    inst & 0x0e000010 == 0x06000010
-}
-
 pub fn is_block_data_tfx(inst: u32) -> bool {
     inst & 0x0e000000 == 0x08000000
 }
@@ -895,16 +834,12 @@ mod test {
     #[test]
     fn test_branch_decode() {
         let inst: u32 = 0b11101010000000000000000000011000;
-        let op = ArmInstruction::from(inst);
-        let op2 = ArmInstruction::B(
-            Conditional::AL,
-            BranchOp {
-                l: false,
-                offset: 0b11000,
-            },
-        );
-        println!("{:?}", op);
-        println!("{:?}", op2);
+        let op = BranchOp::from(inst);
+        let op2 = BranchOp {
+            l: false,
+            offset: 0b11000,
+        };
+
         assert_eq!(op, op2);
     }
 
@@ -918,8 +853,8 @@ mod test {
     #[test]
     fn test_strb_decode() {
         let inst: u32 = 0xe5cc3301;
-        let op = ArmInstruction::from(inst);
-        let op2 = ArmInstruction::STR(Conditional::AL, SingleDataTfx {
+        let op = SingleDataTfx::from(inst);
+        let op2 = SingleDataTfx {
             i: false,
             p: true,
             u: true,
@@ -929,15 +864,15 @@ mod test {
             rn: 12,
             rd: 3,
             offset: 0x301,
-        });
+        };
         assert_eq!(op, op2);
     }
 
     #[test]
     fn test_strh_decode() {
         let inst: u32 = 0xe08180b3;
-        let op = ArmInstruction::from(inst);
-        let op2 = ArmInstruction::STRH(Conditional::AL, HalfwordDataOp{
+        let op = HalfwordDataOp::from(inst);
+        let op2 = HalfwordDataOp {
             p: false,
             u: true,
             w: false,
@@ -947,33 +882,15 @@ mod test {
             rn: 1,
             rd: 8,
             mode: AddressingMode3::PostIndexedReg { rm: 3 },
-        });
-        assert_eq!(op, op2);
-    }
-
-    #[test]
-    fn test_andeq_decode() {
-        let inst: u32 = 0x00000000;
-        let op = ArmInstruction::from(inst);
-        let op2 = ArmInstruction::STRH(Conditional::AL, HalfwordDataOp{
-            p: false,
-            u: true,
-            w: false,
-            l: false,
-            h: true,
-            s: false,
-            rn: 1,
-            rd: 8,
-            mode: AddressingMode3::PostIndexedReg { rm: 3 },
-        });
+        };
         assert_eq!(op, op2);
     }
 
     #[test]
     fn test_msreq_decode() {
         let inst: u32 = 0x0129f00c;
-        let op = ArmInstruction::from(inst);
-        let op2 = ArmInstruction::MSR(Conditional::EQ, PsrTransferOp{
+        let op = PsrTransferOp::from(inst);
+        let op2 = PsrTransferOp{
             i: false,
             imm: 12,
             bit_flags_only: false,
@@ -981,7 +898,8 @@ mod test {
             rd: 15,
             rm: 12,
             rotate: 0,
-        });
+            op: PsrTransferType::MSR
+        };
         assert_eq!(op, op2);
     }
 }

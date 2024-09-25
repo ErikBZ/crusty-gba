@@ -4,11 +4,12 @@ use std::io::prelude::*;
 
 extern crate strum_macros;
 
-use gba::arm::ArmInstruction;
+use gba::Conditional;
 use gba::thumb::ThumbInstruction;
 use gba::cpu::CPU;
 use gba::debugger::DebuggerCommand;
 use gba::system::SystemMemory;
+use gba::arm::decode_as_arm;
 
 fn main() {
     // TODO: Just put test.gba in the root dir
@@ -53,9 +54,10 @@ fn debug_bios(codes: Vec<u32>) {
                 let i = (cpu.pc() >> 2) as usize;
                 if i < codes.len() {
                     let inst = codes[(cpu.pc() >> 2) as usize];
-                    let op = ArmInstruction::from(inst);
+                    let op = decode_as_arm(inst);
+                    let cond = Conditional::from(inst);
                     println!("{}", cpu);
-                    println!("{:?}", op);
+                    println!("{:?} {:?}", cond, op);
                     cpu.run_instruction(inst, &mut memory);
                 } else {
                     println!("Address it not within ROM");
@@ -65,13 +67,14 @@ fn debug_bios(codes: Vec<u32>) {
             DebuggerCommand::Info => {
                 let i = (cpu.pc() >> 2) as usize;
                 let op = if i < codes.len() {
-                    ArmInstruction::from(codes[(cpu.pc() >> 2) as usize])
+                    decode_as_arm(codes[(cpu.pc() >> 2) as usize])
                 } else {
-                    println!("Address it not within ROM");
+                    println!("Address is not within ROM");
                     continue;
                 };
+                let cond = Conditional::from(codes[(cpu.pc() >> 2) as usize]);
                 println!("{}", cpu);
-                println!("{:?}", op);
+                println!("{:?} {:?}", cond, op);
             },
             DebuggerCommand::Quit => break,
         }
@@ -87,15 +90,8 @@ fn dump_opcodes(num_of_lines: usize, codes: Vec<u32>) -> Result<(), ()> {
     for i in 0..0x100 {
         let inst_address = i << 2;
         if !decode_thumb {
-            let op = ArmInstruction::from(codes[i]);
-            match &op {
-                ArmInstruction::BX(_, _) => {
-                    println!("{:#08x} {:0x} {}", inst_address, codes[i], op.string_repr());
-                    decode_thumb = true;
-                }
-                ArmInstruction::Undef(_) => {},
-                _ => println!("{:#08x} {:0x} {}", inst_address, codes[i], op.string_repr()),
-            }
+            let op = decode_as_arm(codes[i]);
+            println!("{:#08x} {:0x} {:?}", inst_address, codes[i], op);
         } else {
             let op2 = ThumbInstruction::from((codes[i] >> 16) as u16);
             let op1 = ThumbInstruction::from((codes[i] & 0xffff) as u16);

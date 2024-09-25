@@ -1,7 +1,5 @@
 use core::fmt;
 
-use strum::additional_attributes;
-
 const KILOBYTE: usize = 1024;
 
 #[derive(Debug, PartialEq, Clone)]
