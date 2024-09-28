@@ -1,6 +1,7 @@
 use super::cpu::CPU;
 use super::Operation;
 use super::SystemMemory;
+use super::CPSR_C;
 
 use super::cpu::PC;
 
@@ -135,23 +136,51 @@ impl Operation for DataProcessingOp {
     fn run(&self, cpu: &mut CPU, _mem: &mut SystemMemory) {
         let operand2 = self.get_operand2(cpu.registers);
         let rn_value = cpu.registers[self.rn as usize];
+        let carry = (cpu.cpsr & CPSR_C) >> 29;
 
         let res = match self.opcode {
-            DataProcessingType::MOV => {
-                cpu.registers[self.rd as usize] = operand2;
-                operand2
+            DataProcessingType::AND | DataProcessingType::TST => {
+                rn_value & operand2
             },
-            DataProcessingType::CMP => {
+            DataProcessingType::EOR | DataProcessingType::TEQ => {
+                rn_value ^ operand2
+            },
+            DataProcessingType::SUB | DataProcessingType::CMP => {
                 rn_value - operand2
             },
-            DataProcessingType::TEQ => {
-                rn_value ^ operand2
+            DataProcessingType::RSB => {
+                operand2 - rn_value
+            },
+            DataProcessingType::ADD | DataProcessingType::CMN => {
+                rn_value + operand2
+            },
+            DataProcessingType::ADC => {
+                rn_value + operand2 + carry
+            },
+            DataProcessingType::SBC => {
+                rn_value - operand2 + carry - 1
+            },
+            DataProcessingType::RSC => {
+                operand2 - rn_value + carry - 1
             },
             DataProcessingType::ORR => {
                 rn_value | operand2
+            },
+            DataProcessingType::MOV => {
+                operand2
+            },
+            DataProcessingType::BIC => {
+                rn_value & !operand2
             }
-            _ => todo!()
+            DataProcessingType::MVN => {
+                !operand2
+            }
         };
+
+        if !(self.opcode == DataProcessingType::CMP && self.opcode == DataProcessingType::TST &&
+            self.opcode == DataProcessingType::TEQ && self.opcode == DataProcessingType::CMN) {
+            cpu.registers[self.rd as usize] = res;
+        }
 
         if self.s {
             cpu.update_cpsr(res);
@@ -204,8 +233,18 @@ pub struct MultiplyOp {
 }
 
 impl Operation for MultiplyOp{
-    fn run(&self, _cpu: &mut CPU, _mem: &mut SystemMemory) {
-        todo!()
+    fn run(&self, cpu: &mut CPU, _mem: &mut SystemMemory) {
+        let rn_value = cpu.registers[self.rn as usize];
+        let rs_value = cpu.registers[self.rs as usize];
+        let rm_value = cpu.registers[self.rm as usize];
+
+        let mut res = rm_value * rs_value;
+        if self.a {
+            res += rn_value;
+        }
+
+        cpu.registers[self.rd as usize] = res;
+        cpu.update_cpsr(res)
     }
 }
 
@@ -352,8 +391,69 @@ pub struct HalfwordRegOffset {
 }
 
 impl Operation for HalfwordRegOffset {
-    fn run(&self, _cpu: &mut CPU, _mem: &mut SystemMemory) {
-        todo!()
+    fn run(&self, cpu: &mut CPU, mem: &mut SystemMemory) {
+        let offset = cpu.registers[self.rm as usize];
+        let mut address = cpu.registers[self.rn as usize];
+
+        if self.p {
+            if self.u {
+                address += offset;
+            } else {
+                address -= offset;
+            }
+
+            if self.w {
+                cpu.registers[self.rn as usize] = address;
+            }
+        }
+
+        if self.l {
+            let res = match mem.read_from_mem(address as usize) {
+                Ok(n) => n,
+                Err(e) => {
+                    //TODO: Better error handling
+                    println!("{}", e);
+                    0
+                }
+            };
+
+            let value: u32 = match (self.h, self.s) {
+                // TODO: Take into consideration the Endianess
+                // LDRB handled by SingleDataTfx
+                (false, false) => unreachable!(),
+                // LDRSB
+                (false, true) => {
+                    if res & 0x80 == 0x80 {
+                        (res | 0xffffff00)
+                    } else {
+                        res & 0xff
+                    }
+                },
+                // LDRH
+                (true, false) => {0},
+                // LDRSH
+                (true, true) => {
+                    if res & 0x8000 == 0x8000 {
+                        (res | 0xffff0000)
+                    } else {
+                        res & 0xffff
+                    }
+                }
+            };
+
+            cpu.registers[self.rd as usize] = value;
+        } else {
+            todo!();
+        }
+
+        if !self.p {
+            if self.u {
+                address += offset;
+            } else {
+                address -= offset;
+            }
+            cpu.registers[self.rn as usize] = address;
+        }
     }
 }
 
@@ -369,43 +469,6 @@ impl From<u32> for HalfwordRegOffset {
             rn: (inst >> 15 & 0xf) as u8,
             rd: (inst >> 11 & 0xf) as u8,
             rm: (inst & 0xf) as u8,
-        }
-    }
-}
-
-#[derive(Debug, PartialEq)]
-pub struct HalfwordImmOffset {
-    p: bool,
-    u: bool,
-    w: bool,
-    l: bool,
-    s: bool,
-    h: bool,
-    rn: u8,
-    rd: u8,
-    offset_a: u8,
-    offset_b: u8,
-}
-
-impl Operation for HalfwordImmOffset {
-    fn run(&self, _cpu: &mut CPU, _mem: &mut SystemMemory) {
-        todo!()
-    }
-}
-
-impl From<u32> for HalfwordImmOffset {
-    fn from(inst: u32) -> Self {
-        Self {
-            p: (inst >> 24 & 1) == 1,
-            u: (inst >> 23 & 1) == 1,
-            w: (inst >> 21 & 1) == 1,
-            l: (inst >> 20 & 1) == 1,
-            s: (inst >> 6 & 1) == 1,
-            h: (inst >> 5 & 1) == 1,
-            rn: (inst >> 16 & 0xf) as u8,
-            rd: (inst >> 12 & 0xf) as u8,
-            offset_a: (inst >> 8 & 0xf) as u8,
-            offset_b: (inst & 0xf) as u8,
         }
     }
 }
@@ -719,8 +782,69 @@ pub struct HalfwordDataOp {
 }
 
 impl Operation for HalfwordDataOp {
-    fn run(&self, _cpu: &mut CPU, _mem: &mut SystemMemory) {
-        todo!()
+    fn run(&self, cpu: &mut CPU, mem: &mut SystemMemory) {
+        let offset = cpu.registers[self.rm as usize];
+        let mut address = cpu.registers[self.rn as usize];
+
+        if self.p {
+            if self.u {
+                address += offset;
+            } else {
+                address -= offset;
+            }
+
+            if self.w {
+                cpu.registers[self.rn as usize] = address;
+            }
+        }
+
+        if self.l {
+            let res = match mem.read_from_mem(address as usize) {
+                Ok(n) => n,
+                Err(e) => {
+                    //TODO: Better error handling
+                    println!("{}", e);
+                    0
+                }
+            };
+
+            let value: u32 = match (self.h, self.s) {
+                // TODO: Take into consideration the Endianess
+                // LDRB handled by SingleDataTfx
+                (false, false) => unreachable!(),
+                // LDRSB
+                (false, true) => {
+                    if res & 0x80 == 0x80 {
+                        (res | 0xffffff00)
+                    } else {
+                        res & 0xff
+                    }
+                },
+                // LDRH
+                (true, false) => {0},
+                // LDRSH
+                (true, true) => {
+                    if res & 0x8000 == 0x8000 {
+                        (res | 0xffff0000)
+                    } else {
+                        res & 0xffff
+                    }
+                }
+            };
+
+            cpu.registers[self.rd as usize] = value;
+        } else {
+            todo!();
+        }
+
+        if !self.p {
+            if self.u {
+                address += offset;
+            } else {
+                address -= offset;
+            }
+            cpu.registers[self.rn as usize] = address;
+        }
     }
 }
 
@@ -730,6 +854,7 @@ impl From<u32> for HalfwordDataOp {
         let byte_offset = ((inst & 0xff) | (inst >> 8 & 0xff)) as u8;
         let rm = (inst & 0xf) as u8;
 
+        // oh don't need post and pre
         let mode = match (is_halfword_data_tfx_imm(inst), p) {
             (false, false) => AddressingMode3::PostIndexedReg { rm },
             (false, true) => AddressingMode3::PreIndexedReg { rm },
