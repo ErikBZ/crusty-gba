@@ -61,12 +61,8 @@ impl Operation for SoftwareInterruptOp {
 
 #[derive(Debug, PartialEq)]
 pub enum AddressingMode3 {
-    Imm { byte_offset: u8 },
-    PreIndexedImm { byte_offset: u8 },
-    PostIndexedImm { byte_offset: u8 },
-    Reg { rm: u8 },
-    PreIndexedReg { rm: u8 },
-    PostIndexedReg { rm: u8 },
+    Imm(u8),
+    Reg(u8),
 }
 
 // TODO: Maybe rename this to DataOperation and use other structs
@@ -567,8 +563,9 @@ pub struct BlockDataTransfer {
 }
 
 impl Operation for BlockDataTransfer {
-    fn run(&self, _cpu: &mut CPU, _mem: &mut SystemMemory) {
-        todo!()
+    fn run(&self, cpu: &mut CPU, mem: &mut SystemMemory) {
+        // When rn is 13 then we are doing stack ops, otherwise no
+        let mut address = cpu.registers[self.rn as usize];
     }
 }
 
@@ -783,7 +780,10 @@ pub struct HalfwordDataOp {
 
 impl Operation for HalfwordDataOp {
     fn run(&self, cpu: &mut CPU, mem: &mut SystemMemory) {
-        let offset = cpu.registers[self.rm as usize];
+        let offset = match self.mode {
+            AddressingMode3::Reg(m) => cpu.registers[m as usize],
+            AddressingMode3::Imm(byte_offset) => byte_offset as u32,
+        };
         let mut address = cpu.registers[self.rn as usize];
 
         if self.p {
@@ -815,17 +815,19 @@ impl Operation for HalfwordDataOp {
                 // LDRSB
                 (false, true) => {
                     if res & 0x80 == 0x80 {
-                        (res | 0xffffff00)
+                        res | 0xffffff00
                     } else {
                         res & 0xff
                     }
                 },
                 // LDRH
-                (true, false) => {0},
+                (true, false) => {
+                    res & 0xffff
+                },
                 // LDRSH
                 (true, true) => {
                     if res & 0x8000 == 0x8000 {
-                        (res | 0xffff0000)
+                        res | 0xffff0000
                     } else {
                         res & 0xffff
                     }
@@ -834,7 +836,16 @@ impl Operation for HalfwordDataOp {
 
             cpu.registers[self.rd as usize] = value;
         } else {
-            todo!();
+            if self.s || !self.h{
+                unreachable!();
+            };
+            // STRH
+            match mem.write_halfword(address as usize, cpu.registers[self.rd as usize]) {
+                Ok(_) => (),
+                Err(e) => {
+                    println!("{}", e);
+                }
+            }
         }
 
         if !self.p {
@@ -855,11 +866,10 @@ impl From<u32> for HalfwordDataOp {
         let rm = (inst & 0xf) as u8;
 
         // oh don't need post and pre
-        let mode = match (is_halfword_data_tfx_imm(inst), p) {
-            (false, false) => AddressingMode3::PostIndexedReg { rm },
-            (false, true) => AddressingMode3::PreIndexedReg { rm },
-            (true, false) => AddressingMode3::PostIndexedImm { byte_offset },
-            (true, true) => AddressingMode3::PreIndexedImm { byte_offset },
+        let mode = if is_halfword_data_tfx_imm(inst) {
+            AddressingMode3::Imm(byte_offset)
+        } else {
+            AddressingMode3::Reg(rm)
         };
 
         Self {
@@ -1006,7 +1016,7 @@ mod test {
             s: false,
             rn: 1,
             rd: 8,
-            mode: AddressingMode3::PostIndexedReg { rm: 3 },
+            mode: AddressingMode3::Reg(3),
         };
         assert_eq!(op, op2);
     }
