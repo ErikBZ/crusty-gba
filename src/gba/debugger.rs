@@ -37,7 +37,7 @@ impl DebuggerCommand {
         let debug_cmd = match cmd {
             "b" | "break" => {
                 let point: Result<u32, _> = match cmd_iter.next() {
-                    Some(n) => n.parse(),
+                    Some(s) => u32::from_str_radix(s, 16),
                     None => return Err(
                         CommandParseError::CommandMissingArguments(command.to_string())
                     ),

@@ -1,4 +1,5 @@
 mod gba;
+use std::collections::HashSet;
 use std::fs::File;
 use std::io::prelude::*;
 
@@ -28,6 +29,7 @@ fn debug_bios(codes: Vec<u32>) {
     use std::io;
     let mut cpu = CPU::default();
     let mut memory =  SystemMemory::default();
+    let mut break_points: HashSet<u32> = HashSet::new();
 
     loop {
         let mut input = String::new();
@@ -48,8 +50,24 @@ fn debug_bios(codes: Vec<u32>) {
         };
 
         match cmd {
-            DebuggerCommand::BreakPoint(_) => println!("Adding break point"),
-            DebuggerCommand::Continue => println!("Continuing"),
+            DebuggerCommand::BreakPoint(address) => {
+                if break_points.contains(&address) {
+                    break_points.remove(&address);
+                } else {
+                    break_points.insert(address);
+                    println!("{:?}", break_points);
+                }
+            },
+            DebuggerCommand::Continue => {
+                for _ in 0..100 {
+                    println!("{}", cpu.pc());
+                    if break_points.contains(&cpu.pc()) {
+                        break;
+                    }
+                    let inst = codes[(cpu.pc() >> 2) as usize];
+                    cpu.run_instruction(inst, &mut memory);
+                }
+            },
             DebuggerCommand::Next => {
                 let i = (cpu.pc() >> 2) as usize;
                 if i < codes.len() {
