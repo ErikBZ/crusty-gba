@@ -9,6 +9,8 @@ use super::cpu::PC;
 // operation structs be a trait "Operable", that takes a CPU
 // and modifies it based on it's instruction
 
+// TODO: currently all regs are u8 or u32 types, maybe they should be usizes
+
 pub fn decode_as_arm(inst: u32) -> Box<dyn Operation> {
     if is_data_processing(inst) {
        Box::new(DataProcessingOp::from(inst))
@@ -299,8 +301,26 @@ pub struct SingleDataSwapOp {
 }
 
 impl Operation for SingleDataSwapOp {
-    fn run(&self, _cpu: &mut CPU, _mem: &mut SystemMemory) {
-        todo!()
+    // TODO: Propogate Error for ABORT signals
+    fn run(&self, cpu: &mut CPU, mem: &mut SystemMemory) {
+        let address = cpu.registers[self.rn as usize] as usize;
+        match mem.read_from_mem(address) {
+            Ok(n) => cpu.registers[self.rd as usize] = n,
+            Err(e) => println!("{}", e),
+        }
+
+        let data = cpu.registers[self.rm as usize];
+        if self.b {
+            match mem.write_byte(address, data) {
+                Ok(_) => (),
+                Err(e) => println!("{}", e),
+            }
+        } else {
+            match mem.write_word(address, data) {
+                Ok(_) => (),
+                Err(e) => println!("{}", e),
+            }
+        }
     }
 }
 
@@ -321,8 +341,9 @@ pub struct BranchExchangeOp {
 }
 
 impl Operation for BranchExchangeOp {
-    fn run(&self, _cpu: &mut CPU, _mem: &mut SystemMemory) {
-        todo!()
+    fn run(&self, cpu: &mut CPU, _mem: &mut SystemMemory) {
+        cpu.update_thumb(self.rn & 1 == 1);
+        cpu.registers[PC] = cpu.registers[self.rn as usize];
     }
 }
 
@@ -413,6 +434,7 @@ impl Operation for HalfwordRegOffset {
                 }
             };
 
+            // TODO: Make this look nicer
             let value: u32 = match (self.h, self.s) {
                 // TODO: Take into consideration the Endianess
                 // LDRB handled by SingleDataTfx
@@ -420,7 +442,7 @@ impl Operation for HalfwordRegOffset {
                 // LDRSB
                 (false, true) => {
                     if res & 0x80 == 0x80 {
-                        (res | 0xffffff00)
+                        res | 0xffffff00
                     } else {
                         res & 0xff
                     }
@@ -430,7 +452,7 @@ impl Operation for HalfwordRegOffset {
                 // LDRSH
                 (true, true) => {
                     if res & 0x8000 == 0x8000 {
-                        (res | 0xffff0000)
+                        res | 0xffff0000
                     } else {
                         res & 0xffff
                     }
@@ -439,7 +461,10 @@ impl Operation for HalfwordRegOffset {
 
             cpu.registers[self.rd as usize] = value;
         } else {
-            todo!();
+            match mem.write_halfword(address as usize, cpu.registers[self.rd as usize]) {
+                Ok(_) => (),
+                Err(e) => println!("{}", e),
+            }
         }
 
         if !self.p {
@@ -484,20 +509,24 @@ pub struct SingleDataTfx {
 
 impl Operation for SingleDataTfx {
     fn run(&self, cpu: &mut CPU, mem: &mut SystemMemory) {
-        if self.l {
-            // TODO: add write back check somewhere
-            let offset = self.get_offset(cpu.registers);
-            let mut tfx_add = offset;
-            tfx_add >>= 2;
+        // TODO: add write back check somewhere
+        let offset = self.get_offset(cpu.registers);
+        let mut tfx_add = cpu.registers[self.rn as usize];
 
-            if self.p {
-                if self.u {
-                    tfx_add += cpu.registers[self.rn as usize];
-                } else {
-                    tfx_add -= cpu.registers[self.rn as usize];
-                }
+        if self.p {
+            if self.u {
+                tfx_add += offset;
+            } else {
+                tfx_add -= offset;
             }
+            if self.w{
+                cpu.registers[self.rn as usize] = tfx_add;
+            }
+        }
 
+        println!("{:#0x}", tfx_add);
+
+        if self.l {
             let block_from_mem = match mem.read_from_mem(tfx_add as usize) {
                 Ok(n) => n,
                 Err(e) => {
@@ -511,14 +540,33 @@ impl Operation for SingleDataTfx {
             } else {
                 block_from_mem & 0xff
             };
-
-            // NOTE: for L i don't think this matters
-            // for LDR
-            if !self.p {
-                todo!()
-            }
         } else {
+            if self.b {
+                match mem.write_word(tfx_add as usize, cpu.registers[self.rd as usize]) {
+                    Ok(_) => (),
+                    Err(e) => {
+                        println!("{}", e)
+                    }
+                }
+            } else {
+                match mem.write_byte(tfx_add as usize, cpu.registers[self.rd as usize]) {
+                    Ok(_) => (),
+                    Err(e) => {
+                        println!("{}", e)
+                    }
+                }
+            }
+        }
 
+        // NOTE: for L i don't think this matters
+        // for LDR
+        if !self.p & self.w{
+            if self.u {
+                tfx_add += offset;
+            } else {
+                tfx_add -= offset;
+            }
+            cpu.registers[self.rn as usize] = tfx_add;
         }
     }
 }
@@ -543,7 +591,6 @@ impl SingleDataTfx {
     pub fn get_offset(&self, registers: [u32;16]) -> u32 {
         if self.i {
             let shift = (self.offset >> 4) & 0xff;
-            println!("{}", shift);
             (registers[(self.offset & 0xf) as usize] << shift) as u32
         } else {
             self.offset as u32
@@ -564,8 +611,51 @@ pub struct BlockDataTransfer {
 
 impl Operation for BlockDataTransfer {
     fn run(&self, cpu: &mut CPU, mem: &mut SystemMemory) {
+        // TODO: Take into consideration the S flag
+        // TODO: Propogate the mem error to signify ABORT signal
         // When rn is 13 then we are doing stack ops, otherwise no
-        let mut address = cpu.registers[self.rn as usize];
+        let mut address = cpu.registers[self.rn as usize] as usize;
+
+        for i in 0..15 {
+            if (self.register_list >> i & 1) == 0 {
+                continue;
+            }
+
+            if self.p && self.w {
+                if self.u {
+                    address += 4
+                } else {
+                    address -= 4
+                }
+                cpu.registers[self.rn as usize] = address as u32;
+            }
+
+            if self.l {
+                cpu.registers[i] = match mem.read_from_mem(address){
+                    Ok(b) => b,
+                    Err(e) => {
+                        println!("{}", e);
+                        0
+                    }
+                };
+            } else {
+                match mem.write_word(address, cpu.registers[i]) {
+                    Ok(_) => (),
+                    Err(e) => {
+                        println!("{}", e);
+                    }
+                };
+            }
+
+            if !self.p && self.w {
+                if self.u {
+                    address += 4
+                } else {
+                    address -= 4
+                }
+                cpu.registers[self.rn as usize] = address as u32;
+            }
+        }
     }
 }
 

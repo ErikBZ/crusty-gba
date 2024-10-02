@@ -66,7 +66,7 @@ impl SystemMemory {
     }
 
     fn write_with_mask(&mut self, address: usize, block: u32, mask: u32) -> Result<(), MemoryError> {
-        let i = address >> 2;
+        let i = (address & 0xfffff) >> 2;
         let shift = (address & 0x3) as u32;
 
         let mut data = self.read_from_mem(address)?;
@@ -83,7 +83,7 @@ impl SystemMemory {
 
     pub fn read_from_mem(&mut self, address: usize) -> Result<u32, MemoryError> {
         let ram: &Vec<u32> = self.memory_map(address)?;
-        let mem_address = address & 0xfffff;
+        let mem_address = (address & 0xfffff) >> 2;
         if mem_address > ram.len() {
             Err(MemoryError::OutOfBounds(mem_address))
         } else {

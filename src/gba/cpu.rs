@@ -1,7 +1,7 @@
 use core::fmt;
 
 use super::arm::decode_as_arm;
-use super::{Conditional, CPSR_Z, CPSR_V, CPSR_N, CPSR_C};
+use super::{Conditional, CPSR_Z, CPSR_V, CPSR_N, CPSR_C, CPSR_T};
 use super::system::SystemMemory;
 
 pub const PC: usize = 15;
@@ -60,6 +60,14 @@ impl CPU {
         self.cpsr &= 0x2fffffff;
         self.cpsr |= CPSR_C & (res >> 2);
         self.cpsr |= zero;
+    }
+
+    pub fn update_thumb(&mut self, is_thumb: bool) {
+        if is_thumb {
+            self.cpsr |= CPSR_T
+        } else {
+            self.cpsr &= !CPSR_T
+        }
     }
 
     pub fn run_instruction(&mut self, inst: u32, ram: &mut SystemMemory) {
