@@ -8,6 +8,7 @@ pub const CPSR_N: u32 = 0x80000000;
 pub const CPSR_Z: u32 = 0x60000000;
 pub const CPSR_C: u32 = 0x20000000;
 pub const CPSR_V: u32 = 0x10000000;
+pub const CPSR_T: u32 = 0x20;
 
 use crate::SystemMemory;
 

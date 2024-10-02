@@ -1,6 +1,9 @@
 use core::fmt;
 
 const KILOBYTE: usize = 1024;
+const WORD: u32 = 0xffffffff;
+const HALFWORD: u32 = 0xffff;
+const BYTE: u32 = 0xff;
 
 #[derive(Debug, PartialEq, Clone)]
 pub enum MemoryError {
@@ -47,31 +50,40 @@ impl Default for SystemMemory {
 }
 
 impl SystemMemory {
-    pub fn write_to_mem(&mut self, address: usize, block: u32) -> Result<(), MemoryError> {
-        let ram: &mut Vec<u32> = self.memory_map(address)?;
-        let mem_address = address & 0xfffff;
-        if mem_address > ram.len() {
-            Err(MemoryError::OutOfBounds(mem_address))
-        } else {
-            ram[mem_address] = block;
-            Ok(())
-        }
+    pub fn write_word(&mut self, address: usize, block: u32) -> Result<(), MemoryError> {
+        self.write_with_mask(address, block, WORD)?;
+        Ok(())
     }
 
-    pub fn write_to_mem_byte(&mut self, address: usize, block: u32) -> Result<(), MemoryError> {
+    pub fn write_halfword(&mut self, address: usize, block: u32) -> Result<(), MemoryError> {
+        self.write_with_mask(address, block, HALFWORD)?;
+        Ok(())
+    }
+
+    pub fn write_byte(&mut self, address: usize, block: u32) -> Result<(), MemoryError> {
+        self.write_with_mask(address, block, BYTE)?;
+        Ok(())
+    }
+
+    fn write_with_mask(&mut self, address: usize, block: u32, mask: u32) -> Result<(), MemoryError> {
+        let i = (address & 0xfffff) >> 2;
+        let shift = (address & 0x3) as u32;
+
+        let mut data = self.read_from_mem(address)?;
+        data = (data & !(mask << shift)) | ((block & mask) << shift);
+
         let ram: &mut Vec<u32> = self.memory_map(address)?;
-        let mem_address = address & 0xfffff;
-        if mem_address > ram.len() {
-            Err(MemoryError::OutOfBounds(mem_address))
+        if i > ram.len() {
+            Err(MemoryError::OutOfBounds(address))
         } else {
-            ram[mem_address] = block;
+            ram[i] = data;
             Ok(())
         }
     }
 
     pub fn read_from_mem(&mut self, address: usize) -> Result<u32, MemoryError> {
         let ram: &Vec<u32> = self.memory_map(address)?;
-        let mem_address = address & 0xfffff;
+        let mem_address = (address & 0xfffff) >> 2;
         if mem_address > ram.len() {
             Err(MemoryError::OutOfBounds(mem_address))
         } else {
