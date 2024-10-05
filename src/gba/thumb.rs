@@ -1,3 +1,6 @@
+use super::Operation;
+use crate::{SystemMemory, CPU};
+
 #[derive(Debug, PartialEq)]
 pub enum ThumbInstruction {
     ADC{rd: u8, rs: u8},
@@ -357,6 +360,19 @@ impl From<u16> for ThumbInstruction {
             ThumbInstruction::Undefined
         }
     }
+}
+
+#[derive(Debug)]
+pub struct Undefined;
+
+impl Operation for Undefined {
+    fn run(&self, _cpu: &mut CPU, _mem: &mut SystemMemory) {
+        unreachable!()
+    }
+}
+
+pub fn decode_as_thumb(_inst: u32) -> Box<dyn Operation> {
+    Box::new(Undefined)
 }
 
 mod test {
