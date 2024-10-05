@@ -12,9 +12,7 @@ use super::cpu::PC;
 // TODO: currently all regs are u8 or u32 types, maybe they should be usizes
 
 pub fn decode_as_arm(inst: u32) -> Box<dyn Operation> {
-    if is_data_processing(inst) {
-       Box::new(DataProcessingOp::from(inst))
-    } else if is_multiply(inst) {
+    if is_multiply(inst) {
        Box::new(MultiplyOp::from(inst))
     } else if is_multiply_long(inst) {
        Box::new(MultiplyLongOp::from(inst))
@@ -40,6 +38,8 @@ pub fn decode_as_arm(inst: u32) -> Box<dyn Operation> {
        Box::new(PsrTransferOp::from(inst))
     } else if is_halfword_data_tfx_imm(inst) || is_halfword_data_tfx_reg(inst) {
        Box::new(HalfwordDataOp::from(inst))
+    } else if is_data_processing(inst) {
+       Box::new(DataProcessingOp::from(inst))
     } else {
        Box::new(UndefinedInstruction)
     }
@@ -524,8 +524,6 @@ impl Operation for SingleDataTfx {
             }
         }
 
-        println!("{:#0x}", tfx_add);
-
         if self.l {
             let block_from_mem = match mem.read_from_mem(tfx_add as usize) {
                 Ok(n) => n,
@@ -976,8 +974,9 @@ impl From<u32> for HalfwordDataOp {
     }
 }
 
+// NOTE: this may match PSR Transfers so PSR transfers should be matched first
 pub fn is_data_processing(inst: u32) -> bool {
-    inst & 0x0e000000 == 0x02000000
+    inst & 0x0c000000 == 0x00000000
 }
 
 pub fn is_multiply(inst: u32) -> bool {
@@ -1124,6 +1123,23 @@ mod test {
             rm: 12,
             rotate: 0,
             op: PsrTransferType::MSR
+        };
+        assert_eq!(op, op2);
+    }
+
+    #[test]
+    fn test_msreq_decode_2() {
+        let inst: u32 = 0x010fc000;
+        let op = PsrTransferOp::from(inst);
+        let op2 = PsrTransferOp{
+            i: false,
+            imm: 0,
+            bit_flags_only: false,
+            p: false,
+            rd: 12,
+            rm: 0,
+            rotate: 0,
+            op: PsrTransferType::MRS
         };
         assert_eq!(op, op2);
     }

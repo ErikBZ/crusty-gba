@@ -73,13 +73,13 @@ mod test {
     #[test]
     fn test_parse_break_full() {
         let cmd = DebuggerCommand::parse("break 32");
-        assert_eq!(cmd, Ok(DebuggerCommand::BreakPoint(32)));
+        assert_eq!(cmd, Ok(DebuggerCommand::BreakPoint(50)));
     }
 
     #[test]
     fn test_parse_break_short() {
         let cmd = DebuggerCommand::parse("b 32");
-        assert_eq!(cmd, Ok(DebuggerCommand::BreakPoint(32)));
+        assert_eq!(cmd, Ok(DebuggerCommand::BreakPoint(50)));
     }
 
     #[test]

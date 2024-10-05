@@ -50,6 +50,13 @@ impl Default for SystemMemory {
 }
 
 impl SystemMemory {
+    pub fn copy_bios(&mut self, bios: Vec<u32>) {
+        self.system_rom = bios;
+    }
+}
+
+
+impl SystemMemory {
     pub fn write_word(&mut self, address: usize, block: u32) -> Result<(), MemoryError> {
         self.write_with_mask(address, block, WORD)?;
         Ok(())

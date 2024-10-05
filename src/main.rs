@@ -29,6 +29,7 @@ fn debug_bios(codes: Vec<u32>) {
     use std::io;
     let mut cpu = CPU::default();
     let mut memory =  SystemMemory::default();
+    memory.copy_bios(codes);
     let mut break_points: HashSet<u32> = HashSet::new();
 
     loop {
@@ -60,39 +61,30 @@ fn debug_bios(codes: Vec<u32>) {
             },
             DebuggerCommand::Continue => {
                 for _ in 0..100 {
-                    println!("{}", cpu.pc());
+                    println!("{:x}", cpu.pc());
                     if break_points.contains(&cpu.pc()) {
                         break;
                     }
-                    let inst = codes[(cpu.pc() >> 2) as usize];
-                    cpu.run_instruction(inst, &mut memory);
+                    cpu.run_current_instruction(&mut memory);
                 }
             },
             DebuggerCommand::Next => {
-                let i = (cpu.pc() >> 2) as usize;
-                if i < codes.len() {
-                    let inst = codes[(cpu.pc() >> 2) as usize];
-                    let op = decode_as_arm(inst);
-                    let cond = Conditional::from(inst);
-                    println!("{}", cpu);
-                    println!("{:?} {:?}", cond, op);
-                    cpu.run_instruction(inst, &mut memory);
-                } else {
-                    println!("Address it not within ROM");
-                    continue;
-                }
+                cpu.run_current_instruction(&mut memory);
+                let op = decode_as_arm(cpu.current);
+                let cond = Conditional::from(cpu.current);
+                println!("{}", cpu);
+                println!("{:#08x} {:?} {:?}", cpu.current, cond, op);
             },
             DebuggerCommand::Info => {
-                let i = (cpu.pc() >> 2) as usize;
-                let op = if i < codes.len() {
-                    decode_as_arm(codes[(cpu.pc() >> 2) as usize])
+                let op = if !cpu.is_thumb_mode() {
+                    decode_as_arm(cpu.current)
                 } else {
                     println!("Address is not within ROM");
                     continue;
                 };
-                let cond = Conditional::from(codes[(cpu.pc() >> 2) as usize]);
+                let cond = Conditional::from(cpu.current);
                 println!("{}", cpu);
-                println!("{:?} {:?}", cond, op);
+                println!("{:#08x} {:?} {:?}", cpu.current, cond, op);
             },
             DebuggerCommand::Quit => break,
         }
