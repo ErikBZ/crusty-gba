@@ -12,7 +12,8 @@ pub struct CPU {
     pub registers: [u32; 16],
     pub cpsr: u32,
     pub spsr: u32,
-    pub current: u32,
+    pub execute: u32,
+    pub decode: u32,
 }
 
 impl Default for CPU {
@@ -23,7 +24,8 @@ impl Default for CPU {
             // TODO: Check if spsr is zero'd out at execution start
             spsr: 0x0,
             // NOTE: This instruction ANDs the r0 with r0 doing nothing
-            current: 0x0,
+            execute: 0x0,
+            decode: 0x0,
         }
     }
 }
@@ -68,9 +70,9 @@ impl CPU {
 
     pub fn update_thumb(&mut self, is_thumb: bool) {
         if is_thumb {
-            self.cpsr |= CPSR_T
+            self.cpsr |= CPSR_T;
         } else {
-            self.cpsr &= !CPSR_T
+            self.cpsr &= !CPSR_T;
         }
     }
 
@@ -78,9 +80,23 @@ impl CPU {
         self.cpsr & CPSR_T == CPSR_T
     }
 
-    fn run_instruction(&mut self, inst: u32, ram: &mut SystemMemory) {
+    pub fn tick(&mut self, ram: &mut SystemMemory) {
+        let inst = self.decode;
+        self.decode = match ram.read_from_mem(self.pc() as usize) {
+            Ok(i) => i,
+            Err(e) => {
+                println!("{}", e);
+                0
+            }
+        };
+
+        self.registers[PC] += if !self.is_thumb_mode() {
+            4
+        } else {
+            2
+        };
+
         let op = if !self.is_thumb_mode() {
-            self.registers[PC] += 4;
             let cond = Conditional::from(inst);
             if !cond.should_run(self.cpsr) {
                 return;
@@ -93,22 +109,9 @@ impl CPU {
                 inst >> 16
             };
 
-            self.registers[PC] += 2;
             decode_as_thumb(inst)
         };
 
         op.run(self, ram);
-    }
-
-    pub fn run_current_instruction(&mut self, ram: &mut SystemMemory) {
-        let next_instruction = match ram.read_from_mem(self.pc() as usize) {
-            Ok(i) => i,
-            Err(e) => {
-                println!("{}", e);
-                0
-            }
-        };
-        self.run_instruction(self.current, ram);
-        self.current = next_instruction;
     }
 }

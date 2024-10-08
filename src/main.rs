@@ -65,26 +65,26 @@ fn debug_bios(codes: Vec<u32>) {
                     if break_points.contains(&cpu.pc()) {
                         break;
                     }
-                    cpu.run_current_instruction(&mut memory);
+                    cpu.tick(&mut memory);
                 }
             },
             DebuggerCommand::Next => {
-                cpu.run_current_instruction(&mut memory);
-                let op = decode_as_arm(cpu.current);
-                let cond = Conditional::from(cpu.current);
+                cpu.tick(&mut memory);
+                let op = decode_as_arm(cpu.decode);
+                let cond = Conditional::from(cpu.decode);
                 println!("{}", cpu);
-                println!("{:#08x} {:?} {:?}", cpu.current, cond, op);
+                println!("{:#08x} {:?} {:?}", cpu.decode, cond, op);
             },
             DebuggerCommand::Info => {
                 let op = if !cpu.is_thumb_mode() {
-                    decode_as_arm(cpu.current)
+                    decode_as_arm(cpu.decode)
                 } else {
                     println!("Address is not within ROM");
                     continue;
                 };
-                let cond = Conditional::from(cpu.current);
+                let cond = Conditional::from(cpu.decode);
                 println!("{}", cpu);
-                println!("{:#08x} {:?} {:?}", cpu.current, cond, op);
+                println!("{:#08x} {:?} {:?}", cpu.decode, cond, op);
             },
             DebuggerCommand::Quit => break,
         }
