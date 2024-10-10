@@ -6,7 +6,6 @@ use std::io::prelude::*;
 extern crate strum_macros;
 
 use gba::Conditional;
-use gba::thumb::ThumbInstruction;
 use gba::cpu::CPU;
 use gba::debugger::DebuggerCommand;
 use gba::system::SystemMemory;
@@ -103,16 +102,16 @@ fn dump_opcodes(num_of_lines: usize, codes: Vec<u32>) -> Result<(), ()> {
             let op = decode_as_arm(codes[i]);
             println!("{:#08x} {:0x} {:?}", inst_address, codes[i], op);
         } else {
-            let op2 = ThumbInstruction::from((codes[i] >> 16) as u16);
-            let op1 = ThumbInstruction::from((codes[i] & 0xffff) as u16);
-            match op1 {
-                ThumbInstruction::Undefined => decode_thumb = false,
-                _ => println!("{:#08x} {:0x} {:?}", inst_address, codes[i], op1),
-            };
-            match op2 {
-                ThumbInstruction::Undefined => decode_thumb = false,
-                _ => println!("{:#08x} {:0x} {:?}", inst_address+2, codes[i], op2),
-            }
+            // let op2 = ThumbInstruction::from((codes[i] >> 16) as u16);
+            // let op1 = ThumbInstruction::from((codes[i] & 0xffff) as u16);
+            // match op1 {
+            //     ThumbInstruction::Undefined => decode_thumb = false,
+            //     _ => println!("{:#08x} {:0x} {:?}", inst_address, codes[i], op1),
+            // };
+            // match op2 {
+            //     ThumbInstruction::Undefined => decode_thumb = false,
+            //     _ => println!("{:#08x} {:0x} {:?}", inst_address+2, codes[i], op2),
+            // }
         }
     }
     Ok(())
