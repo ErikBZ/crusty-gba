@@ -88,6 +88,24 @@ impl SystemMemory {
         }
     }
 
+    pub fn read_word(&mut self, address: usize) -> Result<u32, MemoryError> {
+        let res = self.read_from_mem(address)?;
+        Ok(res)
+    }
+
+    pub fn read_halfword(&mut self, address: usize) -> Result<u32, MemoryError> {
+        let res = self.read_from_mem(address)?;
+        let shift = address & 0b10;
+        // TODO: check that address is halfword aligned, error otherwise?
+        Ok(res >> (shift * 4))
+    }
+
+    pub fn read_byte(&mut self, address: usize) -> Result<u32, MemoryError> {
+        let res = self.read_from_mem(address)?;
+        let shift = address & 0b11;
+        Ok(res >> (shift * 4))
+    }
+
     pub fn read_from_mem(&mut self, address: usize) -> Result<u32, MemoryError> {
         let ram: &Vec<u32> = self.memory_map(address)?;
         let mem_address = (address & 0xfffff) >> 2;

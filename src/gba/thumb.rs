@@ -1,4 +1,4 @@
-use super::cpu::PC;
+use super::cpu::{PC, SP};
 use super::{Conditional, Operation, CPSR_T};
 use crate::{SystemMemory, CPU};
 
@@ -346,6 +346,8 @@ impl Operation for LoadStoreSignExOp {
                     panic!()
                 },
             };
+
+            cpu.registers[self.rd] = block_from_mem;
         }
     }
 }
@@ -372,8 +374,40 @@ impl From<u32> for LoadStoreImmOffsetOp {
 }
 
 impl Operation for LoadStoreImmOffsetOp {
-    fn run(&self, _cpu: &mut super::cpu::CPU, _mem: &mut SystemMemory) {
-        todo!()
+    fn run(&self, cpu: &mut CPU, mem: &mut SystemMemory) {
+        let addr = (cpu.registers[self.rb] + if self.b { self.offset } else { self.offset << 2 }) as usize;
+        if self.l {
+            let res = if self.b {
+                match mem.read_byte(addr) {
+                    Ok(n) => n,
+                    Err(e) => {
+                        println!("{}", e);
+                        0
+                    }
+                }
+            } else {
+                match mem.read_word(addr) {
+                    Ok(n) => n,
+                    Err(e) => {
+                        println!("{}", e);
+                        0
+                    }
+                }
+            };
+
+            cpu.registers[self.rd] = res;
+        } else {
+            let res = if self.b {
+                mem.write_byte(addr, cpu.registers[self.rd])
+            } else {
+                mem.write_word(addr, cpu.registers[self.rd])
+            };
+
+            match res {
+                Ok(_) => (),
+                Err(e) => println!("{}", e),
+            }
+        }
     }
 }
 
@@ -397,8 +431,26 @@ impl From<u32> for LoadStoreHalfWordOp {
 }
 
 impl Operation for LoadStoreHalfWordOp {
-    fn run(&self, _cpu: &mut super::cpu::CPU, _mem: &mut SystemMemory) {
-        todo!()
+    fn run(&self, cpu: &mut CPU, mem: &mut SystemMemory) {
+        let addr = (cpu.registers[self.rb] + self.offset << 1) as usize;
+        if self.l {
+            match mem.write_halfword(addr, cpu.registers[self.rd]) {
+                Ok(_) => (),
+                Err(e) => {
+                    println!("{}", e)
+                }
+            }
+        } else {
+            let block_from_mem = match mem.read_halfword(addr) {
+                Ok(n) => n,
+                Err(e) => {
+                    println!("{}", e);
+                    panic!()
+                },
+            };
+
+            cpu.registers[self.rd] = block_from_mem;
+        }
     }
 }
 
@@ -414,14 +466,34 @@ impl From<u32> for SpRelativeLoadOp {
         SpRelativeLoadOp {
             l: (value >> 11 & 1) == 1,
             rd: get_triplet_as_usize(value, 8),
-            word: value & 0xff << 2,
+            word: (value & 0xff) << 2,
         }
     }
 }
 
 impl Operation for SpRelativeLoadOp {
-    fn run(&self, _cpu: &mut super::cpu::CPU, _mem: &mut SystemMemory) {
-        todo!()
+    fn run(&self, cpu: &mut CPU, mem: &mut SystemMemory) {
+        let addr = (cpu.registers[7] + self.word) as usize;
+
+        if self.l {
+            match mem.write_word(addr, cpu.registers[self.rd]) {
+                Ok(_) => (),
+                Err(e) => {
+                    println!("{}", e);
+                    panic!();
+                }
+            }
+        } else {
+            let block_from_mem = match mem.read_word(addr) {
+                Ok(n) => n,
+                Err(e) => {
+                    println!("{}", e);
+                    panic!();
+                },
+            };
+
+            cpu.registers[self.rd] = block_from_mem;
+        }
     }
 }
 
@@ -437,14 +509,20 @@ impl From<u32> for LoadAddressOp {
         LoadAddressOp {
             sp: (value >> 11 & 0x1) == 1,
             rd: get_triplet_as_usize(value, 8),
-            word: value & 0xff << 2, 
+            word: (value & 0xff) << 2, 
         }
     }
 }
 
 impl Operation for LoadAddressOp {
-    fn run(&self, _cpu: &mut super::cpu::CPU, _mem: &mut SystemMemory) {
-        todo!()
+    fn run(&self, cpu: &mut CPU, _mem: &mut SystemMemory) {
+        let res = if !self.sp {
+            (cpu.registers[PC] & !1) + self.word + 4
+        } else {
+            cpu.registers[SP] + self.word
+        };
+
+        cpu.registers[self.rd] = res;
     }
 }
 
@@ -464,8 +542,13 @@ impl From<u32> for AddOffsetSPOp {
 }
 
 impl Operation for AddOffsetSPOp {
-    fn run(&self, _cpu: &mut super::cpu::CPU, _mem: &mut SystemMemory) {
-        todo!()
+    // TODO: This may need to be updated
+    fn run(&self, cpu: &mut CPU, _mem: &mut SystemMemory) {
+        if self.s {
+            cpu.registers[SP] -= self.word;
+        } else {
+            cpu.registers[SP] += self.word;
+        }
     }
 }
 
@@ -487,7 +570,7 @@ impl From<u32> for PushPopRegOp {
 }
 
 impl Operation for PushPopRegOp {
-    fn run(&self, _cpu: &mut super::cpu::CPU, _mem: &mut SystemMemory) {
+    fn run(&self, _cpu: &mut crate::cpu::CPU, _mem: &mut SystemMemory) {
         todo!()
     }
 }

@@ -6,6 +6,7 @@ use super::{Conditional, CPSR_Z, CPSR_V, CPSR_N, CPSR_C, CPSR_T};
 use super::system::SystemMemory;
 
 pub const PC: usize = 15;
+pub const SP: usize = 13;
 
 #[derive(Debug)]
 pub struct CPU {
