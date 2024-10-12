@@ -4,6 +4,7 @@ use super::SystemMemory;
 use super::CPSR_C;
 
 use super::cpu::PC;
+use super::CPSR_T;
 
 // TODO: Possible alternative to this is to have all 15
 // operation structs be a trait "Operable", that takes a CPU
@@ -354,7 +355,11 @@ impl Operation for BranchExchangeOp {
             }
         };
 
-        cpu.registers[PC] = addr + 2;
+        if cpu.cpsr & CPSR_T == CPSR_T {
+            cpu.registers[PC] = addr + 2;
+        } else {
+            cpu.registers[PC] = addr + 4;
+        }
     }
 }
 

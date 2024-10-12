@@ -1,4 +1,5 @@
-use super::{Conditional, Operation};
+use super::cpu::PC;
+use super::{Conditional, Operation, CPSR_T};
 use crate::{SystemMemory, CPU};
 
 fn get_triplet_as_usize(value: u32, shift: u32) -> usize {
@@ -33,8 +34,16 @@ impl From<u32> for MoveShiftedRegisterOp {
 }
 
 impl Operation for MoveShiftedRegisterOp {
-    fn run(&self, _cpu: &mut super::cpu::CPU, _mem: &mut SystemMemory) {
-        todo!()
+    fn run(&self, cpu: &mut super::cpu::CPU, _mem: &mut SystemMemory) {
+        let res = match self.op {
+            0 => cpu.registers[self.rs] << self.offset,
+            1 => cpu.registers[self.rs] >> self.offset,
+            2 => ((cpu.registers[self.rs] as i32) >> self.offset) as u32,
+            _ => unreachable!(),
+        };
+
+        cpu.update_cpsr(res);
+        cpu.registers[self.rd] = res;
     }
 }
 
@@ -63,8 +72,16 @@ impl From<u32> for AddSubstractOp {
 }
 
 impl Operation for AddSubstractOp {
-    fn run(&self, _cpu: &mut super::cpu::CPU, _mem: &mut SystemMemory) {
-        todo!()
+    fn run(&self, cpu: &mut super::cpu::CPU, _mem: &mut SystemMemory) {
+        let res = match (self.op, self.i) {
+            (false, false) => cpu.registers[self.rs] + cpu.registers[self.rn],
+            (false, true) => cpu.registers[self.rs] + self.offset,
+            (true, false) => cpu.registers[self.rs] - cpu.registers[self.rn],
+            (true, true) => cpu.registers[self.rs] - self.offset,
+        };
+
+        cpu.update_cpsr(res);
+        cpu.registers[self.rd] = res;
     }
 }
 
@@ -86,8 +103,19 @@ impl From<u32> for MathImmOp {
 }
 
 impl Operation for MathImmOp {
-    fn run(&self, _cpu: &mut super::cpu::CPU, _mem: &mut SystemMemory) {
-        todo!()
+    fn run(&self, cpu: &mut super::cpu::CPU, _mem: &mut SystemMemory) {
+        let res = match self.op {
+            0 => self.offset,
+            1 | 3 => cpu.registers[self.rd] - self.offset,
+            2 => cpu.registers[self.rd] + self.offset,
+            _ => unreachable!(),
+        };
+
+        match self.op {
+            2 => (),
+            _ => cpu.registers[self.rd] = res,
+        }
+        cpu.update_cpsr(res);
     }
 }
 
@@ -109,8 +137,18 @@ impl From<u32> for ALUOp {
 }
 
 impl Operation for ALUOp {
-    fn run(&self, _cpu: &mut super::cpu::CPU, _mem: &mut SystemMemory) {
-        todo!()
+    fn run(&self, cpu: &mut super::cpu::CPU, _mem: &mut SystemMemory) {
+        let res = match self.op {
+            0 => cpu.registers[self.rd] & cpu.registers[self.rs],
+            1 => cpu.registers[self.rd] ^ cpu.registers[self.rs],
+            _ => unreachable!(),
+        };
+
+        match self.op {
+            9 | 11 | 12 => {},
+            _ => cpu.registers[self.rd] = res,
+        }
+        cpu.update_cpsr(res);
     }
 }
 
@@ -126,19 +164,55 @@ struct HiRegOp {
 
 impl From<u32> for HiRegOp {
     fn from(value: u32) -> Self {
+        let h1 = (value >> 7 & 1) == 1;
+        let h2 = (value >> 6 & 1) == 1;
+        let rs = get_triplet_as_usize(value, 3);
+        let rd = get_triplet_as_usize(value, 0);
         HiRegOp {
             op: (value >> 8 & 0x3) as u8,
-            h1: (value >> 7 & 1) == 1,
-            h2: (value >> 6 & 1) == 1,
-            rs: get_triplet_as_usize(value, 3),
-            rd: get_triplet_as_usize(value, 0),
+            h1,
+            h2,
+            rs: if h1 { rs + 8 } else { rs },
+            rd: if h2 { rd + 8 } else { rd },
         }
     }
 }
 
 impl Operation for HiRegOp {
-    fn run(&self, _cpu: &mut super::cpu::CPU, _mem: &mut SystemMemory) {
-        todo!()
+    fn run(&self, cpu: &mut super::cpu::CPU, mem: &mut SystemMemory) {
+        // NOTE: h1 = 0, h2 = 0, op = 00 | 01 | 10 is undefined, and should not be used
+        if self.op != 0b11 && !(self.h1 || self.h2) {
+            unreachable!();
+        }
+
+        match self.op {
+            0b00 => cpu.registers[self.rd] += cpu.registers[self.rs],
+            0b01 => {
+                let res = cpu.registers[self.rd] - cpu.registers[self.rs];
+                cpu.update_cpsr(res);
+            },
+            0b10 => cpu.registers[self.rd] = cpu.registers[self.rs],
+            0b11 => {
+                let mut addr = cpu.registers[self.rs];
+                cpu.update_thumb(addr & 1 == 1);
+                addr &= !1;
+                // Pipeline flush
+                cpu.decode = match mem.read_from_mem(addr as usize) {
+                    Ok(n) => n,
+                    Err(e) => {
+                        println!("Error reading from memory while decoding instruction: {}", e);
+                        0
+                    }
+                };
+
+                if cpu.cpsr & CPSR_T == CPSR_T {
+                    cpu.registers[PC] = addr + 2;
+                } else {
+                    cpu.registers[PC] = addr + 4;
+                }
+            },
+            _ => unreachable!(), 
+        }
     }
 }
 
@@ -158,8 +232,20 @@ impl From<u32> for PcRelativeLoadOp {
 }
 
 impl Operation for PcRelativeLoadOp {
-    fn run(&self, _cpu: &mut super::cpu::CPU, _mem: &mut SystemMemory) {
-        todo!()
+    fn run(&self, cpu: &mut CPU, mem: &mut SystemMemory) {
+        // NOTE: The value of PC will always be 4 bytes greater, but bit 1 of PC will always be 0
+        let offset = self.word << 2; 
+        let addr = (cpu.registers[PC] + offset) as usize;
+
+        let block_from_mem = match mem.read_from_mem(addr) {
+            Ok(n) => n,
+            Err(e) => {
+                println!("{}", e);
+                panic!()
+            },
+        };
+
+        cpu.registers[self.rd] = block_from_mem;
     }
 }
 
@@ -185,8 +271,39 @@ impl From<u32> for LoadStoreRegOffsetOp {
 }
 
 impl Operation for LoadStoreRegOffsetOp {
-    fn run(&self, _cpu: &mut super::cpu::CPU, _mem: &mut SystemMemory) {
-        todo!()
+    fn run(&self, cpu: &mut CPU, mem: &mut SystemMemory) {
+        let addr = (cpu.registers[self.rb] + cpu.registers[self.ro]) as usize;
+        if self.l {
+            let block_from_mem = match mem.read_from_mem(addr) {
+                Ok(n) => n,
+                Err(e) => {
+                    println!("{}", e);
+                    panic!()
+                },
+            };
+
+            cpu.registers[self.rd] = if self.b {
+                block_from_mem
+            } else {
+                block_from_mem & 0xff
+            };
+        } else {
+            if self.b {
+                match mem.write_word(addr, cpu.registers[self.rd]) {
+                    Ok(_) => (),
+                    Err(e) => {
+                        println!("{}", e)
+                    }
+                }
+            } else {
+                match mem.write_byte(addr, cpu.registers[self.rd]) {
+                    Ok(_) => (),
+                    Err(e) => {
+                        println!("{}", e)
+                    }
+                }
+            }
+        }
     }
 }
 
@@ -212,8 +329,24 @@ impl From<u32> for LoadStoreSignExOp {
 }
 
 impl Operation for LoadStoreSignExOp {
-    fn run(&self, _cpu: &mut super::cpu::CPU, _mem: &mut SystemMemory) {
-        todo!()
+    fn run(&self, cpu: &mut CPU, mem: &mut SystemMemory) {
+        let addr = (cpu.registers[self.rb] + cpu.registers[self.ro]) as usize;
+        if !self.h && !self.s {
+            match mem.write_word(addr, cpu.registers[self.rd]) {
+                Ok(_) => (),
+                Err(e) => {
+                    println!("{}", e)
+                }
+            }
+        } else {
+            let block_from_mem = match mem.read_from_mem(addr) {
+                Ok(n) => n,
+                Err(e) => {
+                    println!("{}", e);
+                    panic!()
+                },
+            };
+        }
     }
 }
 
