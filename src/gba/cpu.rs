@@ -6,6 +6,7 @@ use super::{Conditional, CPSR_Z, CPSR_V, CPSR_N, CPSR_C, CPSR_T};
 use super::system::SystemMemory;
 
 pub const PC: usize = 15;
+pub const LR: usize = 14;
 pub const SP: usize = 13;
 
 #[derive(Debug)]
@@ -13,6 +14,7 @@ pub struct CPU {
     pub registers: [u32; 16],
     pub cpsr: u32,
     pub spsr: u32,
+    // Should one of these be the addr and the other the value?
     pub execute: u32,
     pub decode: u32,
 }

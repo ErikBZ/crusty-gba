@@ -1,4 +1,4 @@
-use super::cpu::{PC, SP};
+use super::cpu::{LR, PC, SP};
 use super::{Conditional, Operation, CPSR_T};
 use crate::{SystemMemory, CPU};
 
@@ -570,8 +570,50 @@ impl From<u32> for PushPopRegOp {
 }
 
 impl Operation for PushPopRegOp {
-    fn run(&self, _cpu: &mut crate::cpu::CPU, _mem: &mut SystemMemory) {
-        todo!()
+    fn run(&self, cpu: &mut CPU, mem: &mut SystemMemory) {
+        for i in 0..8 {
+            if (self.rlist >> i & 1) == 0 {
+                continue;
+            }
+
+            if self.l {
+                cpu.registers[i] = match mem.read_word(cpu.registers[SP] as usize) {
+                    Ok(n) => n,
+                    Err(e) => {
+                        println!("{}", e);
+                        0
+                    }
+                };
+                cpu.registers[SP] -= 4;
+            } else {
+                match mem.write_word(cpu.registers[SP] as usize, cpu.registers[i]) {
+                    Ok(_) => (),
+                    Err(e) => println!("{}", e),
+                };
+                cpu.registers[SP] += 4;
+            }
+        }
+
+        // TODO: Find more consise way of checking the 'r' register LR or PC
+        if self.r {
+            if self.l {
+                // If updating PC, should we have to flush the pipline?
+                cpu.registers[PC] = match mem.read_word(cpu.registers[SP] as usize) {
+                    Ok(n) => n,
+                    Err(e) => {
+                        println!("{}", e);
+                        0
+                    }
+                };
+                cpu.registers[SP] -= 4;
+            } else {
+                match mem.write_word(cpu.registers[SP] as usize, cpu.registers[LR]) {
+                    Ok(_) => (),
+                    Err(e) => println!("{}", e),
+                };
+                cpu.registers[SP] += 4;
+            }
+        }
     }
 }
 
@@ -593,8 +635,29 @@ impl From<u32> for MultipleLoadStoreOp {
 }
 
 impl Operation for MultipleLoadStoreOp {
-    fn run(&self, _cpu: &mut super::cpu::CPU, _mem: &mut SystemMemory) {
-        todo!()
+    fn run(&self, cpu: &mut CPU, mem: &mut SystemMemory) {
+        for i in 0..8 {
+            if (self.rlist >> i & 1) == 0 {
+                continue;
+            }
+
+            if self.l {
+                cpu.registers[i] = match mem.read_word(cpu.registers[self.rb] as usize) {
+                    Ok(n) => n,
+                    Err(e) => {
+                        println!("{}", e);
+                        0
+                    }
+                };
+                cpu.registers[self.rb] -= 4;
+            } else {
+                match mem.write_word(cpu.registers[self.rb] as usize, cpu.registers[i]) {
+                    Ok(_) => (),
+                    Err(e) => println!("{}", e),
+                };
+                cpu.registers[self.rb] += 4;
+            }
+        }
     }
 }
 
@@ -630,8 +693,31 @@ impl From<u32> for ConditionalBranchOp {
 }
 
 impl Operation for ConditionalBranchOp {
-    fn run(&self, _cpu: &mut super::cpu::CPU, _mem: &mut SystemMemory) {
-        todo!()
+    fn run(&self, cpu: &mut CPU, mem: &mut SystemMemory) {
+        if !self.cond.should_run(cpu.cpsr) {
+            return;
+        }
+
+        let offset = if self.offset & (1 << 8) == (1 << 8) {
+            ((self.offset << 1) | 0xfffffe00) as i32
+        } else {
+            (self.offset << 1) as i32
+        };
+
+        let offset_abs: u32 = u32::try_from(offset.abs()).unwrap_or(0);
+
+        let addr = if offset < 0 {
+            cpu.registers[PC] - offset_abs
+        } else {
+            cpu.registers[PC] + offset_abs
+        };
+
+        cpu.decode = match mem.read_from_mem(addr as usize) {
+            Ok(n) => n,
+            Err(_) => 0,
+        };
+
+        cpu.registers[PC] = addr + 4;
     }
 }
 
@@ -650,6 +736,8 @@ impl From<u32> for SoftwareInterruptOp {
 
 impl Operation for SoftwareInterruptOp {
     fn run(&self, _cpu: &mut super::cpu::CPU, _mem: &mut SystemMemory) {
+        // Move address of next instruction into LR, Copy CPSR to SPSR
+        // Load SWI Vector Address into PC, swith to ARM mode, enter SVC
         todo!()
     }
 }
@@ -668,8 +756,27 @@ impl From<u32> for UnconditionalBranchOp {
 }
 
 impl Operation for UnconditionalBranchOp {
-    fn run(&self, _cpu: &mut super::cpu::CPU, _mem: &mut SystemMemory) {
-        todo!()
+    fn run(&self, cpu: &mut CPU, mem: &mut SystemMemory) {
+        let offset = if self.offset & (1 << 11) == (1 << 11) {
+            ((self.offset << 1) | 0xfffff800) as i32
+        } else {
+            (self.offset << 1) as i32
+        };
+
+        let offset_abs: u32 = u32::try_from(offset.abs()).unwrap_or(0);
+
+        let addr = if offset < 0 {
+            cpu.registers[PC] - offset_abs
+        } else {
+            cpu.registers[PC] + offset_abs
+        };
+
+        cpu.decode = match mem.read_from_mem(addr as usize) {
+            Ok(n) => n,
+            Err(_) => 0,
+        };
+
+        cpu.registers[PC] = addr + 2;
     }
 }
 
@@ -689,8 +796,26 @@ impl From<u32> for LongBranchWithLinkOp {
 }
 
 impl Operation for LongBranchWithLinkOp {
-    fn run(&self, _cpu: &mut super::cpu::CPU, _mem: &mut SystemMemory) {
-        todo!()
+    fn run(&self, cpu: &mut CPU, mem: &mut SystemMemory) {
+        // !self.h runs first, the next addr MUST be another LongBranchWithLinkOp
+        // with self.h == true
+        if !self.h {
+            cpu.registers[LR] = cpu.registers[PC] + self.offset << 12;
+        } else {
+            let temp = cpu.registers[PC] - 2;
+            cpu.registers[PC] = cpu.registers[LR] + self.offset << 1;
+            cpu.registers[LR] = temp;
+
+            cpu.decode = match mem.read_halfword(cpu.registers[PC] as usize) {
+                Ok(n) => n,
+                Err(e) => {
+                    println!("{}", e);
+                    0
+                }
+            };
+
+            cpu.registers[PC] +=2;
+        }
     }
 }
 
