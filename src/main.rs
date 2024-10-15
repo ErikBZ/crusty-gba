@@ -10,6 +10,7 @@ use gba::cpu::CPU;
 use gba::debugger::DebuggerCommand;
 use gba::system::SystemMemory;
 use gba::arm::decode_as_arm;
+use gba::thumb::decode_as_thumb;
 
 fn main() {
     // TODO: Just put test.gba in the root dir
@@ -29,7 +30,7 @@ fn debug_bios(codes: Vec<u32>) {
     let mut cpu = CPU::default();
     let mut memory =  SystemMemory::default();
     memory.copy_bios(codes);
-    let mut break_points: HashSet<u32> = HashSet::new();
+    let mut break_points: HashSet<usize> = HashSet::new();
 
     loop {
         let mut input = String::new();
@@ -69,22 +70,34 @@ fn debug_bios(codes: Vec<u32>) {
             },
             DebuggerCommand::Next => {
                 cpu.tick(&mut memory);
-                let op = decode_as_arm(cpu.decode);
+                let op = if !cpu.is_thumb_mode() {
+                    decode_as_arm(cpu.decode)
+                } else {
+                    decode_as_thumb(cpu.decode)
+                };
                 let cond = Conditional::from(cpu.decode);
+
                 println!("{}", cpu);
-                println!("{:#08x} {:?} {:?}", cpu.decode, cond, op);
+                if cpu.is_thumb_mode() {
+                    println!("{:#04x} {:?} {:?}", cpu.decode, cond, op);
+                } else {
+                    println!("{:#08x} {:?} {:?}", cpu.decode, cond, op);
+                }
             },
             DebuggerCommand::Info => {
                 let op = if !cpu.is_thumb_mode() {
                     decode_as_arm(cpu.decode)
                 } else {
-                    println!("Address is not within ROM");
-                    continue;
+                    decode_as_thumb(cpu.decode)
                 };
                 let cond = Conditional::from(cpu.decode);
+
                 println!("{}", cpu);
-                println!("{:#08x} {:?} {:?}", cpu.decode, cond, op);
-            },
+                if cpu.is_thumb_mode() {
+                    println!("{:#04x} {:?} {:?}", cpu.decode, cond, op);
+                } else {
+                    println!("{:#08x} {:?} {:?}", cpu.decode, cond, op);
+                }            },
             DebuggerCommand::Quit => break,
         }
     }

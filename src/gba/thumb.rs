@@ -2,6 +2,66 @@ use super::cpu::{LR, PC, SP};
 use super::{Conditional, Operation, CPSR_T};
 use crate::{SystemMemory, CPU};
 
+pub fn decode_as_thumb(value: u32) -> Box<dyn Operation> {
+    if value & 0xf800 == 0x1800 {
+        // AddSubstractOp
+        Box::new(AddSubstractOp::from(value))
+    } else if value & 0xe000 == 0x0 {
+        // MoveShiftedRegisterOp
+        Box::new(MoveShiftedRegisterOp::from(value))
+    } else if value & 0xe000 == 0x2000 {
+        // MathImmOp
+        Box::new(MathImmOp::from(value))
+    } else if value & 0xfc00 == 0x2000 {
+        // ALUOp
+        Box::new(ALUOp::from(value))
+    } else if value & 0xfc00 == 0x4400 {
+        // HiRegOp
+        Box::new(HiRegOp::from(value))
+    } else if value & 0xf800 == 0x4800 {
+        // PcRelativeLoadOp
+        Box::new(PcRelativeLoadOp::from(value))
+    } else if value & 0xf200 == 0x5000 {
+        // LoadStoreRegOffsetOp
+        Box::new(LoadStoreRegOffsetOp::from(value))
+    } else if value & 0xf200 == 0x5200 {
+        // LoadStoreSignExOp
+        Box::new(LoadStoreSignExOp::from(value))
+    } else if value & 0xe000 == 0x6000 {
+        // LoadStoreHalfWordOp
+        Box::new(LoadStoreHalfWordOp::from(value))
+    } else if value & 0xf000 == 0x8000 {
+        // LoadStoreImmOffsetOp
+        Box::new(LoadStoreImmOffsetOp::from(value))
+    } else if value & 0xf000 == 0x9000 {
+        // SpRelativeLoadOp
+        Box::new(SpRelativeLoadOp::from(value))
+    } else if value & 0xf000 == 0xa000 {
+        // LoadAddressOp
+        Box::new(LoadAddressOp::from(value))
+    } else if value & 0xff00 == 0xb000 {
+        // AddOffsetSPOp
+        Box::new(AddOffsetSPOp::from(value))
+    } else if value & 0xf600 == 0xb400 {
+        // PushPopRegOp
+        Box::new(PushPopRegOp::from(value))
+    } else if value & 0xf000 == 0xc000 {
+        // MultipleLoadStoreOp
+        Box::new(MultipleLoadStoreOp::from(value))
+    } else if value & 0xf000 == 0xd000 {
+        // ConditionalBranchOp
+        Box::new(ConditionalBranchOp::from(value))
+    } else if value & 0xf800 == 0xe000 {
+        // UnconditionalBranchOp
+        Box::new(UnconditionalBranchOp::from(value))
+    } else if value & 0xf000 == 0xf000 {
+        // LongBranchWithLinkOp
+        Box::new(LongBranchWithLinkOp::from(value))
+    } else {
+        Box::new(SoftwareInterruptOp::from(value))
+    }
+}
+
 fn get_triplet_as_usize(value: u32, shift: u32) -> usize {
     (value >> shift & 0x7) as usize
 }
@@ -273,6 +333,7 @@ impl From<u32> for LoadStoreRegOffsetOp {
 impl Operation for LoadStoreRegOffsetOp {
     fn run(&self, cpu: &mut CPU, mem: &mut SystemMemory) {
         let addr = (cpu.registers[self.rb] + cpu.registers[self.ro]) as usize;
+
         if self.l {
             let block_from_mem = match mem.read_from_mem(addr) {
                 Ok(n) => n,
@@ -816,66 +877,6 @@ impl Operation for LongBranchWithLinkOp {
 
             cpu.registers[PC] +=2;
         }
-    }
-}
-
-pub fn decode_as_thumb(value: u32) -> Box<dyn Operation> {
-    if value & 0xf800 == 0x1800 {
-        // AddSubstractOp
-        Box::new(AddSubstractOp::from(value))
-    } else if value & 0xe000 == 0x0 {
-        // MoveShiftedRegisterOp
-        Box::new(AddSubstractOp::from(value))
-    } else if value & 0xe000 == 0x2000 {
-        // MathImmOp
-        Box::new(AddSubstractOp::from(value))
-    } else if value & 0xfc00 == 0x2000 {
-        // ALUOp
-        Box::new(AddSubstractOp::from(value))
-    } else if value & 0xfc00 == 0x4400 {
-        // HiRegOp
-        Box::new(AddSubstractOp::from(value))
-    } else if value & 0xf800 == 0x4800 {
-        // PcRelativeLoadOp
-        Box::new(AddSubstractOp::from(value))
-    } else if value & 0xf200 == 0x5000 {
-        // LoadStoreRegOffsetOp
-        Box::new(AddSubstractOp::from(value))
-    } else if value & 0xf200 == 0x5200 {
-        // LoadStoreSignExOp
-        Box::new(AddSubstractOp::from(value))
-    } else if value & 0xe000 == 0x6000 {
-        // LoadStoreHalfWordOp
-        Box::new(AddSubstractOp::from(value))
-    } else if value & 0xf000 == 0x8000 {
-        // LoadStoreImmOffsetOp
-        Box::new(AddSubstractOp::from(value))
-    } else if value & 0xf000 == 0x9000 {
-        // SpRelativeLoadOp
-        Box::new(AddSubstractOp::from(value))
-    } else if value & 0xf000 == 0xa000 {
-        // LoadAddressOp
-        Box::new(AddSubstractOp::from(value))
-    } else if value & 0xff00 == 0xb000 {
-        // AddOffsetSPOp
-        Box::new(AddSubstractOp::from(value))
-    } else if value & 0xf600 == 0xb400 {
-        // PushPopRegOp
-        Box::new(AddSubstractOp::from(value))
-    } else if value & 0xf000 == 0xc000 {
-        // MultipleLoadStoreOp
-        Box::new(AddSubstractOp::from(value))
-    } else if value & 0xf000 == 0xd000 {
-        // ConditionalBranchOp
-        Box::new(AddSubstractOp::from(value))
-    } else if value & 0xf800 == 0xe000 {
-        // UnconditionalBranchOp
-        Box::new(AddSubstractOp::from(value))
-    } else if value & 0xf000 == 0xf000 {
-        // LongBranchWithLinkOp
-        Box::new(AddSubstractOp::from(value))
-    } else {
-        Box::new(AddSubstractOp::from(value))
     }
 }
 

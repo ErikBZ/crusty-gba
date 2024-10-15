@@ -22,7 +22,7 @@ pub struct CPU {
 impl Default for CPU {
     fn default() -> Self {
         Self {
-            registers: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0x68],
+            registers: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0x03007f00, 0, 0x68],
             cpsr: 0x1f,
             // TODO: Check if spsr is zero'd out at execution start
             spsr: 0x0,
@@ -47,8 +47,8 @@ impl fmt::Display for CPU {
 
 impl CPU {
     // Program Counter
-    pub fn pc(&self) -> u32 {
-        self.registers[PC]
+    pub fn pc(&self) -> usize {
+        self.registers[PC] as usize
     }
 
     pub fn get_instruction_at_pc(&self) {
@@ -85,7 +85,13 @@ impl CPU {
 
     pub fn tick(&mut self, ram: &mut SystemMemory) {
         let inst = self.decode;
-        self.decode = match ram.read_from_mem(self.pc() as usize) {
+        let next_inst = if self.is_thumb_mode() {
+            ram.read_halfword(self.pc())
+        } else {
+            ram.read_word(self.pc())
+        };
+
+        self.decode = match next_inst {
             Ok(i) => i,
             Err(e) => {
                 println!("{}", e);
@@ -99,6 +105,7 @@ impl CPU {
             2
         };
 
+        println!("THIS IS THE THUMB STATE: {}", self.is_thumb_mode());
         let op = if !self.is_thumb_mode() {
             let cond = Conditional::from(inst);
             if !cond.should_run(self.cpsr) {
@@ -106,12 +113,7 @@ impl CPU {
             }
             decode_as_arm(inst)
         } else {
-            let inst = if self.pc() % 4 == 0 {
-                inst & 0xffff
-            } else {
-                inst >> 16
-            };
-
+            println!("HELLO I AM DECODING THUMB");
             decode_as_thumb(inst)
         };
 

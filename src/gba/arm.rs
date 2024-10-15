@@ -1,9 +1,8 @@
-use super::cpu::CPU;
 use super::Operation;
 use super::SystemMemory;
 use super::CPSR_C;
 
-use super::cpu::PC;
+use super::cpu::{CPU,PC, LR};
 use super::CPSR_T;
 
 // TODO: Possible alternative to this is to have all 15
@@ -347,11 +346,21 @@ impl Operation for BranchExchangeOp {
         cpu.update_thumb(addr & 1 == 1);
         addr &= !1;
         // Pipeline flush
-        cpu.decode = match mem.read_from_mem(addr as usize) {
-            Ok(n) => n,
-            Err(e) => {
-                println!("{}", e);
-                0
+        cpu.decode = if cpu.is_thumb_mode() {
+            match mem.read_halfword(addr as usize) {
+                Ok(n) => n,
+                Err(e) => {
+                    println!("{}", e);
+                    0
+                }
+            }
+        } else {
+            match mem.read_word(addr as usize) {
+                Ok(n) => n,
+                Err(e) => {
+                    println!("{}", e);
+                    0
+                }
             }
         };
 
@@ -387,6 +396,10 @@ impl Operation for BranchOp {
         } else {
             cpu.registers[PC] + offset_abs
         };
+
+        if self.l {
+            cpu.registers[LR] = cpu.registers[PC];
+        }
 
         cpu.decode = match mem.read_from_mem(addr as usize) {
             Ok(n) => n,

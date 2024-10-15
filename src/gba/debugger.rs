@@ -2,7 +2,7 @@ use core::fmt;
 
 #[derive(Debug, PartialEq)]
 pub enum DebuggerCommand {
-    BreakPoint(u32),
+    BreakPoint(usize),
     Continue,
     Info,
     Next,
@@ -50,7 +50,7 @@ impl DebuggerCommand {
                     )
                 };
 
-                DebuggerCommand::BreakPoint(point)
+                DebuggerCommand::BreakPoint(point as usize)
             },
             "c" | "continue" => DebuggerCommand::Continue,
             "i" | "info" => DebuggerCommand::Info,
