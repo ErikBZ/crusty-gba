@@ -6,7 +6,6 @@ use std::io::prelude::*;
 extern crate strum_macros;
 
 use gba::Conditional;
-use gba::thumb::ThumbInstruction;
 use gba::cpu::CPU;
 use gba::debugger::DebuggerCommand;
 use gba::system::SystemMemory;
@@ -65,26 +64,26 @@ fn debug_bios(codes: Vec<u32>) {
                     if break_points.contains(&cpu.pc()) {
                         break;
                     }
-                    cpu.run_current_instruction(&mut memory);
+                    cpu.tick(&mut memory);
                 }
             },
             DebuggerCommand::Next => {
-                cpu.run_current_instruction(&mut memory);
-                let op = decode_as_arm(cpu.current);
-                let cond = Conditional::from(cpu.current);
+                cpu.tick(&mut memory);
+                let op = decode_as_arm(cpu.decode);
+                let cond = Conditional::from(cpu.decode);
                 println!("{}", cpu);
-                println!("{:#08x} {:?} {:?}", cpu.current, cond, op);
+                println!("{:#08x} {:?} {:?}", cpu.decode, cond, op);
             },
             DebuggerCommand::Info => {
                 let op = if !cpu.is_thumb_mode() {
-                    decode_as_arm(cpu.current)
+                    decode_as_arm(cpu.decode)
                 } else {
                     println!("Address is not within ROM");
                     continue;
                 };
-                let cond = Conditional::from(cpu.current);
+                let cond = Conditional::from(cpu.decode);
                 println!("{}", cpu);
-                println!("{:#08x} {:?} {:?}", cpu.current, cond, op);
+                println!("{:#08x} {:?} {:?}", cpu.decode, cond, op);
             },
             DebuggerCommand::Quit => break,
         }
@@ -103,16 +102,16 @@ fn dump_opcodes(num_of_lines: usize, codes: Vec<u32>) -> Result<(), ()> {
             let op = decode_as_arm(codes[i]);
             println!("{:#08x} {:0x} {:?}", inst_address, codes[i], op);
         } else {
-            let op2 = ThumbInstruction::from((codes[i] >> 16) as u16);
-            let op1 = ThumbInstruction::from((codes[i] & 0xffff) as u16);
-            match op1 {
-                ThumbInstruction::Undefined => decode_thumb = false,
-                _ => println!("{:#08x} {:0x} {:?}", inst_address, codes[i], op1),
-            };
-            match op2 {
-                ThumbInstruction::Undefined => decode_thumb = false,
-                _ => println!("{:#08x} {:0x} {:?}", inst_address+2, codes[i], op2),
-            }
+            // let op2 = ThumbInstruction::from((codes[i] >> 16) as u16);
+            // let op1 = ThumbInstruction::from((codes[i] & 0xffff) as u16);
+            // match op1 {
+            //     ThumbInstruction::Undefined => decode_thumb = false,
+            //     _ => println!("{:#08x} {:0x} {:?}", inst_address, codes[i], op1),
+            // };
+            // match op2 {
+            //     ThumbInstruction::Undefined => decode_thumb = false,
+            //     _ => println!("{:#08x} {:0x} {:?}", inst_address+2, codes[i], op2),
+            // }
         }
     }
     Ok(())

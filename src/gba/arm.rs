@@ -4,6 +4,7 @@ use super::SystemMemory;
 use super::CPSR_C;
 
 use super::cpu::PC;
+use super::CPSR_T;
 
 // TODO: Possible alternative to this is to have all 15
 // operation structs be a trait "Operable", that takes a CPU
@@ -341,9 +342,24 @@ pub struct BranchExchangeOp {
 }
 
 impl Operation for BranchExchangeOp {
-    fn run(&self, cpu: &mut CPU, _mem: &mut SystemMemory) {
-        cpu.update_thumb(self.rn & 1 == 1);
-        cpu.registers[PC] = cpu.registers[self.rn as usize];
+    fn run(&self, cpu: &mut CPU, mem: &mut SystemMemory) {
+        let mut addr = cpu.registers[self.rn as usize];
+        cpu.update_thumb(addr & 1 == 1);
+        addr &= !1;
+        // Pipeline flush
+        cpu.decode = match mem.read_from_mem(addr as usize) {
+            Ok(n) => n,
+            Err(e) => {
+                println!("{}", e);
+                0
+            }
+        };
+
+        if cpu.cpsr & CPSR_T == CPSR_T {
+            cpu.registers[PC] = addr + 2;
+        } else {
+            cpu.registers[PC] = addr + 4;
+        }
     }
 }
 
@@ -362,15 +378,22 @@ pub struct BranchOp {
 }
 
 impl Operation for BranchOp {
-    fn run(&self, cpu: &mut CPU, _mem: &mut SystemMemory) {
+    fn run(&self, cpu: &mut CPU, mem: &mut SystemMemory) {
         let offset = self.get_offset();
         let offset_abs: u32 = u32::try_from(offset.abs()).unwrap_or(0);
 
-        if offset < 0 {
-            cpu.registers[PC] -= offset_abs;
+        let addr = if offset < 0 {
+            cpu.registers[PC] - offset_abs
         } else {
-            cpu.registers[PC] += offset_abs;
-        }
+            cpu.registers[PC] + offset_abs
+        };
+
+        cpu.decode = match mem.read_from_mem(addr as usize) {
+            Ok(n) => n,
+            Err(_) => 0,
+        };
+
+        cpu.registers[PC] = addr + 4;
     }
 }
 
