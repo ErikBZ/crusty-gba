@@ -7,14 +7,14 @@ const BYTE: u32 = 0xff;
 
 #[derive(Debug, PartialEq, Clone)]
 pub enum MemoryError {
-    OutOfBounds(usize),
+    OutOfBounds(usize, usize),
     MapNotFound(usize),
 }
 
 impl fmt::Display for MemoryError {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
-            Self::OutOfBounds(a) => write!(f, "Memory Address is out of bounds: {:#08x}", a),
+            Self::OutOfBounds(a, b) => write!(f, "Memory Address is out of bounds: {:#08x} index: {:#08x}", a, b),
             Self::MapNotFound(a) => write!(f, "Memory Mapping not found for address: {:#08x}", a),
         }
     } 
@@ -73,15 +73,15 @@ impl SystemMemory {
     }
 
     fn write_with_mask(&mut self, address: usize, block: u32, mask: u32) -> Result<(), MemoryError> {
-        let i = (address & 0xfffff) >> 2;
-        let shift = (address & 0x3) as u32;
+        let i = (address & 0xffffff) >> 2;
+        let shift = (address & 0x3) * 8;
 
         let mut data = self.read_from_mem(address)?;
         data = (data & !(mask << shift)) | ((block & mask) << shift);
 
         let ram: &mut Vec<u32> = self.memory_map(address)?;
         if i > ram.len() {
-            Err(MemoryError::OutOfBounds(address))
+            Err(MemoryError::OutOfBounds(address, i))
         } else {
             ram[i] = data;
             Ok(())
@@ -108,9 +108,9 @@ impl SystemMemory {
 
     pub fn read_from_mem(&mut self, address: usize) -> Result<u32, MemoryError> {
         let ram: &Vec<u32> = self.memory_map(address)?;
-        let mem_address = (address & 0xfffff) >> 2;
+        let mem_address = (address & 0xffffff) >> 2;
         if mem_address > ram.len() {
-            Err(MemoryError::OutOfBounds(mem_address))
+            Err(MemoryError::OutOfBounds(address, mem_address))
         } else {
             Ok(ram[mem_address])
         }
@@ -118,7 +118,7 @@ impl SystemMemory {
     
     // deal with lifetimes later
     fn memory_map(&mut self, address: usize) -> Result<&mut Vec<u32>, MemoryError> {
-        let mem_type = address >> 24;
+        let mem_type = address >> 24 & 0xf;
         match mem_type {
             0x0 => Ok(&mut self.system_rom),
             0x2 => Ok(&mut self.ewram),

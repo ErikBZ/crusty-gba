@@ -5,7 +5,7 @@ pub mod thumb;
 pub mod system;
 
 pub const CPSR_N: u32 = 0x80000000;
-pub const CPSR_Z: u32 = 0x60000000;
+pub const CPSR_Z: u32 = 0x40000000;
 pub const CPSR_C: u32 = 0x20000000;
 pub const CPSR_V: u32 = 0x10000000;
 pub const CPSR_T: u32 = 0x20;
@@ -99,7 +99,7 @@ impl Conditional {
                 (cpsr & CPSR_N) == (cpsr & CPSR_V << 3)
             },
             Conditional::LT => {
-                (cpsr & CPSR_N) != (cpsr & CPSR_V << 3)
+                (cpsr & CPSR_N) != ((cpsr & CPSR_V) << 3)
             },
             Conditional::GT => {
                 (cpsr & CPSR_Z) == 0 && (cpsr & CPSR_N == cpsr & CPSR_V << 3)
@@ -113,5 +113,17 @@ impl Conditional {
             _ => false,
         }
     }
+}
+
+pub fn get_abs_int_value(num: u32) -> u32 {
+    if num & 1 << 31 == 1 << 31 {
+        u32::try_from((num as i32).abs()).unwrap_or(0)
+    } else {
+        num
+    }
+}
+
+pub fn is_signed(num: u32) -> bool {
+    num & 1 << 31 == 1 << 31
 }
 

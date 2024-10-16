@@ -1,5 +1,5 @@
 use super::cpu::{LR, PC, SP};
-use super::{Conditional, Operation, CPSR_T};
+use super::{Conditional, Operation, CPSR_T, get_abs_int_value, is_signed};
 use crate::{SystemMemory, CPU};
 
 pub fn decode_as_thumb(value: u32) -> Box<dyn Operation> {
@@ -133,14 +133,22 @@ impl From<u32> for AddSubstractOp {
 
 impl Operation for AddSubstractOp {
     fn run(&self, cpu: &mut super::cpu::CPU, _mem: &mut SystemMemory) {
-        let res = match (self.op, self.i) {
-            (false, false) => cpu.registers[self.rs] + cpu.registers[self.rn],
-            (false, true) => cpu.registers[self.rs] + self.offset,
-            (true, false) => cpu.registers[self.rs] - cpu.registers[self.rn],
-            (true, true) => cpu.registers[self.rs] - self.offset,
+        let mut overflow = false;
+        let offset = if self.i {
+            self.offset
+        } else {
+            cpu.registers[self.rn]
         };
 
-        cpu.update_cpsr(res);
+        let res = if self.op {
+            cpu.registers[self.rs] - offset
+        } else {
+            let value = cpu.registers[self.rs].wrapping_add(offset) as u64;
+            overflow = value & 1 << 32 == 1 << 32;
+            (value & 0xffffffff) as u32
+        };
+
+        cpu.update_cpsr_with_overflow(res, overflow);
         cpu.registers[self.rd] = res;
     }
 }
@@ -332,7 +340,14 @@ impl From<u32> for LoadStoreRegOffsetOp {
 
 impl Operation for LoadStoreRegOffsetOp {
     fn run(&self, cpu: &mut CPU, mem: &mut SystemMemory) {
-        let addr = (cpu.registers[self.rb] + cpu.registers[self.ro]) as usize;
+        let ro_val = cpu.registers[self.ro];
+        let offset = get_abs_int_value(ro_val);
+
+        let addr = if is_signed(ro_val) {
+            (cpu.registers[self.rb] - offset) as usize
+        } else {
+            (cpu.registers[self.rb] + offset) as usize
+        };
 
         if self.l {
             let block_from_mem = match mem.read_from_mem(addr) {
@@ -732,7 +747,7 @@ impl From<u32> for ConditionalBranchOp {
     fn from(value: u32) -> Self {
         ConditionalBranchOp {
             offset: (value & 0xff) as u32,
-            cond: match value >> 8 & 0xff {
+            cond: match value >> 8 & 0xf {
                 0  => Conditional::EQ,
                 1  => Conditional::NE,
                 2  => Conditional::CS,
@@ -759,7 +774,7 @@ impl Operation for ConditionalBranchOp {
             return;
         }
 
-        let offset = if self.offset & (1 << 8) == (1 << 8) {
+        let offset = if self.offset & (1 << 7) == (1 << 7) {
             ((self.offset << 1) | 0xfffffe00) as i32
         } else {
             (self.offset << 1) as i32
@@ -773,12 +788,12 @@ impl Operation for ConditionalBranchOp {
             cpu.registers[PC] + offset_abs
         };
 
-        cpu.decode = match mem.read_from_mem(addr as usize) {
+        cpu.decode = match mem.read_halfword(addr as usize) {
             Ok(n) => n,
             Err(_) => 0,
         };
 
-        cpu.registers[PC] = addr + 4;
+        cpu.registers[PC] = addr + 2;
     }
 }
 

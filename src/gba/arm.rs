@@ -398,7 +398,8 @@ impl Operation for BranchOp {
         };
 
         if self.l {
-            cpu.registers[LR] = cpu.registers[PC];
+            // NOTE: LR has to be the current decode
+            cpu.registers[LR] = cpu.registers[PC] - 4;
         }
 
         cpu.decode = match mem.read_from_mem(addr as usize) {
