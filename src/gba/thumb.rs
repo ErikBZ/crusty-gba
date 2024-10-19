@@ -1,5 +1,5 @@
 use super::cpu::{LR, PC, SP};
-use super::{Conditional, Operation, CPSR_T, get_abs_int_value, is_signed};
+use super::{get_abs_int_value, get_v_from_sub, is_signed, Conditional, Operation, CPSR_T};
 use crate::{SystemMemory, CPU};
 
 pub fn decode_as_thumb(value: u32) -> Box<dyn Operation> {
@@ -102,7 +102,8 @@ impl Operation for MoveShiftedRegisterOp {
             _ => unreachable!(),
         };
 
-        cpu.update_cpsr(res);
+        // TODO: This probably sets carry
+        cpu.update_cpsr(res, false, false);
         cpu.registers[self.rd] = res;
     }
 }
@@ -148,7 +149,7 @@ impl Operation for AddSubstractOp {
             (value & 0xffffffff) as u32
         };
 
-        cpu.update_cpsr_with_overflow(res, overflow);
+        cpu.update_cpsr(res, overflow, false);
         cpu.registers[self.rd] = res;
     }
 }
@@ -172,18 +173,34 @@ impl From<u32> for MathImmOp {
 
 impl Operation for MathImmOp {
     fn run(&self, cpu: &mut super::cpu::CPU, _mem: &mut SystemMemory) {
+        let rd = cpu.registers[self.rd] as u64;
+        let mut v_status = false;
+
         let res = match self.op {
-            0 => self.offset,
-            1 | 3 => cpu.registers[self.rd] - self.offset,
-            2 => cpu.registers[self.rd] + self.offset,
+            0 => self.offset as u64,
+            1 | 3 => {
+                let offset = !(self.offset) as u64;
+                let res = rd + offset + 1;
+                v_status = get_v_from_sub(rd, offset, res);
+                res
+            },
+            2 => {
+                let offset = self.offset as u64;
+                let res = rd + offset;
+                v_status = get_v_from_sub(rd, offset, res);
+                res
+            }
             _ => unreachable!(),
         };
+
+        let c_status = (res >> 32) & 1 == 1;
+        let res = (res & 0xffffffff) as u32;
 
         match self.op {
             2 => (),
             _ => cpu.registers[self.rd] = res,
         }
-        cpu.update_cpsr(res);
+        cpu.update_cpsr(res, v_status, c_status);
     }
 }
 
@@ -204,6 +221,7 @@ impl From<u32> for ALUOp {
     }
 }
 
+// TODO: Forgot to implement the ALU ops
 impl Operation for ALUOp {
     fn run(&self, cpu: &mut super::cpu::CPU, _mem: &mut SystemMemory) {
         let res = match self.op {
@@ -216,7 +234,8 @@ impl Operation for ALUOp {
             9 | 11 | 12 => {},
             _ => cpu.registers[self.rd] = res,
         }
-        cpu.update_cpsr(res);
+
+        cpu.update_cpsr(res, false, false);
     }
 }
 

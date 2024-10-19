@@ -1,3 +1,5 @@
+use super::get_v_from_add;
+use super::get_v_from_sub;
 use super::Operation;
 use super::SystemMemory;
 use super::CPSR_C;
@@ -132,9 +134,10 @@ impl From<u32> for DataProcessingOp {
 
 impl Operation for DataProcessingOp {
     fn run(&self, cpu: &mut CPU, _mem: &mut SystemMemory) {
-        let operand2 = self.get_operand2(cpu.registers);
-        let rn_value = cpu.registers[self.rn as usize];
-        let carry = (cpu.cpsr & CPSR_C) >> 29;
+        let operand2 = self.get_operand2(cpu.registers) as u64;
+        let rn_value = cpu.registers[self.rn as usize] as u64;
+        let carry = ((cpu.cpsr & CPSR_C) >> 29) as u64;
+        let mut v_status = false;
 
         let res = match self.opcode {
             DataProcessingType::AND | DataProcessingType::TST => {
@@ -144,22 +147,37 @@ impl Operation for DataProcessingOp {
                 rn_value ^ operand2
             },
             DataProcessingType::SUB | DataProcessingType::CMP => {
-                rn_value - operand2
+                // Note: 2s complementing
+                let rhs = !self.get_operand2(cpu.registers) as u64;
+                let res = rn_value + rhs + 1;
+                v_status = get_v_from_sub(rn_value, operand2, res);
+                res
             },
             DataProcessingType::RSB => {
-                operand2 - rn_value
+                // Note: 2s complementing
+                let rhs = !cpu.registers[self.rn as usize] as u64;
+                let res = operand2 + rhs + 1;
+                v_status = get_v_from_sub(operand2, rn_value, res);
+                res
             },
             DataProcessingType::ADD | DataProcessingType::CMN => {
-                rn_value + operand2
+                let res = rn_value + operand2;
+                v_status = get_v_from_add(rn_value, operand2, res);
+                res
             },
             DataProcessingType::ADC => {
-                rn_value + operand2 + carry
+                let res = rn_value + operand2 + carry;
+                v_status = get_v_from_add(rn_value, operand2, res);
+                res
             },
             DataProcessingType::SBC => {
-                rn_value - operand2 + carry - 1
+                // Note: 2s complementing
+                let rhs = !self.get_operand2(cpu.registers) as u64;
+                rn_value + rhs + carry
             },
             DataProcessingType::RSC => {
-                operand2 - rn_value + carry - 1
+                let rhs = !cpu.registers[self.rn as usize] as u64;
+                operand2 + rhs + carry
             },
             DataProcessingType::ORR => {
                 rn_value | operand2
@@ -174,6 +192,8 @@ impl Operation for DataProcessingOp {
                 !operand2
             }
         };
+        let c_status = (res >> 32) & 1 == 1;
+        let res: u32 = (res & 0xffffffff) as u32;
 
         if !(self.opcode == DataProcessingType::CMP && self.opcode == DataProcessingType::TST &&
             self.opcode == DataProcessingType::TEQ && self.opcode == DataProcessingType::CMN) {
@@ -181,7 +201,7 @@ impl Operation for DataProcessingOp {
         }
 
         if self.s {
-            cpu.update_cpsr(res);
+            cpu.update_cpsr(res, v_status, c_status);
         }
     }
 }
@@ -242,7 +262,8 @@ impl Operation for MultiplyOp{
         }
 
         cpu.registers[self.rd as usize] = res;
-        cpu.update_cpsr(res)
+        // TODO: Update v and c for this
+        cpu.update_cpsr(res, false, false);
     }
 }
 

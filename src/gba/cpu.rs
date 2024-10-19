@@ -152,11 +152,7 @@ impl CPU {
         }
     }
 
-    pub fn update_cpsr(&mut self, res: u32) {
-        self.update_cpsr_with_overflow(res, false);
-    }
-
-    pub fn update_cpsr_with_overflow(&mut self, res: u32, overlflow: bool) {
+    pub fn update_cpsr(&mut self, res: u32, v: bool, c: bool) {
         let zero = if res == 0 {
             CPSR_Z
         } else {
@@ -169,8 +165,15 @@ impl CPU {
             0
         };
 
-        // NOTE: When testing 0xFFFFFFFF + 4, it sets C and Z, not V
-        let over = if overlflow {
+        // Over is set when POS + POS = neg, NEG + NEG = pos
+        // or POS - NEG = NEG, NEG - POS = POS
+        let over = if v {
+            CPSR_V
+        } else {
+            0
+        };
+
+        let carry = if c {
             CPSR_C
         } else {
             0
@@ -181,6 +184,7 @@ impl CPU {
         self.cpsr |= zero;
         self.cpsr |= neg;
         self.cpsr |= over;
+        self.cpsr |= carry;
     }
 
     pub fn update_thumb(&mut self, is_thumb: bool) {

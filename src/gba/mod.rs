@@ -127,3 +127,16 @@ pub fn is_signed(num: u32) -> bool {
     num & 1 << 31 == 1 << 31
 }
 
+pub fn get_v_from_add(o1: u64, o2: u64, res: u64) -> bool {
+    let o1_sign = (o1 >> 31) & 1 == 1;
+    let o2_sign = (o2 >> 31) & 1 == 1;
+    let res_sign = (res >> 31) & 1 == 1;
+    (o1_sign == o2_sign) && (o1_sign != res_sign)
+}
+
+pub fn get_v_from_sub(o1: u64, o2: u64, res: u64) -> bool {
+    let o1_sign = (o1 >> 31) & 1 == 1;
+    let o2_sign = (o2 >> 31) & 1 == 1;
+    let res_sign = (res >> 31) & 1 == 1;
+    (o2_sign == res_sign) && (o1_sign != res_sign)
+}
