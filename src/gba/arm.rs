@@ -835,14 +835,14 @@ impl Operation for PsrTransferOp {
                 if self.is_cspr() {
                     cpu.cpsr = (cpu.cpsr & !mask) | (operand & mask)
                 } else {
-                    cpu.spsr = (cpu.spsr & !mask) | (operand & mask)
+                    cpu.set_psr(cpu.get_psr() & !mask | (operand & mask))
                 }
             },
             PsrTransferType::MRS => {
                 if self.is_cspr() {
                     cpu.registers[self.rd as usize] = cpu.cpsr;
                 } else {
-                    cpu.registers[self.rd as usize] = cpu.spsr;
+                    cpu.registers[self.rd as usize] = cpu.get_psr();
                 }
             },
         }

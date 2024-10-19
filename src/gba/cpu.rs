@@ -39,9 +39,12 @@ impl From<u32> for CpuMode {
 pub struct CPU {
     pub registers: [u32; 16],
     // NOTE: General use banked regs, r8-r12
-    fiq_banked_gen_regs: [u32; 5],
+    fiq_banked_gen_regs: [u32; 7],
     // NOTE: Banked regs r13, r14 for all alt modes
-    banked_regs: [u32; 4],
+    svc_banked_regs: [u32; 2],
+    abt_banked_regs: [u32; 2],
+    irq_banked_regs: [u32; 2],
+    und_banked_regs: [u32; 2],
     pub cpsr: u32,
     pub spsr: u32,
     psr: [u32; 6],
@@ -55,8 +58,11 @@ impl Default for CPU {
     fn default() -> Self {
         Self {
             registers: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0x03007f00, 0, 0x68],
-            fiq_banked_gen_regs: [0; 5],
-            banked_regs: [0; 4],
+            fiq_banked_gen_regs: [0, 0, 0, 0, 0, 0x03007f00, 0],
+            svc_banked_regs: [0x03007f00, 0],
+            abt_banked_regs: [0x03007f00, 0],
+            irq_banked_regs: [0x03007f00, 0],
+            und_banked_regs: [0x03007f00, 0],
             psr: [0x1f,0,0,0,0,0],
             cpsr: 0x1f,
             mode: CpuMode::System,
@@ -72,10 +78,10 @@ impl Default for CPU {
 impl fmt::Display for CPU {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         for i in (0..16).step_by(4) {
-            write!(f, "r{}\t{:#08x}\t", i, self.registers[i])?;
-            write!(f, "r{}\t{:#08x}\t", i + 1, self.registers[i + 1])?;
-            write!(f, "r{}\t{:#08x}\t", i + 2, self.registers[i + 2])?;
-            write!(f, "r{}\t{:#08x}\n", i + 3, self.registers[i + 3])?;
+            write!(f, "r{}\t{:#08x}\t", i, self.get_register(i))?;
+            write!(f, "r{}\t{:#08x}\t", i + 1, self.get_register(i + 1))?;
+            write!(f, "r{}\t{:#08x}\t", i + 2, self.get_register(i + 2))?;
+            write!(f, "r{}\t{:#08x}\n", i + 3, self.get_register(i + 3))?;
         }
         write!(f, "cpsr: {:#8x}\n", self.cpsr)
     }
@@ -90,18 +96,60 @@ impl CPU {
     // TODO: Do reverse for set_register
     pub fn get_register(&self, rn: usize) -> u32 {
         let mode = CpuMode::from(self.cpsr);
-        if rn < 13 && !((mode == CpuMode::FIQ) && rn > 8) {
-            self.registers[rn]
-        } else if mode == CpuMode::FIQ && rn < 13 {
-            self.fiq_banked_gen_regs[rn - 8]
-        } else {
-            // The 13 and 14 banked regs
-            self.banked_regs[rn - 13]
+        if rn == 15 || (rn < 13 && !((mode == CpuMode::FIQ) && rn > 8)) {
+            return self.registers[rn];
+        }
+
+        match mode {
+            CpuMode::FIQ => self.registers[rn - 8],
+            CpuMode::Supervisor => self.registers[rn - 13],
+            CpuMode::IRQ => self.registers[rn - 13],
+            CpuMode::Abort => self.registers[rn - 13],
+            CpuMode::Undefined => self.registers[rn - 13],
+            CpuMode::User | CpuMode::System => self.registers[rn],
         }
     }
 
-    pub fn set_register(&self, rn: usize, value: u32) {
-        todo!()
+    pub fn set_register(&mut self, rn: usize, value: u32) {
+        let mode = CpuMode::from(self.cpsr);
+        if rn == 15 || (rn < 13 && !((mode == CpuMode::FIQ) && rn > 8)) {
+            return self.registers[rn] = value;
+        }
+
+        match mode {
+            CpuMode::FIQ => self.registers[rn - 8] = value,
+            CpuMode::Supervisor => self.registers[rn - 13] = value,
+            CpuMode::Abort => self.registers[rn - 13] = value,
+            CpuMode::IRQ => self.registers[rn - 13] = value,
+            CpuMode::Undefined => self.registers[rn - 13] = value,
+            CpuMode::User | CpuMode::System => unreachable!(),
+        }
+    }
+
+    // Note: will return the CPSR when mode is sys or user, and
+    // corresponding spsr for other modes
+    pub fn get_psr(&self) -> u32 {
+        let mode = CpuMode::from(self.cpsr);
+        match mode {
+            CpuMode::User | CpuMode::System => self.cpsr,
+            CpuMode::FIQ => self.psr[0],
+            CpuMode::Supervisor => self.psr[1],
+            CpuMode::IRQ => self.psr[2],
+            CpuMode::Abort => self.psr[3],
+            CpuMode::Undefined => self.psr[4],
+        }
+    }
+
+    pub fn set_psr(&mut self, value: u32) {
+        let mode = CpuMode::from(self.cpsr);
+        match mode {
+            CpuMode::User | CpuMode::System => println!("Can't set SPSR in User and System mode"),
+            CpuMode::FIQ => self.psr[0] = value,
+            CpuMode::Supervisor => self.psr[1] = value,
+            CpuMode::IRQ => self.psr[2] = value,
+            CpuMode::Abort => self.psr[3] = value,
+            CpuMode::Undefined => self.psr[4] = value,
+        }
     }
 
     pub fn update_cpsr(&mut self, res: u32) {
