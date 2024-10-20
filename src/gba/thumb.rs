@@ -224,11 +224,20 @@ impl From<u32> for ALUOp {
 // TODO: Forgot to implement the ALU ops
 impl Operation for ALUOp {
     fn run(&self, cpu: &mut super::cpu::CPU, _mem: &mut SystemMemory) {
+        let rd_value = cpu.registers[self.rd] as u64;
+        let rs_value = cpu.registers[self.rs] as u64;
+        let mut v_status = false;
+
         let res = match self.op {
-            0 => cpu.registers[self.rd] & cpu.registers[self.rs],
-            1 => cpu.registers[self.rd] ^ cpu.registers[self.rs],
+            0 => rd_value & rs_value,
+            1 => rd_value ^ rs_value,
+            2 => rd_value >> rs_value,
+            3 => rd_value << rs_value,
+            4 => ((cpu.registers[self.rd] as i32) >> rs_value) as u64,
             _ => unreachable!(),
         };
+
+        let res = (res & 0xffffffff) as u32;
 
         match self.op {
             9 | 11 | 12 => {},
