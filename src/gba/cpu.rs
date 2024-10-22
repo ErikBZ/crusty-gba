@@ -37,7 +37,7 @@ impl From<u32> for CpuMode {
 
 #[derive(Debug)]
 pub struct CPU {
-    pub registers: [u32; 16],
+    registers: [u32; 16],
     // NOTE: General use banked regs, r8-r12
     fiq_banked_gen_regs: [u32; 7],
     // NOTE: Banked regs r13, r14 for all alt modes
@@ -122,7 +122,7 @@ impl CPU {
             CpuMode::Abort => self.registers[rn - 13] = value,
             CpuMode::IRQ => self.registers[rn - 13] = value,
             CpuMode::Undefined => self.registers[rn - 13] = value,
-            CpuMode::User | CpuMode::System => unreachable!(),
+            CpuMode::User | CpuMode::System => self.registers[rn] = value,
         }
     }
 

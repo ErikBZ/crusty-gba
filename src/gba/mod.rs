@@ -140,3 +140,20 @@ pub fn get_v_from_sub(o1: u64, o2: u64, res: u64) -> bool {
     let res_sign = (res >> 31) & 1 == 1;
     (o2_sign == res_sign) && (o1_sign != res_sign)
 }
+
+pub fn add_nums(o1: u32, o2: u32, carry: bool) -> (u64, bool) {
+    let lhs = o1 as u64;
+    let rhs = o2 as u64;
+    let c: u64 = if carry { 1 } else { 0 };
+    let res = lhs + rhs + c;
+    (res, get_v_from_add(lhs, rhs, res))
+}
+
+pub fn subtract_nums(o1: u32, o2: u32, carry: bool) -> (u64, bool) {
+    let lhs = o1 as u64;
+    let rhs = !o2 as u64;
+    let c: u64 = if carry { 1 } else { 0 };
+    let res = lhs + rhs + c + 1;
+    (res, get_v_from_sub(lhs, rhs, res))
+}
+

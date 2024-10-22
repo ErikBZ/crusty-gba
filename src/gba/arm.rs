@@ -134,8 +134,8 @@ impl From<u32> for DataProcessingOp {
 
 impl Operation for DataProcessingOp {
     fn run(&self, cpu: &mut CPU, _mem: &mut SystemMemory) {
-        let operand2 = self.get_operand2(cpu.registers) as u64;
-        let rn_value = cpu.registers[self.rn as usize] as u64;
+        let operand2 = self.get_operand2(cpu) as u64;
+        let rn_value = cpu.get_register(self.rn as usize) as u64;
         let carry = ((cpu.cpsr & CPSR_C) >> 29) as u64;
         let mut v_status = false;
 
@@ -148,14 +148,14 @@ impl Operation for DataProcessingOp {
             },
             DataProcessingType::SUB | DataProcessingType::CMP => {
                 // Note: 2s complementing
-                let rhs = !self.get_operand2(cpu.registers) as u64;
+                let rhs = !self.get_operand2(cpu) as u64;
                 let res = rn_value + rhs + 1;
                 v_status = get_v_from_sub(rn_value, operand2, res);
                 res
             },
             DataProcessingType::RSB => {
                 // Note: 2s complementing
-                let rhs = !cpu.registers[self.rn as usize] as u64;
+                let rhs = !cpu.get_register(self.rn as usize) as u64;
                 let res = operand2 + rhs + 1;
                 v_status = get_v_from_sub(operand2, rn_value, res);
                 res
@@ -172,11 +172,11 @@ impl Operation for DataProcessingOp {
             },
             DataProcessingType::SBC => {
                 // Note: 2s complementing
-                let rhs = !self.get_operand2(cpu.registers) as u64;
+                let rhs = !self.get_operand2(cpu) as u64;
                 rn_value + rhs + carry
             },
             DataProcessingType::RSC => {
-                let rhs = !cpu.registers[self.rn as usize] as u64;
+                let rhs = !cpu.get_register(self.rn as usize) as u64;
                 operand2 + rhs + carry
             },
             DataProcessingType::ORR => {
@@ -195,9 +195,9 @@ impl Operation for DataProcessingOp {
         let c_status = (res >> 32) & 1 == 1;
         let res: u32 = (res & 0xffffffff) as u32;
 
-        if !(self.opcode == DataProcessingType::CMP && self.opcode == DataProcessingType::TST &&
-            self.opcode == DataProcessingType::TEQ && self.opcode == DataProcessingType::CMN) {
-            cpu.registers[self.rd as usize] = res;
+        if !(self.opcode == DataProcessingType::CMP || self.opcode == DataProcessingType::TST ||
+            self.opcode == DataProcessingType::TEQ || self.opcode == DataProcessingType::CMN) {
+            cpu.set_register(self.rd as usize, res);
         }
 
         if self.s {
@@ -207,7 +207,7 @@ impl Operation for DataProcessingOp {
 }
 
 impl DataProcessingOp {
-    pub fn get_operand2(&self, registers: [u32;16]) -> u32 {
+    pub fn get_operand2(&self, cpu: &CPU) -> u32 {
         if self.i {
             let rotate = (self.operand >> 8 & 0xf) as u32;
             let op = (self.operand & 0xff) as u32;
@@ -218,7 +218,7 @@ impl DataProcessingOp {
             let shift = (self.operand >> 4 & 0xff) as u32;
 
             let (s, s_type) = if shift & 1 == 1 {
-                (registers[(shift >> 4) as usize], (shift >> 1) & 3)
+                (cpu.get_register((shift >> 4) as usize), (shift >> 1) & 3)
             } else if shift & 1 == 0 {
                 (shift >> 3, (shift >> 1) & 3)
             } else {
@@ -229,10 +229,10 @@ impl DataProcessingOp {
 
             // TODO: Change this to enum?
             match s_type {
-                0 => registers[rm] << s,
-                1 => registers[rm] >> s,
-                2 => ((registers[rm] as i32) >> s) as u32,
-                3 => registers[rm].rotate_right(s),
+                0 => cpu.get_register(rm) << s,
+                1 => cpu.get_register(rm) >> s,
+                2 => ((cpu.get_register(rm) as i32) >> s) as u32,
+                3 => cpu.get_register(rm).rotate_right(s),
                 _ => unreachable!()
             }
         }
@@ -252,16 +252,16 @@ pub struct MultiplyOp {
 
 impl Operation for MultiplyOp{
     fn run(&self, cpu: &mut CPU, _mem: &mut SystemMemory) {
-        let rn_value = cpu.registers[self.rn as usize];
-        let rs_value = cpu.registers[self.rs as usize];
-        let rm_value = cpu.registers[self.rm as usize];
+        let rn_value = cpu.get_register(self.rn as usize);
+        let rs_value = cpu.get_register(self.rs as usize);
+        let rm_value = cpu.get_register(self.rm as usize);
 
         let mut res = rm_value * rs_value;
         if self.a {
             res += rn_value;
         }
 
-        cpu.registers[self.rd as usize] = res;
+        cpu.set_register(self.rd as usize, res);
         // TODO: Update v and c for this
         cpu.update_cpsr(res, false, false);
     }
@@ -324,13 +324,13 @@ pub struct SingleDataSwapOp {
 impl Operation for SingleDataSwapOp {
     // TODO: Propogate Error for ABORT signals
     fn run(&self, cpu: &mut CPU, mem: &mut SystemMemory) {
-        let address = cpu.registers[self.rn as usize] as usize;
+        let address = cpu.get_register(self.rn as usize) as usize;
         match mem.read_from_mem(address) {
-            Ok(n) => cpu.registers[self.rd as usize] = n,
+            Ok(n) => cpu.set_register(self.rd as usize, n),
             Err(e) => println!("{}", e),
         }
 
-        let data = cpu.registers[self.rm as usize];
+        let data = cpu.get_register(self.rm as usize);
         if self.b {
             match mem.write_byte(address, data) {
                 Ok(_) => (),
@@ -363,7 +363,7 @@ pub struct BranchExchangeOp {
 
 impl Operation for BranchExchangeOp {
     fn run(&self, cpu: &mut CPU, mem: &mut SystemMemory) {
-        let mut addr = cpu.registers[self.rn as usize];
+        let mut addr = cpu.get_register(self.rn as usize);
         cpu.update_thumb(addr & 1 == 1);
         addr &= !1;
         // Pipeline flush
@@ -386,9 +386,9 @@ impl Operation for BranchExchangeOp {
         };
 
         if cpu.cpsr & CPSR_T == CPSR_T {
-            cpu.registers[PC] = addr + 2;
+            cpu.set_register(PC, addr + 2);
         } else {
-            cpu.registers[PC] = addr + 4;
+            cpu.set_register(PC, addr + 4);
         }
     }
 }
@@ -413,14 +413,14 @@ impl Operation for BranchOp {
         let offset_abs: u32 = u32::try_from(offset.abs()).unwrap_or(0);
 
         let addr = if offset < 0 {
-            cpu.registers[PC] - offset_abs
+            cpu.get_register(PC) - offset_abs
         } else {
-            cpu.registers[PC] + offset_abs
+            cpu.get_register(PC) + offset_abs
         };
 
         if self.l {
             // NOTE: LR has to be the current decode
-            cpu.registers[LR] = cpu.registers[PC] - 4;
+            cpu.set_register(LR, cpu.get_register(PC) - 4);
         }
 
         cpu.decode = match mem.read_from_mem(addr as usize) {
@@ -428,7 +428,7 @@ impl Operation for BranchOp {
             Err(_) => 0,
         };
 
-        cpu.registers[PC] = addr + 4;
+        cpu.set_register(PC, addr + 4);
     }
 }
 
@@ -467,8 +467,8 @@ pub struct HalfwordRegOffset {
 
 impl Operation for HalfwordRegOffset {
     fn run(&self, cpu: &mut CPU, mem: &mut SystemMemory) {
-        let offset = cpu.registers[self.rm as usize];
-        let mut address = cpu.registers[self.rn as usize];
+        let offset = cpu.get_register(self.rm as usize);
+        let mut address = cpu.get_register(self.rn as usize);
 
         if self.p {
             if self.u {
@@ -478,7 +478,7 @@ impl Operation for HalfwordRegOffset {
             }
 
             if self.w {
-                cpu.registers[self.rn as usize] = address;
+                cpu.set_register(self.rn as usize, address);
             }
         }
 
@@ -517,9 +517,9 @@ impl Operation for HalfwordRegOffset {
                 }
             };
 
-            cpu.registers[self.rd as usize] = value;
+            cpu.set_register(self.rd as usize, value);
         } else {
-            match mem.write_halfword(address as usize, cpu.registers[self.rd as usize]) {
+            match mem.write_halfword(address as usize, cpu.get_register(self.rd as usize)) {
                 Ok(_) => (),
                 Err(e) => println!("{}", e),
             }
@@ -531,7 +531,7 @@ impl Operation for HalfwordRegOffset {
             } else {
                 address -= offset;
             }
-            cpu.registers[self.rn as usize] = address;
+            cpu.set_register(self.rn as usize, address);
         }
     }
 }
@@ -568,8 +568,8 @@ pub struct SingleDataTfx {
 impl Operation for SingleDataTfx {
     fn run(&self, cpu: &mut CPU, mem: &mut SystemMemory) {
         // TODO: add write back check somewhere
-        let offset = self.get_offset(cpu.registers);
-        let mut tfx_add = cpu.registers[self.rn as usize];
+        let offset = self.get_offset(cpu);
+        let mut tfx_add = cpu.get_register(self.rn as usize);
 
         if self.p {
             if self.u {
@@ -578,7 +578,7 @@ impl Operation for SingleDataTfx {
                 tfx_add -= offset;
             }
             if self.w{
-                cpu.registers[self.rn as usize] = tfx_add;
+                cpu.set_register(self.rn as usize, tfx_add);
             }
         }
 
@@ -591,21 +591,22 @@ impl Operation for SingleDataTfx {
                 },
             };
 
-            cpu.registers[self.rd as usize] = if self.b {
+            let res = if self.b {
                 block_from_mem
             } else {
                 block_from_mem & 0xff
             };
+            cpu.set_register(self.rd as usize, res);
         } else {
             if self.b {
-                match mem.write_word(tfx_add as usize, cpu.registers[self.rd as usize]) {
+                match mem.write_word(tfx_add as usize, cpu.get_register(self.rd as usize)) {
                     Ok(_) => (),
                     Err(e) => {
                         println!("{}", e)
                     }
                 }
             } else {
-                match mem.write_byte(tfx_add as usize, cpu.registers[self.rd as usize]) {
+                match mem.write_byte(tfx_add as usize, cpu.get_register(self.rd as usize)) {
                     Ok(_) => (),
                     Err(e) => {
                         println!("{}", e)
@@ -622,7 +623,7 @@ impl Operation for SingleDataTfx {
             } else {
                 tfx_add -= offset;
             }
-            cpu.registers[self.rn as usize] = tfx_add;
+            cpu.set_register(self.rn as usize, tfx_add);
         }
     }
 }
@@ -644,10 +645,10 @@ impl From<u32> for SingleDataTfx {
 }
 
 impl SingleDataTfx {
-    pub fn get_offset(&self, registers: [u32;16]) -> u32 {
+    pub fn get_offset(&self, cpu: &CPU) -> u32 {
         if self.i {
             let shift = (self.offset >> 4) & 0xff;
-            (registers[(self.offset & 0xf) as usize] << shift) as u32
+            (cpu.get_register((self.offset & 0xf) as usize) << shift) as u32
         } else {
             self.offset as u32
         }
@@ -670,7 +671,7 @@ impl Operation for BlockDataTransfer {
         // TODO: Take into consideration the S flag
         // TODO: Propogate the mem error to signify ABORT signal
         // When rn is 13 then we are doing stack ops, otherwise no
-        let mut address = cpu.registers[self.rn as usize] as usize;
+        let mut address = cpu.get_register(self.rn as usize) as usize;
 
         for i in 0..15 {
             if (self.register_list >> i & 1) == 0 {
@@ -683,19 +684,20 @@ impl Operation for BlockDataTransfer {
                 } else {
                     address -= 4
                 }
-                cpu.registers[self.rn as usize] = address as u32;
+                cpu.set_register(self.rn as usize, address as u32);
             }
 
             if self.l {
-                cpu.registers[i] = match mem.read_from_mem(address){
+                let res = match mem.read_from_mem(address){
                     Ok(b) => b,
                     Err(e) => {
                         println!("{}", e);
                         0
                     }
                 };
+                cpu.set_register(i, res);
             } else {
-                match mem.write_word(address, cpu.registers[i]) {
+                match mem.write_word(address, cpu.get_register(i)) {
                     Ok(_) => (),
                     Err(e) => {
                         println!("{}", e);
@@ -709,7 +711,7 @@ impl Operation for BlockDataTransfer {
                 } else {
                     address -= 4
                 }
-                cpu.registers[self.rn as usize] = address as u32;
+                cpu.set_register(self.rn as usize, address as u32);
             }
         }
     }
@@ -846,7 +848,7 @@ impl Operation for PsrTransferOp {
     fn run(&self, cpu: &mut CPU, _mem: &mut SystemMemory) {
         match self.op {
             PsrTransferType::MSR => {
-                let operand = self.get_operand(cpu.registers);
+                let operand = self.get_operand(cpu);
                 let mask: u32 = if self.is_bit_flag_only() {
                     0xf0000000
                 } else {
@@ -861,9 +863,9 @@ impl Operation for PsrTransferOp {
             },
             PsrTransferType::MRS => {
                 if self.is_cspr() {
-                    cpu.registers[self.rd as usize] = cpu.cpsr;
+                    cpu.set_register(self.rd as usize, cpu.cpsr);
                 } else {
-                    cpu.registers[self.rd as usize] = cpu.get_psr();
+                    cpu.set_register(self.rd as usize, cpu.get_psr());
                 }
             },
         }
@@ -893,12 +895,12 @@ impl From<u32> for PsrTransferOp {
 }
 
 impl PsrTransferOp {
-    pub fn get_operand(&self, registers: [u32;16]) -> u32 {
+    pub fn get_operand(&self, cpu: &CPU) -> u32 {
         if self.i {
             let imm = self.imm as u32;
             imm.rotate_right((self.rotate as u32) * 2)
         } else {
-            registers[self.rm as usize]
+            cpu.get_register(self.rm as usize)
         }
     }
 
@@ -927,10 +929,10 @@ pub struct HalfwordDataOp {
 impl Operation for HalfwordDataOp {
     fn run(&self, cpu: &mut CPU, mem: &mut SystemMemory) {
         let offset = match self.mode {
-            AddressingMode3::Reg(m) => cpu.registers[m as usize],
+            AddressingMode3::Reg(m) => cpu.get_register(m as usize),
             AddressingMode3::Imm(byte_offset) => byte_offset as u32,
         };
-        let mut address = cpu.registers[self.rn as usize];
+        let mut address = cpu.get_register(self.rn as usize);
 
         if self.p {
             if self.u {
@@ -940,7 +942,7 @@ impl Operation for HalfwordDataOp {
             }
 
             if self.w {
-                cpu.registers[self.rn as usize] = address;
+                cpu.set_register(self.rn as usize, address);
             }
         }
 
@@ -980,13 +982,13 @@ impl Operation for HalfwordDataOp {
                 }
             };
 
-            cpu.registers[self.rd as usize] = value;
+            cpu.set_register(self.rd as usize, value);
         } else {
             if self.s || !self.h{
                 unreachable!();
             };
             // STRH
-            match mem.write_halfword(address as usize, cpu.registers[self.rd as usize]) {
+            match mem.write_halfword(address as usize, cpu.get_register(self.rd as usize)) {
                 Ok(_) => (),
                 Err(e) => {
                     println!("{}", e);
@@ -1000,7 +1002,7 @@ impl Operation for HalfwordDataOp {
             } else {
                 address -= offset;
             }
-            cpu.registers[self.rn as usize] = address;
+            cpu.set_register(self.rn as usize, address);
         }
     }
 }
