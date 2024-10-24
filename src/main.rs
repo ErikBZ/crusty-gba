@@ -13,6 +13,8 @@ use gba::arm::decode_as_arm;
 use gba::thumb::decode_as_thumb;
 
 fn main() {
+    let num = 0xbc2 - 0xab8;
+    println!("{:x} {}", num, num);
     // TODO: Just put test.gba in the root dir
     let mut file = match File::open("test.gba") {
         Ok(f) => f,
@@ -60,11 +62,8 @@ fn debug_bios(codes: Vec<u32>) {
                 }
             },
             DebuggerCommand::Continue => {
-                for _ in 0..100 {
+                while !break_points.contains(&cpu.pc()) {
                     println!("{:x}", cpu.pc());
-                    if break_points.contains(&cpu.pc()) {
-                        break;
-                    }
                     cpu.tick(&mut memory);
                 }
             },
@@ -101,33 +100,6 @@ fn debug_bios(codes: Vec<u32>) {
             DebuggerCommand::Quit => break,
         }
     }
-}
-
-fn dump_opcodes(num_of_lines: usize, codes: Vec<u32>) -> Result<(), ()> {
-    if num_of_lines < codes.len() {
-        return Err(())
-    };
-    let mut decode_thumb = false;
-
-    for i in 0..0x100 {
-        let inst_address = i << 2;
-        if !decode_thumb {
-            let op = decode_as_arm(codes[i]);
-            println!("{:#08x} {:0x} {:?}", inst_address, codes[i], op);
-        } else {
-            // let op2 = ThumbInstruction::from((codes[i] >> 16) as u16);
-            // let op1 = ThumbInstruction::from((codes[i] & 0xffff) as u16);
-            // match op1 {
-            //     ThumbInstruction::Undefined => decode_thumb = false,
-            //     _ => println!("{:#08x} {:0x} {:?}", inst_address, codes[i], op1),
-            // };
-            // match op2 {
-            //     ThumbInstruction::Undefined => decode_thumb = false,
-            //     _ => println!("{:#08x} {:0x} {:?}", inst_address+2, codes[i], op2),
-            // }
-        }
-    }
-    Ok(())
 }
 
 fn read_file_into_u32(file: &mut File) -> Vec<u32> {

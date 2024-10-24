@@ -46,11 +46,7 @@ pub struct CPU {
     irq_banked_regs: [u32; 2],
     und_banked_regs: [u32; 2],
     pub cpsr: u32,
-    pub spsr: u32,
     psr: [u32; 6],
-    pub mode: CpuMode,
-    // Should one of these be the addr and the other the value?
-    pub execute: u32,
     pub decode: u32,
 }
 
@@ -65,11 +61,6 @@ impl Default for CPU {
             und_banked_regs: [0x03007f00, 0],
             psr: [0x1f,0,0,0,0,0],
             cpsr: 0x1f,
-            mode: CpuMode::System,
-            // TODO: Check if spsr is zero'd out at execution start
-            spsr: 0x0,
-            // NOTE: This instruction ANDs the r0 with r0 doing nothing
-            execute: 0x0,
             decode: 0x0,
         }
     }
@@ -101,11 +92,11 @@ impl CPU {
         }
 
         match mode {
-            CpuMode::FIQ => self.registers[rn - 8],
-            CpuMode::Supervisor => self.registers[rn - 13],
-            CpuMode::IRQ => self.registers[rn - 13],
-            CpuMode::Abort => self.registers[rn - 13],
-            CpuMode::Undefined => self.registers[rn - 13],
+            CpuMode::FIQ => self.fiq_banked_gen_regs[rn - 8],
+            CpuMode::Supervisor => self.svc_banked_regs[rn - 13],
+            CpuMode::IRQ => self.irq_banked_regs[rn - 13],
+            CpuMode::Abort => self.abt_banked_regs[rn - 13],
+            CpuMode::Undefined => self.und_banked_regs[rn - 13],
             CpuMode::User | CpuMode::System => self.registers[rn],
         }
     }
@@ -117,11 +108,11 @@ impl CPU {
         }
 
         match mode {
-            CpuMode::FIQ => self.registers[rn - 8] = value,
-            CpuMode::Supervisor => self.registers[rn - 13] = value,
-            CpuMode::Abort => self.registers[rn - 13] = value,
-            CpuMode::IRQ => self.registers[rn - 13] = value,
-            CpuMode::Undefined => self.registers[rn - 13] = value,
+            CpuMode::FIQ => self.fiq_banked_gen_regs[rn - 8] = value,
+            CpuMode::Supervisor => self.svc_banked_regs[rn - 13] = value,
+            CpuMode::Abort => self.abt_banked_regs[rn - 13] = value,
+            CpuMode::IRQ => self.irq_banked_regs[rn - 13] = value,
+            CpuMode::Undefined => self.und_banked_regs[rn - 13] = value,
             CpuMode::User | CpuMode::System => self.registers[rn] = value,
         }
     }

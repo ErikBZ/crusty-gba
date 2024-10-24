@@ -12,7 +12,7 @@ pub fn decode_as_thumb(value: u32) -> Box<dyn Operation> {
     } else if value & 0xe000 == 0x2000 {
         // MathImmOp
         Box::new(MathImmOp::from(value))
-    } else if value & 0xfc00 == 0x2000 {
+    } else if value & 0xfc00 == 0x4000 {
         // ALUOp
         Box::new(ALUOp::from(value))
     } else if value & 0xfc00 == 0x4400 {
@@ -67,10 +67,6 @@ fn get_triplet_as_usize(value: u32, shift: u32) -> usize {
 }
 
 fn get_triplet_as_u32(value: u32, shift: u32) -> u32 {
-    (value >> shift & 0x7) as u32
-}
-
-fn get_triplet_as_u8(value: u32, shift: u32) -> u32 {
     (value >> shift & 0x7) as u32
 }
 
@@ -305,8 +301,8 @@ impl From<u32> for HiRegOp {
             op: (value >> 8 & 0x3) as u8,
             h1,
             h2,
-            rs: if h1 { rs + 8 } else { rs },
-            rd: if h2 { rd + 8 } else { rd },
+            rd: if h1 { rd + 8 } else { rd },
+            rs: if h2 { rs + 8 } else { rs },
         }
     }
 }
@@ -603,7 +599,7 @@ impl Operation for LoadStoreHalfWordOp {
 struct SpRelativeLoadOp {
     l: bool,
     rd: usize,
-    word: u32
+    offset: u32
 }
 
 impl From<u32> for SpRelativeLoadOp {
@@ -611,14 +607,14 @@ impl From<u32> for SpRelativeLoadOp {
         SpRelativeLoadOp {
             l: (value >> 11 & 1) == 1,
             rd: get_triplet_as_usize(value, 8),
-            word: (value & 0xff) << 2,
+            offset: (value & 0xff) << 2,
         }
     }
 }
 
 impl Operation for SpRelativeLoadOp {
     fn run(&self, cpu: &mut CPU, mem: &mut SystemMemory) {
-        let addr = (cpu.get_register(7) + self.word) as usize;
+        let addr = (cpu.get_register(SP) + self.offset) as usize;
 
         if self.l {
             match mem.write_word(addr, cpu.get_register(self.rd)) {
@@ -714,6 +710,7 @@ impl From<u32> for PushPopRegOp {
     }
 }
 
+// TODO: This doesn't seem to be adding/subbing things right
 impl Operation for PushPopRegOp {
     fn run(&self, cpu: &mut CPU, mem: &mut SystemMemory) {
         for i in 0..8 {
@@ -752,13 +749,13 @@ impl Operation for PushPopRegOp {
                     }
                 };
                 cpu.set_register(PC, value);
-                cpu.set_register(SP, cpu.get_register(PC) - 4);
+                cpu.set_register(SP, cpu.get_register(PC) + 4);
             } else {
                 match mem.write_word(cpu.get_register(SP) as usize, cpu.get_register(LR)) {
                     Ok(_) => (),
                     Err(e) => println!("{}", e),
                 };
-                cpu.set_register(SP, cpu.get_register(SP) + 4);
+                cpu.set_register(SP, cpu.get_register(SP) - 4);
             }
         }
     }
@@ -883,7 +880,9 @@ impl From<u32> for SoftwareInterruptOp {
 }
 
 impl Operation for SoftwareInterruptOp {
-    fn run(&self, _cpu: &mut super::cpu::CPU, _mem: &mut SystemMemory) {
+    fn run(&self, cpu: &mut CPU, _mem: &mut SystemMemory) {
+        println!("{:?}", cpu);
+        println!("CPU PC: {:x}", cpu.pc());
         // Move address of next instruction into LR, Copy CPSR to SPSR
         // Load SWI Vector Address into PC, swith to ARM mode, enter SVC
         todo!()
@@ -906,22 +905,18 @@ impl From<u32> for UnconditionalBranchOp {
 impl Operation for UnconditionalBranchOp {
     fn run(&self, cpu: &mut CPU, mem: &mut SystemMemory) {
         let offset = if self.offset & (1 << 11) == (1 << 11) {
-            ((self.offset << 1) | 0xfffff800) as i32
+            (self.offset) | 0xfffff000
         } else {
-            (self.offset << 1) as i32
+            self.offset
         };
+        let addr = cpu.get_register(PC).wrapping_add(offset);
 
-        let offset_abs: u32 = u32::try_from(offset.abs()).unwrap_or(0);
-
-        let addr = if offset < 0 {
-            cpu.get_register(PC) - offset_abs
-        } else {
-            cpu.get_register(PC) + offset_abs
-        };
-
-        cpu.decode = match mem.read_from_mem(addr as usize) {
+        cpu.decode = match mem.read_halfword(addr as usize) {
             Ok(n) => n,
-            Err(_) => 0,
+            Err(e) => {
+                println!("{}", e);
+                0
+            }
         };
 
         cpu.set_register(PC, addr + 2);
@@ -948,11 +943,17 @@ impl Operation for LongBranchWithLinkOp {
         // !self.h runs first, the next addr MUST be another LongBranchWithLinkOp
         // with self.h == true
         if !self.h {
-            let res = cpu.get_register(PC) + self.offset << 12;
+            let offset = if self.offset >> 10 & 1 == 1 {
+                (self.offset << 12) | 0xff800000
+            } else {
+                self.offset << 12
+            };
+            let res = cpu.get_register(PC).wrapping_add(offset);
+
             cpu.set_register(LR, res);
         } else {
             let temp = cpu.get_register(PC) - 2;
-            let res = cpu.get_register(LR) + self.offset << 1;
+            let res = cpu.get_register(LR) + (self.offset << 1);
             cpu.set_register(PC, res);
             cpu.set_register(LR, temp);
 
@@ -1018,7 +1019,7 @@ mod test {
     fn test_bx_variant_one() {
         let inst: u32 = 0x4770;
         let op = HiRegOp::from(inst);
-        assert_eq!(op, HiRegOp{h1: false, h2: true, rd: 0, rs: 6, op: 3});
+        assert_eq!(op, HiRegOp{h1: false, h2: true, rd: 0, rs: 14, op: 3});
     }
 
     #[test]

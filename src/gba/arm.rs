@@ -583,18 +583,18 @@ impl Operation for SingleDataTfx {
         }
 
         if self.l {
-            let block_from_mem = match mem.read_from_mem(tfx_add as usize) {
+            let data_block = if self.b {
+                mem.read_byte(tfx_add as usize)
+            } else {
+                mem.read_word(tfx_add as usize)
+            };
+
+            let res = match data_block {
                 Ok(n) => n,
                 Err(e) => {
                     println!("{}", e);
                     panic!()
                 },
-            };
-
-            let res = if self.b {
-                block_from_mem
-            } else {
-                block_from_mem & 0xff
             };
             cpu.set_register(self.rd as usize, res);
         } else {
