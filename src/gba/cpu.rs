@@ -170,7 +170,7 @@ impl CPU {
             0
         };
 
-        self.cpsr &= 0x2fffffff;
+        self.cpsr &= 0x0fffffff;
         // self.cpsr |= CPSR_C & (res >> 2);
         self.cpsr |= zero;
         self.cpsr |= neg;
