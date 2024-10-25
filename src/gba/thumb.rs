@@ -677,7 +677,7 @@ impl From<u32> for AddOffsetSPOp {
     fn from(value: u32) -> Self {
         AddOffsetSPOp {
             s: (value >> 7 & 1) == 1,
-            word: value & 0x7f << 2,
+            word: (value & 0x7f) << 2,
         }
     }
 }
@@ -727,13 +727,13 @@ impl Operation for PushPopRegOp {
                     }
                 };
                 cpu.set_register(i, value);
-                cpu.set_register(SP, cpu.get_register(PC) - 4);
+                cpu.set_register(SP, cpu.get_register(SP) + 4);
             } else {
                 match mem.write_word(cpu.get_register(SP) as usize, cpu.get_register(i)) {
                     Ok(_) => (),
                     Err(e) => println!("{}", e),
                 };
-                cpu.set_register(SP, cpu.get_register(SP) + 4);
+                cpu.set_register(SP, cpu.get_register(SP) - 4);
             }
         }
 
