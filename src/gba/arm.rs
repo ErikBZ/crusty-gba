@@ -410,13 +410,7 @@ pub struct BranchOp {
 impl Operation for BranchOp {
     fn run(&self, cpu: &mut CPU, mem: &mut SystemMemory) {
         let offset = self.get_offset();
-        let offset_abs: u32 = u32::try_from(offset.abs()).unwrap_or(0);
-
-        let addr = if offset < 0 {
-            cpu.get_register(PC) - offset_abs
-        } else {
-            cpu.get_register(PC) + offset_abs
-        };
+        let addr = cpu.get_register(PC).wrapping_add(offset);
 
         if self.l {
             // NOTE: LR has to be the current decode
@@ -442,12 +436,12 @@ impl From<u32> for BranchOp {
 }
 
 impl BranchOp {
-    pub fn get_offset(&self) -> i32 {
+    pub fn get_offset(&self) -> u32 {
         // offset is shifted left by 2, and then sign extended to 32 bits
-        if self.offset & (1 << 24) == (1 << 24) {
-            ((self.offset << 2) | 0xffc00000) as i32
+        if self.offset & (1 << 23) == (1 << 23) {
+            (self.offset << 2) | 0xffc00000
         } else {
-            (self.offset << 2) as i32
+            self.offset << 2
         }
     }
 }

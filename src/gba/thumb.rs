@@ -952,7 +952,7 @@ impl Operation for LongBranchWithLinkOp {
 
             cpu.set_register(LR, res);
         } else {
-            let temp = cpu.get_register(PC) - 2;
+            let temp = (cpu.get_register(PC) - 2) | 1;
             let res = cpu.get_register(LR) + (self.offset << 1);
             cpu.set_register(PC, res);
             cpu.set_register(LR, temp);

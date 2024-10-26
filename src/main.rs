@@ -13,8 +13,6 @@ use gba::arm::decode_as_arm;
 use gba::thumb::decode_as_thumb;
 
 fn main() {
-    let num = 0xbc2 - 0xab8;
-    println!("{:x} {}", num, num);
     // TODO: Just put test.gba in the root dir
     let mut file = match File::open("test.gba") {
         Ok(f) => f,
