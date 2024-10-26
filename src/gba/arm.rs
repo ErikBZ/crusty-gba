@@ -1,3 +1,4 @@
+use super::bit_is_one_at;
 use super::get_v_from_add;
 use super::get_v_from_sub;
 use super::Operation;
@@ -227,14 +228,62 @@ impl DataProcessingOp {
 
             let rm = (self.operand & 0xf) as usize;
 
+            let rm_value = cpu.get_register(rm);
+            // TODO Find a way to simplify this
             // TODO: Change this to enum?
-            match s_type {
-                0 => cpu.get_register(rm) << s,
-                1 => cpu.get_register(rm) >> s,
-                2 => ((cpu.get_register(rm) as i32) >> s) as u32,
-                3 => cpu.get_register(rm).rotate_right(s),
+            // NOTE: LSR 0, ASR 0, and ROR 0 encode special things
+            let (res, _) = match s_type {
+                0 => {
+                    let carry = if s > 32 {
+                        false
+                    } else {
+                        bit_is_one_at(rm_value, 32 - s)
+                    };
+
+                    let res = if s > 31 {
+                        0
+                    } else {
+                        rm_value << s
+                    };
+
+                    (res, carry)
+                },
+                1 => {
+                    let carry = if s > 32 || s < 1 {
+                        false
+                    } else {
+                        bit_is_one_at(rm_value, s - 1)
+                    };
+
+                    let res = if s > 31 {
+                        0
+                    } else {
+                        rm_value >> s
+                    };
+
+                    (res, carry)
+                },
+                2 => {
+                    // TODO: ASR #0 encodes a specific function
+                    if s == 0 {
+                        (rm_value, false)
+                    } else {
+                        let x = if s > 31 { 31 } else { s };
+                        (((rm_value as i32) >> x) as u32, bit_is_one_at(rm_value, x))
+                    }
+                },
+                3 => {
+                    if s == 0 {
+                        let c = if bit_is_one_at(cpu.cpsr, CPSR_C) { 0x80000000 } else { 0 };
+                        ((rm_value >> 1) | c, bit_is_one_at(rm_value, 0))
+                    } else {
+                        (rm_value.rotate_right(s), bit_is_one_at(rm_value, (s % 32) - 1))
+                    }
+                },
                 _ => unreachable!()
-            }
+            };
+
+            res
         }
     }
 }

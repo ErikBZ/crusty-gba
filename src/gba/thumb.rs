@@ -89,6 +89,7 @@ impl From<u32> for MoveShiftedRegisterOp {
     }
 }
 
+// TODO: Set carry for these
 impl Operation for MoveShiftedRegisterOp {
     fn run(&self, cpu: &mut super::cpu::CPU, _mem: &mut SystemMemory) {
         let rs = cpu.get_register(self.rs);
