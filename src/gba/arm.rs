@@ -1,4 +1,6 @@
-use super::bit_is_one_at;
+use crate::utils::bit_is_one_at;
+use crate::utils::shifter::ShiftWithCarry;
+use crate::utils::Bitable;
 use super::get_v_from_add;
 use super::get_v_from_sub;
 use super::Operation;
@@ -135,7 +137,8 @@ impl From<u32> for DataProcessingOp {
 
 impl Operation for DataProcessingOp {
     fn run(&self, cpu: &mut CPU, _mem: &mut SystemMemory) {
-        let operand2 = self.get_operand2(cpu) as u64;
+        let (op2, mut c_out) = self.get_operand2(cpu);
+        let operand2 = op2 as u64;
         let rn_value = cpu.get_register(self.rn as usize) as u64;
         let carry = ((cpu.cpsr & CPSR_C) >> 29) as u64;
         let mut v_status = false;
@@ -149,7 +152,7 @@ impl Operation for DataProcessingOp {
             },
             DataProcessingType::SUB | DataProcessingType::CMP => {
                 // Note: 2s complementing
-                let rhs = !self.get_operand2(cpu) as u64;
+                let rhs = !op2 as u64;
                 let res = rn_value + rhs + 1;
                 v_status = get_v_from_sub(rn_value, operand2, res);
                 res
@@ -173,7 +176,7 @@ impl Operation for DataProcessingOp {
             },
             DataProcessingType::SBC => {
                 // Note: 2s complementing
-                let rhs = !self.get_operand2(cpu) as u64;
+                let rhs = !op2 as u64;
                 rn_value + rhs + carry
             },
             DataProcessingType::RSC => {
@@ -193,7 +196,7 @@ impl Operation for DataProcessingOp {
                 !operand2
             }
         };
-        let c_status = (res >> 32) & 1 == 1;
+        c_out = if self.is_logical_operation() { c_out } else { res.bit_is_high(32) };
         let res: u32 = (res & 0xffffffff) as u32;
 
         if !(self.opcode == DataProcessingType::CMP || self.opcode == DataProcessingType::TST ||
@@ -202,88 +205,102 @@ impl Operation for DataProcessingOp {
         }
 
         if self.s {
-            cpu.update_cpsr(res, v_status, c_status);
+            cpu.update_cpsr(res, v_status, c_out);
+        }
+    }
+}
+
+enum ShiftType {
+    LSL,
+    LSR,
+    ASR,
+    ROR,
+}
+
+impl From<u32> for ShiftType {
+    fn from(value: u32) -> Self {
+        match value {
+            0 => Self::LSL,
+            1 => Self::LSR,
+            2 => Self::ASR,
+            3 => Self::ROR,
+            _ => unreachable!()
         }
     }
 }
 
 impl DataProcessingOp {
-    pub fn get_operand2(&self, cpu: &CPU) -> u32 {
+    fn is_logical_operation(&self) -> bool {
+        self.opcode == DataProcessingType::AND ||
+        self.opcode == DataProcessingType::EOR ||
+        self.opcode == DataProcessingType::TST ||
+        self.opcode == DataProcessingType::TEQ ||
+        self.opcode == DataProcessingType::ORR ||
+        self.opcode == DataProcessingType::MOV ||
+        self.opcode == DataProcessingType::BIC ||
+        self.opcode == DataProcessingType::MVN
+    }
+
+    fn get_operand2(&self, cpu: &CPU) -> (u32, bool) {
         if self.i {
             let rotate = (self.operand >> 8 & 0xf) as u32;
             let op = (self.operand & 0xff) as u32;
             // we gotta rotate by twice the amount
-            op.rotate_right(rotate * 2)
+            op.ror_with_carry(rotate * 2)
         }
         else {
             let shift = (self.operand >> 4 & 0xff) as u32;
 
-            let (s, s_type) = if shift & 1 == 1 {
-                (cpu.get_register((shift >> 4) as usize), (shift >> 1) & 3)
-            } else if shift & 1 == 0 {
-                (shift >> 3, (shift >> 1) & 3)
+            // TODO: This is hard to read
+            let (s, s_type) = if bit_is_one_at(shift, 0) {
+                let val = cpu.get_register((shift >> 4 & 0xf) as usize);
+                if val == 0 {
+                    (val, ShiftType::LSL)
+                } else {
+                    (val, ShiftType::from((shift >> 1) & 3))
+                }
             } else {
-                unreachable!()
+                ((shift >> 3) & 0x1f, ShiftType::from((shift >> 1) & 3))
             };
 
             let rm = (self.operand & 0xf) as usize;
-
             let rm_value = cpu.get_register(rm);
+            let c_in = (cpu.cpsr & CPSR_C) != 0;
+
             // TODO Find a way to simplify this
             // TODO: Change this to enum?
             // NOTE: LSR 0, ASR 0, and ROR 0 encode special things
-            let (res, _) = match s_type {
-                0 => {
-                    let carry = if s > 32 {
-                        false
+            match s_type {
+                ShiftType::LSL => {
+                    if s == 0 {
+                        (rm_value, c_in)
                     } else {
-                        bit_is_one_at(rm_value, 32 - s)
-                    };
-
-                    let res = if s > 31 {
-                        0
-                    } else {
-                        rm_value << s
-                    };
-
-                    (res, carry)
+                        rm_value.shl_with_carry(s)
+                    }
                 },
-                1 => {
-                    let carry = if s > 32 || s < 1 {
-                        false
+                ShiftType::LSR => {
+                    if s == 0 {
+                        rm_value.shr_with_carry(32)
                     } else {
-                        bit_is_one_at(rm_value, s - 1)
-                    };
-
-                    let res = if s > 31 {
-                        0
-                    } else {
-                        rm_value >> s
-                    };
-
-                    (res, carry)
+                        rm_value.shr_with_carry(s)
+                    }
                 },
-                2 => {
+                ShiftType::ASR => {
                     // TODO: ASR #0 encodes a specific function
                     if s == 0 {
-                        (rm_value, false)
+                        rm_value.asr_with_carry(32)
                     } else {
-                        let x = if s > 31 { 31 } else { s };
-                        (((rm_value as i32) >> x) as u32, bit_is_one_at(rm_value, x))
+                        rm_value.asr_with_carry(s)
                     }
                 },
-                3 => {
+                ShiftType::ROR => {
                     if s == 0 {
-                        let c = if bit_is_one_at(cpu.cpsr, CPSR_C) { 0x80000000 } else { 0 };
-                        ((rm_value >> 1) | c, bit_is_one_at(rm_value, 0))
+                        rm_value.rrx_with_carry(c_in)
                     } else {
-                        (rm_value.rotate_right(s), bit_is_one_at(rm_value, (s % 32) - 1))
+                        rm_value.ror_with_carry(s)
                     }
                 },
-                _ => unreachable!()
-            };
-
-            res
+            }
         }
     }
 }

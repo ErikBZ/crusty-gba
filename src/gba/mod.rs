@@ -158,12 +158,3 @@ pub fn subtract_nums(o1: u32, o2: u32, carry: bool) -> (u64, bool) {
     (res, get_v_from_sub(lhs, rhs, res))
 }
 
-// Returns true if the bit at x is 1
-pub fn bit_is_one_at(num: u32, x: u32) -> bool {
-    if x > 31 {
-        unreachable!()
-    }
-
-    (num >> x) & 1 == 1
-}
-

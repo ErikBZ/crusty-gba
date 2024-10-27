@@ -1,4 +1,5 @@
 mod gba;
+mod utils;
 use std::collections::HashSet;
 use std::fs::File;
 use std::io::prelude::*;
