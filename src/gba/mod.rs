@@ -158,6 +158,8 @@ pub fn subtract_nums(o1: u32, o2: u32, carry: bool) -> (u64, bool) {
     (res, get_v_from_sub(lhs, rhs, res))
 }
 
+// TODO: Find if there's a faster alternative
+// NOTE: Should be maybe be a Vec<usize> instead of Vec<u32>?
 pub fn bit_map_to_array(bitmap: u32) -> Vec<u32> {
     let mut arr: Vec<u32> = vec![];
     for i in 0..31 {

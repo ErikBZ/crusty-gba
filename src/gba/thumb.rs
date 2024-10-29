@@ -1,5 +1,5 @@
 use super::cpu::{LR, PC, SP};
-use super::{add_nums, get_abs_int_value, get_v_from_add, get_v_from_sub, is_signed, subtract_nums, Conditional, Operation, CPSR_C, CPSR_T};
+use super::{add_nums, bit_map_to_array, get_abs_int_value, get_v_from_add, get_v_from_sub, is_signed, subtract_nums, Conditional, Operation, CPSR_C, CPSR_T};
 use crate::{SystemMemory, CPU};
 
 pub fn decode_as_thumb(value: u32) -> Box<dyn Operation> {
@@ -219,7 +219,6 @@ impl From<u32> for ALUOp {
     }
 }
 
-// TODO: Forgot to implement the ALU ops
 impl Operation for ALUOp {
     fn run(&self, cpu: &mut CPU, _mem: &mut SystemMemory) {
         let rd_value = cpu.get_register(self.rd) as u64;
@@ -229,6 +228,7 @@ impl Operation for ALUOp {
 
         // TODO: Maybe make self.op enum?
         let res = match self.op {
+            // TODO: Implement Shift check for carry
             0 => rd_value & rs_value,
             1 => rd_value ^ rs_value,
             2 => rd_value >> rs_value,
@@ -430,6 +430,7 @@ impl Operation for LoadStoreRegOffsetOp {
             };
             cpu.set_register(self.rd, data);
         } else {
+            // TODO: Rewrite with let x if, and match on the result x
             if self.b {
                 match mem.write_word(addr, cpu.get_register(self.rd)) {
                     Ok(_) => (),
@@ -711,37 +712,16 @@ impl From<u32> for PushPopRegOp {
     }
 }
 
-// TODO: This doesn't seem to be adding/subbing things right
 impl Operation for PushPopRegOp {
     fn run(&self, cpu: &mut CPU, mem: &mut SystemMemory) {
-        for i in 0..8 {
-            if (self.rlist >> i & 1) == 0 {
-                continue;
-            }
-
-            if self.l {
-                let value = match mem.read_word(cpu.get_register(SP) as usize) {
-                    Ok(n) => n,
-                    Err(e) => {
-                        println!("{}", e);
-                        0
-                    }
-                };
-                cpu.set_register(i, value);
-                cpu.set_register(SP, cpu.get_register(SP) + 4);
-            } else {
-                match mem.write_word(cpu.get_register(SP) as usize, cpu.get_register(i)) {
-                    Ok(_) => (),
-                    Err(e) => println!("{}", e),
-                };
-                cpu.set_register(SP, cpu.get_register(SP) - 4);
-            }
+        let mut registers = bit_map_to_array(self.rlist as u32);
+        if self.r {
+            registers.push(if self.l { PC as u32 } else { LR as u32 });
         }
 
-        // TODO: Find more consise way of checking the 'r' register LR or PC
-        if self.r {
+        for i in 0..registers.len() {
             if self.l {
-                // If updating PC, should we have to flush the pipline?
+                let reg = registers[i];
                 let value = match mem.read_word(cpu.get_register(SP) as usize) {
                     Ok(n) => n,
                     Err(e) => {
@@ -749,14 +729,15 @@ impl Operation for PushPopRegOp {
                         0
                     }
                 };
-                cpu.set_register(PC, value);
-                cpu.set_register(SP, cpu.get_register(PC) + 4);
+                cpu.set_register(reg as usize, value);
+                cpu.set_register(SP, cpu.get_register(SP) + 4);
             } else {
-                match mem.write_word(cpu.get_register(SP) as usize, cpu.get_register(LR)) {
+                let reg = registers[registers.len() - i - 1];
+                cpu.set_register(SP, cpu.get_register(SP) - 4);
+                match mem.write_word(cpu.get_register(SP) as usize, cpu.get_register(reg as usize)) {
                     Ok(_) => (),
                     Err(e) => println!("{}", e),
                 };
-                cpu.set_register(SP, cpu.get_register(SP) - 4);
             }
         }
     }
