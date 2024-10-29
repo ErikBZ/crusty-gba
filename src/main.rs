@@ -97,6 +97,12 @@ fn debug_bios(codes: Vec<u32>) {
                     println!("{:#08x} {:?} {:?}", cpu.decode, cond, op);
                 }            },
             DebuggerCommand::Quit => break,
+            DebuggerCommand::ReadMem(address) => {
+                match memory.read_word(address) {
+                    Ok(d) =>  println!("{:x}: {:x}", address, d),
+                    Err(e) => println!("{}", e),
+                }
+            }
         }
     }
 }

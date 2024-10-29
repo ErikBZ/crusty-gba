@@ -1,6 +1,7 @@
 use crate::utils::bit_is_one_at;
 use crate::utils::shifter::ShiftWithCarry;
 use crate::utils::Bitable;
+use super::bit_map_to_array;
 use super::get_v_from_add;
 use super::get_v_from_sub;
 use super::Operation;
@@ -9,10 +10,6 @@ use super::CPSR_C;
 
 use super::cpu::{CPU,PC, LR};
 use super::CPSR_T;
-
-// TODO: Possible alternative to this is to have all 15
-// operation structs be a trait "Operable", that takes a CPU
-// and modifies it based on it's instruction
 
 // TODO: currently all regs are u8 or u32 types, maybe they should be usizes
 
@@ -732,12 +729,9 @@ impl Operation for BlockDataTransfer {
         // TODO: Propogate the mem error to signify ABORT signal
         // When rn is 13 then we are doing stack ops, otherwise no
         let mut address = cpu.get_register(self.rn as usize) as usize;
+        let registers = bit_map_to_array(self.register_list as u32);
 
-        for i in 0..15 {
-            if (self.register_list >> i & 1) == 0 {
-                continue;
-            }
-
+        for i in 0..registers.len() {
             if self.p && self.w {
                 if self.u {
                     address += 4
@@ -747,6 +741,12 @@ impl Operation for BlockDataTransfer {
                 cpu.set_register(self.rn as usize, address as u32);
             }
 
+            let reg = if !self.u {
+                registers.len() - i - 1
+            } else {
+                i
+            };
+
             if self.l {
                 let res = match mem.read_from_mem(address){
                     Ok(b) => b,
@@ -755,9 +755,9 @@ impl Operation for BlockDataTransfer {
                         0
                     }
                 };
-                cpu.set_register(i, res);
+                cpu.set_register(registers[reg] as usize, res);
             } else {
-                match mem.write_word(address, cpu.get_register(i)) {
+                match mem.write_word(address, cpu.get_register(registers[reg] as usize)) {
                     Ok(_) => (),
                     Err(e) => {
                         println!("{}", e);

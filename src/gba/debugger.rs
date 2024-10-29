@@ -1,10 +1,12 @@
 use core::fmt;
+use std::str::SplitWhitespace;
 
 #[derive(Debug, PartialEq)]
 pub enum DebuggerCommand {
     BreakPoint(usize),
     Continue,
     Info,
+    ReadMem(usize),
     Next,
     Quit,
 }
@@ -52,6 +54,22 @@ impl DebuggerCommand {
 
                 DebuggerCommand::BreakPoint(point as usize)
             },
+            "r" | "read" => {
+                let point: Result<u32, _> = match cmd_iter.next() {
+                    Some(s) => u32::from_str_radix(s, 16),
+                    None => return Err(
+                        CommandParseError::CommandMissingArguments(command.to_string())
+                    ),
+                };
+
+                let point = match point {
+                    Ok(n) => n,
+                    Err(_) => return Err(
+                        CommandParseError::CommandNotRecognized(command.to_string())
+                    )
+                };
+                DebuggerCommand::ReadMem(point as usize)
+            }
             "c" | "continue" => DebuggerCommand::Continue,
             "i" | "info" => DebuggerCommand::Info,
             "n" | "next" => DebuggerCommand::Next,

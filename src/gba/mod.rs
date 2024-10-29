@@ -158,3 +158,13 @@ pub fn subtract_nums(o1: u32, o2: u32, carry: bool) -> (u64, bool) {
     (res, get_v_from_sub(lhs, rhs, res))
 }
 
+pub fn bit_map_to_array(bitmap: u32) -> Vec<u32> {
+    let mut arr: Vec<u32> = vec![];
+    for i in 0..31 {
+        if (bitmap >> i) & 1 == 1 {
+            arr.push(i);
+        }
+    }
+    arr
+}
+
