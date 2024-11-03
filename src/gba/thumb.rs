@@ -28,11 +28,11 @@ pub fn decode_as_thumb(value: u32) -> Box<dyn Operation> {
         // LoadStoreSignExOp
         Box::new(LoadStoreSignExOp::from(value))
     } else if value & 0xe000 == 0x6000 {
-        // LoadStoreHalfWordOp
-        Box::new(LoadStoreHalfWordOp::from(value))
-    } else if value & 0xf000 == 0x8000 {
         // LoadStoreImmOffsetOp
         Box::new(LoadStoreImmOffsetOp::from(value))
+    } else if value & 0xf000 == 0x8000 {
+        // LoadStoreHalfWordOp
+        Box::new(LoadStoreHalfWordOp::from(value))
     } else if value & 0xf000 == 0x9000 {
         // SpRelativeLoadOp
         Box::new(SpRelativeLoadOp::from(value))
@@ -575,7 +575,7 @@ impl From<u32> for LoadStoreHalfWordOp {
 
 impl Operation for LoadStoreHalfWordOp {
     fn run(&self, cpu: &mut CPU, mem: &mut SystemMemory) {
-        let addr = (cpu.get_register(self.rb) + self.offset << 1) as usize;
+        let addr = (cpu.get_register(self.rb) + self.offset) as usize;
         if self.l {
             match mem.write_halfword(addr, cpu.get_register(self.rd)) {
                 Ok(_) => (),
