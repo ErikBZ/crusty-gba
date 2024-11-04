@@ -8,7 +8,7 @@ extern crate strum_macros;
 
 use gba::Conditional;
 use gba::cpu::CPU;
-use gba::debugger::DebuggerCommand;
+use gba::debugger::{DebuggerCommand, ContinueSubcommand};
 use gba::system::SystemMemory;
 use gba::arm::decode_as_arm;
 use gba::thumb::decode_as_thumb;
@@ -60,10 +60,18 @@ fn debug_bios(codes: Vec<u32>) {
                     println!("{:?}", break_points);
                 }
             },
-            DebuggerCommand::Continue => {
+            DebuggerCommand::Continue(ContinueSubcommand::Endless) => {
                 while !break_points.contains(&cpu.pc()) {
                     println!("{:x}", cpu.pc());
                     cpu.tick(&mut memory);
+                }
+            },
+            DebuggerCommand::Continue(ContinueSubcommand::For(l)) => {
+                let mut n = 0;
+                while !break_points.contains(&cpu.pc()) && l > n {
+                    println!("{:x}", cpu.pc());
+                    cpu.tick(&mut memory);
+                    n += 1;
                 }
             },
             DebuggerCommand::Next => {

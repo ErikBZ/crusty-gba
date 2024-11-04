@@ -4,12 +4,14 @@ use std::str::SplitWhitespace;
 #[derive(Debug, PartialEq)]
 pub enum DebuggerCommand {
     BreakPoint(usize),
-    Continue,
+    Continue(ContinueSubcommand),
     Info,
     ReadMem(usize),
     Next,
     Quit,
 }
+
+
 
 #[derive(Debug, PartialEq, Clone)]
 pub enum CommandParseError {
@@ -70,7 +72,21 @@ impl DebuggerCommand {
                 };
                 DebuggerCommand::ReadMem(point as usize)
             }
-            "c" | "continue" => DebuggerCommand::Continue,
+            "c" | "continue" => {
+                let lines: Result<u32, _> = match cmd_iter.next() {
+                    Some(s) => u32::from_str_radix(s, 10),
+                    None => return Ok(DebuggerCommand::Continue(ContinueSubcommand::Endless))
+                };
+                
+                let lines = match lines {
+                    Ok(n) => n,
+                    Err(_) => return Err(
+                        CommandParseError::CommandNotRecognized(command.to_string())
+                    )
+                };
+
+                DebuggerCommand::Continue(ContinueSubcommand::For(lines as usize))
+            }
             "i" | "info" => DebuggerCommand::Info,
             "n" | "next" => DebuggerCommand::Next,
             "q" | "quit" => DebuggerCommand::Quit,
@@ -83,6 +99,12 @@ impl DebuggerCommand {
             Ok(debug_cmd)
         }
     }
+}
+
+#[derive(PartialEq, Debug)]
+pub enum ContinueSubcommand {
+    Endless,
+    For(usize)
 }
 
 mod test {
