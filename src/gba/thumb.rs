@@ -185,7 +185,7 @@ impl Operation for MathImmOp {
             2 => {
                 let offset = self.offset as u64;
                 let res = rd + offset;
-                v_status = get_v_from_sub(rd, offset, res);
+                v_status = get_v_from_add(rd, offset, res);
                 res
             }
             _ => unreachable!(),
@@ -195,7 +195,7 @@ impl Operation for MathImmOp {
         let res = (res & 0xffffffff) as u32;
 
         match self.op {
-            2 => (),
+            1 => (),
             _ => cpu.set_register(self.rd, res),
         }
         cpu.update_cpsr(res, v_status, c_status);
