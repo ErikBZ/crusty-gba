@@ -329,8 +329,15 @@ impl Operation for HiRegOp {
                 let mut addr = cpu.get_register(self.rs);
                 cpu.update_thumb(addr & 1 == 1);
                 addr &= !1;
+
+                let next_inst = if cpu.is_thumb_mode() {
+                    mem.read_halfword(addr as usize)
+                } else {
+                    mem.read_word(addr as usize)
+                };
+
                 // Pipeline flush
-                cpu.decode = match mem.read_from_mem(addr as usize) {
+                cpu.decode = match next_inst {
                     Ok(n) => n,
                     Err(e) => {
                         println!("Error reading from memory while decoding instruction: {}", e);
@@ -935,7 +942,7 @@ impl Operation for LongBranchWithLinkOp {
             cpu.set_register(LR, res);
         } else {
             let temp = (cpu.get_register(PC) - 2) | 1;
-            let res = cpu.get_register(LR) + (self.offset << 1);
+            let res = cpu.get_register(LR).wrapping_add(self.offset << 1);
             cpu.set_register(PC, res);
             cpu.set_register(LR, temp);
 
