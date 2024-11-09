@@ -31,6 +31,7 @@ fn debug_bios(codes: Vec<u32>) {
     let mut cpu = CPU::default();
     let mut memory =  SystemMemory::default();
     memory.copy_bios(codes);
+    let _ = memory.write_halfword(0x04000088, 0x200);
     let mut break_points: HashSet<usize> = HashSet::new();
 
     loop {
@@ -61,15 +62,17 @@ fn debug_bios(codes: Vec<u32>) {
                 }
             },
             DebuggerCommand::Continue(ContinueSubcommand::Endless) => {
+                let mut i = 0;
                 while !break_points.contains(&cpu.pc()) {
                     println!("{:x}", cpu.pc());
                     cpu.tick(&mut memory);
+                    i += 1;
                 }
             },
             DebuggerCommand::Continue(ContinueSubcommand::For(l)) => {
                 let mut n = 0;
                 while !break_points.contains(&cpu.pc()) && l > n {
-                    println!("{:x}", cpu.pc());
+//                    println!("{:x}", cpu.pc());
                     cpu.tick(&mut memory);
                     n += 1;
                 }
@@ -111,6 +114,7 @@ fn debug_bios(codes: Vec<u32>) {
                     Err(e) => println!("{}", e),
                 }
             }
+            _ => (),
         }
     }
 }

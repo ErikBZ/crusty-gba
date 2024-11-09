@@ -1,5 +1,6 @@
 use super::cpu::{LR, PC, SP};
 use super::{add_nums, bit_map_to_array, get_abs_int_value, get_v_from_add, get_v_from_sub, is_signed, subtract_nums, Conditional, Operation, CPSR_C, CPSR_T};
+use crate::utils::shifter::ShiftWithCarry;
 use crate::{SystemMemory, CPU};
 
 pub fn decode_as_thumb(value: u32) -> Box<dyn Operation> {
@@ -93,15 +94,15 @@ impl From<u32> for MoveShiftedRegisterOp {
 impl Operation for MoveShiftedRegisterOp {
     fn run(&self, cpu: &mut super::cpu::CPU, _mem: &mut SystemMemory) {
         let rs = cpu.get_register(self.rs);
-        let res = match self.op {
-            0 => rs << self.offset,
-            1 => rs >> self.offset,
-            2 => ((rs as i32) >> self.offset) as u32,
+        let (res, c_carry) = match self.op {
+            0 => rs.shl_with_carry(self.offset),
+            1 => rs.shr_with_carry(self.offset),
+            2 => rs.asr_with_carry(self.offset),
             _ => unreachable!(),
         };
 
         // TODO: This probably sets carry
-        cpu.update_cpsr(res, false, false);
+        cpu.update_cpsr(res, false, c_carry);
         cpu.set_register(self.rd, res);
     }
 }
@@ -175,7 +176,14 @@ impl Operation for MathImmOp {
         let mut v_status = false;
 
         let res = match self.op {
-            0 => self.offset as u64,
+            0 => {
+                let res = self.offset as u64;
+                if cpu.cpsr & CPSR_C != 0 {
+                    res | (1 << 32)
+                } else {
+                    res
+                }
+            },
             1 | 3 => {
                 let offset = !(self.offset) as u64;
                 let res = rd + offset + 1;
@@ -493,7 +501,7 @@ impl Operation for LoadStoreSignExOp {
                 Ok(n) => n,
                 Err(e) => {
                     println!("{}", e);
-                    panic!()
+                    0
                 },
             };
 
@@ -584,13 +592,6 @@ impl Operation for LoadStoreHalfWordOp {
     fn run(&self, cpu: &mut CPU, mem: &mut SystemMemory) {
         let addr = (cpu.get_register(self.rb) + self.offset) as usize;
         if self.l {
-            match mem.write_halfword(addr, cpu.get_register(self.rd)) {
-                Ok(_) => (),
-                Err(e) => {
-                    println!("{}", e)
-                }
-            }
-        } else {
             let block_from_mem = match mem.read_halfword(addr) {
                 Ok(n) => n,
                 Err(e) => {
@@ -600,6 +601,13 @@ impl Operation for LoadStoreHalfWordOp {
             };
 
             cpu.set_register(self.rd, block_from_mem);
+        } else {
+            match mem.write_halfword(addr, cpu.get_register(self.rd)) {
+                Ok(_) => (),
+                Err(e) => {
+                    println!("{}", e)
+                }
+            }
         }
     }
 }
@@ -666,10 +674,11 @@ impl From<u32> for LoadAddressOp {
 
 impl Operation for LoadAddressOp {
     fn run(&self, cpu: &mut CPU, _mem: &mut SystemMemory) {
-        let res = if !self.sp {
-            (cpu.get_register(PC) & !1) + self.word + 4
-        } else {
+        let res = if self.sp {
             cpu.get_register(SP) + self.word
+        } else {
+            // TODO: Don't have to add 4 here, cause we already did it earlier
+            (cpu.get_register(PC) & !1) + self.word
         };
 
         cpu.set_register(self.rd, res);
@@ -783,7 +792,7 @@ impl Operation for MultipleLoadStoreOp {
                     }
                 };
                 cpu.set_register(i, value);
-                cpu.set_register(self.rb, cpu.get_register(self.rb) - 4);
+                cpu.set_register(self.rb, cpu.get_register(self.rb) + 4);
             } else {
                 match mem.write_word(cpu.get_register(self.rb) as usize, cpu.get_register(i)) {
                     Ok(_) => (),

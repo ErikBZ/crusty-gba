@@ -7,6 +7,7 @@ pub enum DebuggerCommand {
     Continue(ContinueSubcommand),
     Info,
     ReadMem(usize),
+    WriteMem(u32, usize),
     Next,
     Quit,
 }
@@ -40,37 +41,17 @@ impl DebuggerCommand {
 
         let debug_cmd = match cmd {
             "b" | "break" => {
-                let point: Result<u32, _> = match cmd_iter.next() {
-                    Some(s) => u32::from_str_radix(s, 16),
-                    None => return Err(
-                        CommandParseError::CommandMissingArguments(command.to_string())
-                    ),
-                };
-
-                let point = match point {
-                    Ok(n) => n,
-                    Err(_) => return Err(
-                        CommandParseError::CommandNotRecognized(command.to_string())
-                    )
-                };
-
-                DebuggerCommand::BreakPoint(point as usize)
+                let inst_addr = parse_number(&mut cmd_iter, cmd, 16)?;
+                DebuggerCommand::BreakPoint(inst_addr as usize)
             },
+            "w" | "write" => {
+                let data = parse_number(&mut cmd_iter, command, 16)?;
+                let addr = parse_number(&mut cmd_iter, command, 16)?;
+                DebuggerCommand::WriteMem(data, addr as usize)
+            }
             "r" | "read" => {
-                let point: Result<u32, _> = match cmd_iter.next() {
-                    Some(s) => u32::from_str_radix(s, 16),
-                    None => return Err(
-                        CommandParseError::CommandMissingArguments(command.to_string())
-                    ),
-                };
-
-                let point = match point {
-                    Ok(n) => n,
-                    Err(_) => return Err(
-                        CommandParseError::CommandNotRecognized(command.to_string())
-                    )
-                };
-                DebuggerCommand::ReadMem(point as usize)
+                let addr = parse_number(&mut cmd_iter, command, 16)?;
+                DebuggerCommand::ReadMem(addr as usize)
             }
             "c" | "continue" => {
                 let lines: Result<u32, _> = match cmd_iter.next() {
@@ -99,6 +80,19 @@ impl DebuggerCommand {
             Ok(debug_cmd)
         }
     }
+}
+
+fn parse_number(cmd_iter: &mut SplitWhitespace, cmd: &str, radix: u32) -> Result<u32, CommandParseError> {
+    let point: Result<u32, _> = match cmd_iter.next() {
+        Some(s) => u32::from_str_radix(s, radix),
+        None => return Err(CommandParseError::CommandMissingArguments(cmd.to_string())),
+    };
+
+    let point = match point {
+        Ok(n) => n,
+        Err(_) => return Err(CommandParseError::CommandNotRecognized(cmd.to_string())),
+    };
+    Ok(point)
 }
 
 #[derive(PartialEq, Debug)]

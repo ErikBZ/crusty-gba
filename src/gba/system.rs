@@ -127,7 +127,7 @@ impl SystemMemory {
             0x5 => Ok(&mut self.pal_ram),
             0x6 => Ok(&mut self.vram),
             0x7 => Ok(&mut self.oam),
-            0x8 => Ok(&mut self.pak_rom),
+            0x8 | 0x9 | 0xa | 0xb | 0xc | 0xd => Ok(&mut self.pak_rom),
             0xe => Ok(&mut self.cart_ram),
             _ => Err(MemoryError::MapNotFound(address))
         }
