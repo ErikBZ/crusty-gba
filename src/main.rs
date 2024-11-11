@@ -37,16 +37,17 @@ fn main() {
     };
 
     let bios: Vec<u32> = read_file_into_u32(&mut bios_rom);
-    let _game_pak: Vec<u32> = read_file_into_u32(&mut game_rom);
-    debug_bios(bios);
+    let game_pak: Vec<u32> = read_file_into_u32(&mut game_rom);
+    let cpu = CPU::default();
+    let mut memory = SystemMemory::default();
+    memory.copy_bios(bios);
+    memory.copy_game_pak(game_pak);
+
+    debug_bios(cpu, memory);
 }
 
-fn debug_bios(codes: Vec<u32>) {
+fn debug_bios(mut cpu: CPU, mut memory: SystemMemory) {
     use std::io;
-    let mut cpu = CPU::default();
-    let mut memory =  SystemMemory::default();
-    memory.copy_bios(codes);
-    let _ = memory.write_halfword(0x04000088, 0x200);
     let mut break_points: HashSet<usize> = HashSet::new();
 
     loop {
