@@ -1,11 +1,14 @@
 mod gba;
 mod utils;
+mod cli;
 use std::collections::HashSet;
 use std::fs::File;
 use std::io::prelude::*;
 
 extern crate strum_macros;
 
+use clap::Parser;
+use cli::Args;
 use gba::Conditional;
 use gba::cpu::CPU;
 use gba::debugger::{DebuggerCommand, ContinueSubcommand};
@@ -14,16 +17,28 @@ use gba::arm::decode_as_arm;
 use gba::thumb::decode_as_thumb;
 
 fn main() {
+    let args = Args::parse();
+
     // TODO: Just put test.gba in the root dir
-    let mut file = match File::open("test.gba") {
+    let mut bios_rom = match File::open(args.bios) {
         Ok(f) => f,
         Err(e) => {
-            println!("There was an error: {:?}", e);
+            println!("Unable to to open bios file: {:?}", e);
             return;
         }
     };
-    let codes: Vec<u32> = read_file_into_u32(&mut file);
-    debug_bios(codes);
+
+    let mut game_rom = match File::open(args.game) {
+        Ok(f) => f,
+        Err(e) => {
+            println!("Unable to to open gba file: {:?}", e);
+            return;
+        }
+    };
+
+    let bios: Vec<u32> = read_file_into_u32(&mut bios_rom);
+    let _game_pak: Vec<u32> = read_file_into_u32(&mut game_rom);
+    debug_bios(bios);
 }
 
 fn debug_bios(codes: Vec<u32>) {
