@@ -53,6 +53,10 @@ impl SystemMemory {
     pub fn copy_bios(&mut self, bios: Vec<u32>) {
         self.system_rom = bios;
     }
+
+    pub fn copy_game_pak(&mut self, game_pak: Vec<u32>) {
+        self.pak_rom = game_pak;
+    }
 }
 
 
