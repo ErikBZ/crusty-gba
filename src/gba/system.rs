@@ -109,7 +109,7 @@ impl SystemMemory {
     pub fn read_from_mem(&mut self, address: usize) -> Result<u32, MemoryError> {
         let ram: &Vec<u32> = self.memory_map(address)?;
         let mem_address = (address & 0xffffff) >> 2;
-        if mem_address > ram.len() {
+        if mem_address >= ram.len() {
             Err(MemoryError::OutOfBounds(address, mem_address))
         } else {
             Ok(ram[mem_address])

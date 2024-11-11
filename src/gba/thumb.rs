@@ -5,8 +5,8 @@ use crate::{SystemMemory, CPU};
 
 pub fn decode_as_thumb(value: u32) -> Box<dyn Operation> {
     if value & 0xf800 == 0x1800 {
-        // AddSubstractOp
-        Box::new(AddSubstractOp::from(value))
+        // AddSubtractOp
+        Box::new(AddSubtractOp::from(value))
     } else if value & 0xe000 == 0x0 {
         // MoveShiftedRegisterOp
         Box::new(MoveShiftedRegisterOp::from(value))
@@ -108,7 +108,7 @@ impl Operation for MoveShiftedRegisterOp {
 }
 
 #[derive(Debug, PartialEq)]
-struct AddSubstractOp {
+struct AddSubtractOp {
     i: bool,
     op: bool,
     rn: usize,
@@ -117,9 +117,9 @@ struct AddSubstractOp {
     rd: usize
 }
 
-impl From<u32> for AddSubstractOp {
+impl From<u32> for AddSubtractOp {
     fn from(value: u32) -> Self {
-        AddSubstractOp {
+        AddSubtractOp {
             i: (value >> 10 & 0x1) == 1,
             op: (value >> 9 & 0x1) == 1,
             rn : get_triplet_as_usize(value, 6),
@@ -131,7 +131,7 @@ impl From<u32> for AddSubstractOp {
     }
 }
 
-impl Operation for AddSubstractOp {
+impl Operation for AddSubtractOp {
     fn run(&self, cpu: &mut super::cpu::CPU, _mem: &mut SystemMemory) {
         let offset = if self.i {
             self.offset
@@ -272,7 +272,9 @@ impl Operation for ALUOp {
             },
             12 => rd_value | rs_value,
             // TODO: This is gonna cause issues
-            13 => rd_value * rs_value,
+            13 => {
+                rd_value.wrapping_mul(rs_value)
+            },
             14 => rd_value & !rs_value,
             15 => !rs_value,
             _ => unreachable!(),
@@ -677,8 +679,9 @@ impl Operation for LoadAddressOp {
         let res = if self.sp {
             cpu.get_register(SP) + self.word
         } else {
-            // TODO: Don't have to add 4 here, cause we already did it earlier
-            (cpu.get_register(PC) & !1) + self.word
+            // TODO: Adding 2 here because it's 2 ahead where it should be.
+            // BUG: Fix Pipeline
+            (cpu.get_register(PC) & !1) + self.word - 2
         };
 
         cpu.set_register(self.rd, res);
@@ -739,13 +742,36 @@ impl Operation for PushPopRegOp {
             if self.l {
                 let reg = registers[i];
                 let value = match mem.read_word(cpu.get_register(SP) as usize) {
-                    Ok(n) => n,
+                    Ok(n) => {
+                        if reg == PC as u32 {
+                            n & 0xfffffffe
+                        } else {
+                            n
+                        }
+                    },
                     Err(e) => {
                         println!("{}", e);
                         0
                     }
                 };
                 cpu.set_register(reg as usize, value);
+                // TODO: Super Hacky, update pipeline. This should need to be done and, we should fetch inst at the
+                // end i think.
+                if reg == PC as u32 {
+                    let addr = cpu.get_register(PC) as usize;
+                    let next_inst = if cpu.is_thumb_mode() {
+                        mem.read_halfword(addr as usize)
+                    } else {
+                        mem.read_word(addr as usize)
+                    };
+
+                    cpu.decode = match next_inst {
+                        Ok(n) => n,
+                        Err(_) => panic!(),
+                    };
+                    cpu.set_register(reg as usize, (addr + 2) as u32)
+                }
+
                 cpu.set_register(SP, cpu.get_register(SP) + 4);
             } else {
                 let reg = registers[registers.len() - i - 1];
@@ -981,22 +1007,22 @@ mod test {
     #[test]
     fn test_add_reg_variant() {
         let inst: u32 = 0x19ad;
-        let op = AddSubstractOp::from(inst);
-        assert_eq!(op, AddSubstractOp{rd: 5, rs: 5, rn: 6, i: false, op: false, offset: 6});
+        let op = AddSubtractOp::from(inst);
+        assert_eq!(op, AddSubtractOp{rd: 5, rs: 5, rn: 6, i: false, op: false, offset: 6});
     }
 
     #[test]
     fn test_sub_imm_variant() {
         let inst: u32 = 0x1e68;
-        let op = AddSubstractOp::from(inst);
-        assert_eq!(op, AddSubstractOp{rd: 0, rs: 5, rn: 1, i: true, op: true, offset: 1});
+        let op = AddSubtractOp::from(inst);
+        assert_eq!(op, AddSubtractOp{rd: 0, rs: 5, rn: 1, i: true, op: true, offset: 1});
     }
 
     #[test]
     fn test_add_imm_variant() {
         let inst: u32 = 0x1c22;
-        let op = AddSubstractOp::from(inst);
-        assert_eq!(op, AddSubstractOp{rd: 2, rs: 4, offset: 0, rn: 0, i: true, op: false});
+        let op = AddSubtractOp::from(inst);
+        assert_eq!(op, AddSubtractOp{rd: 2, rs: 4, offset: 0, rn: 0, i: true, op: false});
     }
 
     #[test]
