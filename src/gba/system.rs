@@ -7,14 +7,14 @@ const BYTE: u32 = 0xff;
 
 #[derive(Debug, PartialEq, Clone)]
 pub enum MemoryError {
-    OutOfBounds(usize),
+    OutOfBounds(usize, usize),
     MapNotFound(usize),
 }
 
 impl fmt::Display for MemoryError {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
-            Self::OutOfBounds(a) => write!(f, "Memory Address is out of bounds: {:#08x}", a),
+            Self::OutOfBounds(a, b) => write!(f, "Memory Address is out of bounds: {:#08x} index: {:#08x}", a, b),
             Self::MapNotFound(a) => write!(f, "Memory Mapping not found for address: {:#08x}", a),
         }
     } 
@@ -73,15 +73,15 @@ impl SystemMemory {
     }
 
     fn write_with_mask(&mut self, address: usize, block: u32, mask: u32) -> Result<(), MemoryError> {
-        let i = (address & 0xfffff) >> 2;
-        let shift = (address & 0x3) as u32;
+        let i = (address & 0xffffff) >> 2;
+        let shift = (address & 0x3) * 8;
 
         let mut data = self.read_from_mem(address)?;
         data = (data & !(mask << shift)) | ((block & mask) << shift);
 
         let ram: &mut Vec<u32> = self.memory_map(address)?;
         if i > ram.len() {
-            Err(MemoryError::OutOfBounds(address))
+            Err(MemoryError::OutOfBounds(address, i))
         } else {
             ram[i] = data;
             Ok(())
@@ -97,20 +97,20 @@ impl SystemMemory {
         let res = self.read_from_mem(address)?;
         let shift = address & 0b10;
         // TODO: check that address is halfword aligned, error otherwise?
-        Ok(res >> (shift * 4))
+        Ok(res >> (shift * 8) & 0xffff)
     }
 
     pub fn read_byte(&mut self, address: usize) -> Result<u32, MemoryError> {
         let res = self.read_from_mem(address)?;
         let shift = address & 0b11;
-        Ok(res >> (shift * 4))
+        Ok(res >> (shift * 8) & 0xff)
     }
 
     pub fn read_from_mem(&mut self, address: usize) -> Result<u32, MemoryError> {
         let ram: &Vec<u32> = self.memory_map(address)?;
-        let mem_address = (address & 0xfffff) >> 2;
-        if mem_address > ram.len() {
-            Err(MemoryError::OutOfBounds(mem_address))
+        let mem_address = (address & 0xffffff) >> 2;
+        if mem_address >= ram.len() {
+            Err(MemoryError::OutOfBounds(address, mem_address))
         } else {
             Ok(ram[mem_address])
         }
@@ -118,7 +118,7 @@ impl SystemMemory {
     
     // deal with lifetimes later
     fn memory_map(&mut self, address: usize) -> Result<&mut Vec<u32>, MemoryError> {
-        let mem_type = address >> 24;
+        let mem_type = address >> 24 & 0xf;
         match mem_type {
             0x0 => Ok(&mut self.system_rom),
             0x2 => Ok(&mut self.ewram),
@@ -127,7 +127,7 @@ impl SystemMemory {
             0x5 => Ok(&mut self.pal_ram),
             0x6 => Ok(&mut self.vram),
             0x7 => Ok(&mut self.oam),
-            0x8 => Ok(&mut self.pak_rom),
+            0x8 | 0x9 | 0xa | 0xb | 0xc | 0xd => Ok(&mut self.pak_rom),
             0xe => Ok(&mut self.cart_ram),
             _ => Err(MemoryError::MapNotFound(address))
         }

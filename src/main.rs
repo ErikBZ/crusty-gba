@@ -1,4 +1,5 @@
 mod gba;
+mod utils;
 use std::collections::HashSet;
 use std::fs::File;
 use std::io::prelude::*;
@@ -7,9 +8,10 @@ extern crate strum_macros;
 
 use gba::Conditional;
 use gba::cpu::CPU;
-use gba::debugger::DebuggerCommand;
+use gba::debugger::{DebuggerCommand, ContinueSubcommand};
 use gba::system::SystemMemory;
 use gba::arm::decode_as_arm;
+use gba::thumb::decode_as_thumb;
 
 fn main() {
     // TODO: Just put test.gba in the root dir
@@ -29,7 +31,8 @@ fn debug_bios(codes: Vec<u32>) {
     let mut cpu = CPU::default();
     let mut memory =  SystemMemory::default();
     memory.copy_bios(codes);
-    let mut break_points: HashSet<u32> = HashSet::new();
+    let _ = memory.write_halfword(0x04000088, 0x200);
+    let mut break_points: HashSet<usize> = HashSet::new();
 
     loop {
         let mut input = String::new();
@@ -58,63 +61,62 @@ fn debug_bios(codes: Vec<u32>) {
                     println!("{:?}", break_points);
                 }
             },
-            DebuggerCommand::Continue => {
-                for _ in 0..100 {
+            DebuggerCommand::Continue(ContinueSubcommand::Endless) => {
+                let mut i = 0;
+                while !break_points.contains(&cpu.pc()) {
                     println!("{:x}", cpu.pc());
-                    if break_points.contains(&cpu.pc()) {
-                        break;
-                    }
                     cpu.tick(&mut memory);
+                    i += 1;
+                }
+            },
+            DebuggerCommand::Continue(ContinueSubcommand::For(l)) => {
+                let mut n = 0;
+                while !break_points.contains(&cpu.pc()) && l > n {
+//                    println!("{:x}", cpu.pc());
+                    cpu.tick(&mut memory);
+                    n += 1;
                 }
             },
             DebuggerCommand::Next => {
                 cpu.tick(&mut memory);
-                let op = decode_as_arm(cpu.decode);
+                let op = if !cpu.is_thumb_mode() {
+                    decode_as_arm(cpu.decode)
+                } else {
+                    decode_as_thumb(cpu.decode)
+                };
                 let cond = Conditional::from(cpu.decode);
+
                 println!("{}", cpu);
-                println!("{:#08x} {:?} {:?}", cpu.decode, cond, op);
+                if cpu.is_thumb_mode() {
+                    println!("{:#04x} {:?} {:?}", cpu.decode, cond, op);
+                } else {
+                    println!("{:#08x} {:?} {:?}", cpu.decode, cond, op);
+                }
             },
             DebuggerCommand::Info => {
                 let op = if !cpu.is_thumb_mode() {
                     decode_as_arm(cpu.decode)
                 } else {
-                    println!("Address is not within ROM");
-                    continue;
+                    decode_as_thumb(cpu.decode)
                 };
                 let cond = Conditional::from(cpu.decode);
+
                 println!("{}", cpu);
-                println!("{:#08x} {:?} {:?}", cpu.decode, cond, op);
-            },
+                if cpu.is_thumb_mode() {
+                    println!("{:#04x} {:?} {:?}", cpu.decode, cond, op);
+                } else {
+                    println!("{:#08x} {:?} {:?}", cpu.decode, cond, op);
+                }            },
             DebuggerCommand::Quit => break,
+            DebuggerCommand::ReadMem(address) => {
+                match memory.read_word(address) {
+                    Ok(d) =>  println!("{:x}: {:x}", address, d),
+                    Err(e) => println!("{}", e),
+                }
+            }
+            _ => (),
         }
     }
-}
-
-fn dump_opcodes(num_of_lines: usize, codes: Vec<u32>) -> Result<(), ()> {
-    if num_of_lines < codes.len() {
-        return Err(())
-    };
-    let mut decode_thumb = false;
-
-    for i in 0..0x100 {
-        let inst_address = i << 2;
-        if !decode_thumb {
-            let op = decode_as_arm(codes[i]);
-            println!("{:#08x} {:0x} {:?}", inst_address, codes[i], op);
-        } else {
-            // let op2 = ThumbInstruction::from((codes[i] >> 16) as u16);
-            // let op1 = ThumbInstruction::from((codes[i] & 0xffff) as u16);
-            // match op1 {
-            //     ThumbInstruction::Undefined => decode_thumb = false,
-            //     _ => println!("{:#08x} {:0x} {:?}", inst_address, codes[i], op1),
-            // };
-            // match op2 {
-            //     ThumbInstruction::Undefined => decode_thumb = false,
-            //     _ => println!("{:#08x} {:0x} {:?}", inst_address+2, codes[i], op2),
-            // }
-        }
-    }
-    Ok(())
 }
 
 fn read_file_into_u32(file: &mut File) -> Vec<u32> {

@@ -5,7 +5,7 @@ pub mod thumb;
 pub mod system;
 
 pub const CPSR_N: u32 = 0x80000000;
-pub const CPSR_Z: u32 = 0x60000000;
+pub const CPSR_Z: u32 = 0x40000000;
 pub const CPSR_C: u32 = 0x20000000;
 pub const CPSR_V: u32 = 0x10000000;
 pub const CPSR_T: u32 = 0x20;
@@ -96,7 +96,7 @@ impl Conditional {
                 (cpsr & CPSR_C) == 0 && (cpsr & CPSR_Z) == CPSR_Z
             },
             Conditional::GE => {
-                (cpsr & CPSR_N) == (cpsr & CPSR_V << 3)
+                (cpsr & CPSR_N) == (cpsr & CPSR_V) << 3
             },
             Conditional::LT => {
                 (cpsr & CPSR_N) != (cpsr & CPSR_V << 3)
@@ -113,5 +113,60 @@ impl Conditional {
             _ => false,
         }
     }
+}
+
+pub fn get_abs_int_value(num: u32) -> u32 {
+    if num & 1 << 31 == 1 << 31 {
+        u32::try_from((num as i32).abs()).unwrap_or(0)
+    } else {
+        num
+    }
+}
+
+pub fn is_signed(num: u32) -> bool {
+    num & 1 << 31 == 1 << 31
+}
+
+pub fn get_v_from_add(o1: u64, o2: u64, res: u64) -> bool {
+    let o1_sign = (o1 >> 31) & 1 == 1;
+    let o2_sign = (o2 >> 31) & 1 == 1;
+    let res_sign = (res >> 31) & 1 == 1;
+    (o1_sign == o2_sign) && (o1_sign != res_sign)
+}
+
+pub fn get_v_from_sub(o1: u64, o2: u64, res: u64) -> bool {
+    let o1_sign = (o1 >> 31) & 1 == 1;
+    let o2_sign = (o2 >> 31) & 1 == 1;
+    let res_sign = (res >> 31) & 1 == 1;
+    (o2_sign == res_sign) && (o1_sign != res_sign)
+}
+
+// TODO: There is an overlfow_add and overflow_sub maybe check those
+pub fn add_nums(o1: u32, o2: u32, carry: bool) -> (u64, bool) {
+    let lhs = o1 as u64;
+    let rhs = o2 as u64;
+    let c: u64 = if carry { 1 } else { 0 };
+    let res = lhs + rhs + c;
+    (res, get_v_from_add(lhs, rhs, res))
+}
+
+pub fn subtract_nums(o1: u32, o2: u32, carry: bool) -> (u64, bool) {
+    let lhs = o1 as u64;
+    let rhs = !o2 as u64;
+    let c: u64 = if carry { 1 } else { 0 };
+    let res = lhs + rhs + c + 1;
+    (res, get_v_from_sub(lhs, rhs, res))
+}
+
+// TODO: Find if there's a faster alternative
+// NOTE: Should be maybe be a Vec<usize> instead of Vec<u32>?
+pub fn bit_map_to_array(bitmap: u32) -> Vec<u32> {
+    let mut arr: Vec<u32> = vec![];
+    for i in 0..31 {
+        if (bitmap >> i) & 1 == 1 {
+            arr.push(i);
+        }
+    }
+    arr
 }
 
