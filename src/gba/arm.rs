@@ -655,26 +655,23 @@ impl Operation for SingleDataTfx {
             };
             cpu.set_register(self.rd as usize, res);
         } else {
-            if self.b {
-                match mem.write_word(tfx_add as usize, cpu.get_register(self.rd as usize)) {
-                    Ok(_) => (),
-                    Err(e) => {
-                        println!("{}", e)
-                    }
-                }
+            let res = if self.b {
+                mem.write_byte(tfx_add as usize, cpu.get_register(self.rd as usize))
             } else {
-                match mem.write_byte(tfx_add as usize, cpu.get_register(self.rd as usize)) {
-                    Ok(_) => (),
-                    Err(e) => {
-                        println!("{}", e)
-                    }
+                mem.write_word(tfx_add as usize, cpu.get_register(self.rd as usize))
+            };
+
+            match res {
+                Ok(_) => (),
+                Err(e) => {
+                    println!("{}", e)
                 }
             }
         }
 
         // NOTE: for L i don't think this matters
         // for LDR
-        if !self.p & self.w{
+        if !self.p {
             if self.u {
                 tfx_add += offset;
             } else {
