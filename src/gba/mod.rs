@@ -102,10 +102,10 @@ impl Conditional {
                 (cpsr & CPSR_N) != (cpsr & CPSR_V) << 3
             },
             Conditional::GT => {
-                (cpsr & CPSR_Z) == 0 && (cpsr & CPSR_N == cpsr & CPSR_V << 3)
+                (cpsr & CPSR_Z) == 0 && (cpsr & CPSR_N == (cpsr & CPSR_V) << 3)
             },
             Conditional::LE => {
-                (cpsr & CPSR_Z) == CPSR_Z || (cpsr & CPSR_N != cpsr & CPSR_V << 3)
+                (cpsr & CPSR_Z) == CPSR_Z || (cpsr & CPSR_N != (cpsr & CPSR_V) << 3)
             },
             Conditional::AL => {
                 true
