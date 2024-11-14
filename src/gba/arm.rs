@@ -207,6 +207,7 @@ impl Operation for DataProcessingOp {
     }
 }
 
+#[derive(Debug)]
 enum ShiftType {
     LSL,
     LSR,
@@ -239,11 +240,17 @@ impl DataProcessingOp {
     }
 
     fn get_operand2(&self, cpu: &CPU) -> (u32, bool) {
+        let c_in = (cpu.cpsr & CPSR_C) != 0;
         if self.i {
             let rotate = (self.operand >> 8 & 0xf) as u32;
             let op = (self.operand & 0xff) as u32;
-            // we gotta rotate by twice the amount
-            op.ror_with_carry(rotate * 2)
+            if rotate == 0 {
+                // If ror is 0, just bump carry?
+                (op, c_in)
+            } else {
+                // we gotta rotate by twice the amount
+                op.ror_with_carry(rotate * 2)
+            }
         }
         else {
             let shift = (self.operand >> 4 & 0xff) as u32;
@@ -262,7 +269,6 @@ impl DataProcessingOp {
 
             let rm = (self.operand & 0xf) as usize;
             let rm_value = cpu.get_register(rm);
-            let c_in = (cpu.cpsr & CPSR_C) != 0;
 
             // TODO Find a way to simplify this
             // TODO: Change this to enum?
