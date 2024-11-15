@@ -1073,7 +1073,7 @@ impl Operation for HalfwordDataOp {
 impl From<u32> for HalfwordDataOp {
     fn from(inst: u32) -> Self {
         let p = (inst >> 24 & 1) == 1;
-        let byte_offset = ((inst & 0xff) | (inst >> 8 & 0xff)) as u8;
+        let byte_offset = ((inst & 0xf) | (inst >> 4 & 0xf0)) as u8;
         let rm = (inst & 0xf) as u8;
 
         // oh don't need post and pre

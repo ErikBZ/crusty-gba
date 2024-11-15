@@ -171,6 +171,7 @@ impl From<u32> for MathImmOp {
 }
 
 impl Operation for MathImmOp {
+    // TODO: Improve this, looks too ugly
     fn run(&self, cpu: &mut super::cpu::CPU, _mem: &mut SystemMemory) {
         let rd = cpu.get_register(self.rd) as u64;
         let mut v_status = false;
@@ -185,10 +186,9 @@ impl Operation for MathImmOp {
                 }
             },
             1 | 3 => {
-                let offset = !(self.offset) as u64;
-                let res = rd + offset + 1;
-                v_status = get_v_from_sub(rd, offset, res);
-                res
+                let (x, v_stat) = subtract_nums(cpu.get_register(self.rd), self.offset, false);
+                v_status = v_stat;
+                x
             },
             2 => {
                 let offset = self.offset as u64;
@@ -387,7 +387,7 @@ impl Operation for PcRelativeLoadOp {
         let offset = self.word << 2; 
         let addr = (cpu.get_register(PC) + offset) as usize;
 
-        let block_from_mem = match mem.read_from_mem(addr) {
+        let block_from_mem = match mem.read_word(addr) {
             Ok(n) => n,
             Err(e) => {
                 println!("{}", e);
@@ -492,14 +492,22 @@ impl Operation for LoadStoreSignExOp {
     fn run(&self, cpu: &mut CPU, mem: &mut SystemMemory) {
         let addr = (cpu.get_register(self.rb) + cpu.get_register(self.ro)) as usize;
         if !self.h && !self.s {
-            match mem.write_word(addr, cpu.get_register(self.rd)) {
+            match mem.write_halfword(addr, cpu.get_register(self.rd)) {
                 Ok(_) => (),
                 Err(e) => {
                     println!("{}", e)
                 }
             }
         } else {
-            let block_from_mem = match mem.read_from_mem(addr) {
+            let data = if self.h && !self.s{
+                mem.read_halfword(addr)
+            } else if !self.h && self.s {
+                mem.read_byte_sign_ex(addr)
+            } else {
+                mem.read_halfword_sign_ex(addr)
+            };
+
+            let data = match data {
                 Ok(n) => n,
                 Err(e) => {
                     println!("{}", e);
@@ -507,7 +515,7 @@ impl Operation for LoadStoreSignExOp {
                 },
             };
 
-            cpu.set_register(self.rd, block_from_mem);
+            cpu.set_register(self.rd, data);
         }
     }
 }
@@ -636,14 +644,6 @@ impl Operation for SpRelativeLoadOp {
         let addr = (cpu.get_register(SP) + self.offset) as usize;
 
         if self.l {
-            match mem.write_word(addr, cpu.get_register(self.rd)) {
-                Ok(_) => (),
-                Err(e) => {
-                    println!("{}", e);
-                    panic!();
-                }
-            }
-        } else {
             let block_from_mem = match mem.read_word(addr) {
                 Ok(n) => n,
                 Err(e) => {
@@ -653,6 +653,14 @@ impl Operation for SpRelativeLoadOp {
             };
 
             cpu.set_register(self.rd, block_from_mem);
+        } else {
+            match mem.write_word(addr, cpu.get_register(self.rd)) {
+                Ok(_) => (),
+                Err(e) => {
+                    println!("{}", e);
+                    panic!();
+                }
+            }
         }
     }
 }

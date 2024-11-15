@@ -1,5 +1,7 @@
 use core::fmt;
 
+use crate::utils::shifter::ShiftWithCarry;
+
 const KILOBYTE: usize = 1024;
 const WORD: u32 = 0xffffffff;
 const HALFWORD: u32 = 0xffff;
@@ -104,10 +106,20 @@ impl SystemMemory {
         Ok(res >> (shift * 8) & 0xffff)
     }
 
+    pub fn read_halfword_sign_ex(&mut self, address: usize) -> Result<u32, MemoryError> {
+        let res = self.read_halfword(address)? as i32;
+        Ok(((res << 16) >> 16) as u32)
+    }
+
     pub fn read_byte(&mut self, address: usize) -> Result<u32, MemoryError> {
         let res = self.read_from_mem(address)?;
         let shift = address & 0b11;
         Ok(res >> (shift * 8) & 0xff)
+    }
+
+    pub fn read_byte_sign_ex(&mut self, address: usize) -> Result<u32, MemoryError> {
+        let res = self.read_byte(address)? as i32;
+        Ok(((res << 24) >> 24) as u32)
     }
 
     pub fn read_from_mem(&mut self, address: usize) -> Result<u32, MemoryError> {

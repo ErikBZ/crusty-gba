@@ -93,7 +93,7 @@ impl Conditional {
                 (cpsr & CPSR_C) == CPSR_C && (cpsr & CPSR_Z) == 0
             },
             Conditional::LS => {
-                (cpsr & CPSR_C) == 0 && (cpsr & CPSR_Z) == CPSR_Z
+                (cpsr & CPSR_C) == 0 || (cpsr & CPSR_Z) == CPSR_Z
             },
             Conditional::GE => {
                 (cpsr & CPSR_N) == (cpsr & CPSR_V) << 3
@@ -138,7 +138,8 @@ pub fn get_v_from_sub(o1: u64, o2: u64, res: u64) -> bool {
     let o1_sign = (o1 >> 31) & 1 == 1;
     let o2_sign = (o2 >> 31) & 1 == 1;
     let res_sign = (res >> 31) & 1 == 1;
-    (o2_sign == res_sign) && (o1_sign != res_sign)
+    ((o1_sign == true) && (o2_sign == false) && (res_sign == false)) ||
+    ((o1_sign == false) && (o2_sign == true) && (res_sign == true))
 }
 
 // TODO: There is an overlfow_add and overflow_sub maybe check those
@@ -155,7 +156,7 @@ pub fn subtract_nums(o1: u32, o2: u32, carry: bool) -> (u64, bool) {
     let rhs = !o2 as u64;
     let c: u64 = if carry { 1 } else { 0 };
     let res = lhs + rhs + c + 1;
-    (res, get_v_from_sub(lhs, rhs, res))
+    (res, get_v_from_sub(lhs, o2 as u64, res))
 }
 
 // TODO: Find if there's a faster alternative
