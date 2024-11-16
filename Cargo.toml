@@ -7,3 +7,6 @@ edition = "2021"
 strum = "0.26.3"
 strum_macros = "0.26.4"
 clap = { version = "4.5.20", features = ["derive"] }
+pixels = { path = "../pixels/"}
+winit = "0.29.15"
+winit_input_helper = "0.15"

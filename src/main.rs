@@ -16,7 +16,18 @@ use gba::system::SystemMemory;
 use gba::arm::decode_as_arm;
 use gba::thumb::decode_as_thumb;
 
-fn main() {
+use pixels::{Error, Pixels, SurfaceTexture};
+use winit::{
+    event_loop::EventLoop,
+    dpi::LogicalSize,
+    window::WindowBuilder,
+};
+use winit_input_helper::WinitInputHelper;
+
+const WIDTH: u32 = 400;
+const HEIGHT: u32 = 300;
+
+fn main() -> Result<(), Error> {
     let args = Args::parse();
 
     // TODO: Just put test.gba in the root dir
@@ -24,7 +35,7 @@ fn main() {
         Ok(f) => f,
         Err(e) => {
             println!("Unable to to open bios file: {:?}", e);
-            return;
+            return Ok(());
         }
     };
 
@@ -32,7 +43,7 @@ fn main() {
         Ok(f) => f,
         Err(e) => {
             println!("Unable to to open gba file: {:?}", e);
-            return;
+            return Ok(());
         }
     };
 
@@ -43,7 +54,28 @@ fn main() {
     memory.copy_bios(bios);
     memory.copy_game_pak(game_pak);
 
+    let event_loop = EventLoop::new().unwrap();
+    let mut input = WinitInputHelper::new();
+
+    let window = {
+        let size = LogicalSize::new(WIDTH as f64, HEIGHT as f64);
+        let scaled_size = LogicalSize::new(WIDTH as f64 * 3.0, HEIGHT as f64 * 3.0);
+        WindowBuilder::new()
+            .with_title("Crusty Gameboy")
+            .with_inner_size(scaled_size)
+            .with_min_inner_size(size)
+            .build(&event_loop)
+            .unwrap()
+    };
+
+    let mut pixels = {
+        let window_size = window.inner_size();
+        let surface_texture = SurfaceTexture::new(window_size.width, window_size.height, &window);
+        Pixels::new(WIDTH, HEIGHT, surface_texture)?
+    };
+
     debug_bios(cpu, memory);
+    Ok(())
 }
 
 fn debug_bios(mut cpu: CPU, mut memory: SystemMemory) {
