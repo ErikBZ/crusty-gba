@@ -1,6 +1,7 @@
 mod gba;
 mod utils;
 mod cli;
+mod ppu;
 use std::collections::HashSet;
 use std::fs::File;
 use std::io::prelude::*;
@@ -12,19 +13,37 @@ use cli::Args;
 use gba::Conditional;
 use gba::cpu::CPU;
 use gba::debugger::{DebuggerCommand, ContinueSubcommand};
-use gba::system::SystemMemory;
+use gba::system::{MemoryError, SystemMemory};
 use gba::arm::decode_as_arm;
 use gba::thumb::decode_as_thumb;
+use std::time::{Instant, Duration};
+use std::thread::sleep;
 
-fn main() {
+use pixels::{Error, Pixels, SurfaceTexture};
+use winit::{
+    event::{Event, WindowEvent},
+    event_loop::EventLoop,
+    dpi::LogicalSize,
+    window::WindowBuilder,
+    keyboard::KeyCode,
+};
+use winit_input_helper::WinitInputHelper;
+
+const WIDTH: u32 = 400;
+const HEIGHT: u32 = 300;
+const CYCLES_PER_SCANLINE: u32 = 4 * 240;
+const CYCLES_PER_FRAME: u32 = 4 * 240 * 226;
+
+fn main() -> Result<(), Error> {
     let args = Args::parse();
+    let frames_per_second = 1.0 / 60.0;
 
     // TODO: Just put test.gba in the root dir
     let mut bios_rom = match File::open(args.bios) {
         Ok(f) => f,
         Err(e) => {
             println!("Unable to to open bios file: {:?}", e);
-            return;
+            return Ok(());
         }
     };
 
@@ -32,18 +51,106 @@ fn main() {
         Ok(f) => f,
         Err(e) => {
             println!("Unable to to open gba file: {:?}", e);
-            return;
+            return Ok(());
         }
     };
 
     let bios: Vec<u32> = read_file_into_u32(&mut bios_rom);
     let game_pak: Vec<u32> = read_file_into_u32(&mut game_rom);
-    let cpu = CPU::default();
+    let mut cpu = CPU::default();
     let mut memory = SystemMemory::default();
     memory.copy_bios(bios);
     memory.copy_game_pak(game_pak);
 
-    debug_bios(cpu, memory);
+    println!("{:?}", args.render);
+
+    match args.render {
+        cli::Renderer::Terminal => debug_bios(cpu, memory),
+        cli::Renderer::Gui => {
+            let _ = run_gui(cpu, memory);
+            ()
+        },
+    };
+
+    Ok(())
+}
+
+fn run_gui(mut cpu: CPU, mut memory: SystemMemory)  -> Result<(), Box<dyn std::error::Error> >{
+    let event_loop = EventLoop::new().unwrap();
+    let mut input = WinitInputHelper::new();
+
+    let window = {
+        let size = LogicalSize::new(WIDTH as f64, HEIGHT as f64);
+        let scaled_size = LogicalSize::new(WIDTH as f64 * 3.0, HEIGHT as f64 * 3.0);
+        WindowBuilder::new()
+            .with_title("Crusty Gameboy")
+            .with_inner_size(scaled_size)
+            .with_min_inner_size(size)
+            .build(&event_loop)
+            .unwrap()
+    };
+
+    let mut pixels = {
+        let window_size = window.inner_size();
+        let surface_texture = SurfaceTexture::new(window_size.width, window_size.height, &window);
+        Pixels::new(WIDTH, HEIGHT, surface_texture)?
+    };
+    let mut add = true;
+    let mut scale: u8 = 0;
+    let ones = 0x11;
+
+    let _res = event_loop.run(|event, elwt| {
+        elwt.set_control_flow(winit::event_loop::ControlFlow::Poll);
+
+        match event {
+            Event::WindowEvent { event: WindowEvent::RedrawRequested, .. } => {
+                let current = Instant::now();
+                next_frame(&mut cpu, &mut memory);
+                {
+                    let buffer = pixels.frame_mut();
+                    let grey = scale.wrapping_mul(ones) as u8;
+                    for i in 0..(buffer.len()) {
+                        buffer[i] = grey;
+                    }
+                    if scale > 15 {
+                        add = false;
+                    } else if scale < 1 {
+                        add = true;
+                    } 
+
+                    if add {
+                        scale += 1;
+                    } else {
+                        scale -= 1;
+                    }
+                }
+                let _ = pixels.render();
+                let dt = Instant::now() - current;
+                if dt.as_secs_f64() > 0.0 {
+                    std::thread::sleep(dt);
+                }
+
+            },
+            _ => (),
+        }
+
+        if input.update(&event) {
+            // Close events
+            if input.key_pressed(KeyCode::Escape) || input.close_requested() {
+                elwt.exit();
+                return;
+            }
+            window.request_redraw();
+        }
+    });
+    Ok(())
+}
+
+fn next_frame(cpu: &mut CPU, ram: &mut SystemMemory ) {
+    for i in 0..227 {
+        cpu.tick_for_cycles(ram, CYCLES_PER_SCANLINE);
+        let _ = ram.write_halfword(0x4000006, i);
+    }
 }
 
 fn debug_bios(mut cpu: CPU, mut memory: SystemMemory) {
@@ -80,9 +187,12 @@ fn debug_bios(mut cpu: CPU, mut memory: SystemMemory) {
             DebuggerCommand::Continue(ContinueSubcommand::Endless) => {
                 let mut i = 0;
                 while !break_points.contains(&cpu.pc()) {
-                    println!("{:x}", cpu.pc());
                     cpu.tick(&mut memory);
                     i += 1;
+
+                    if cpu.pc() == 0x1776 || cpu.pc() == 0x1778{
+                        panic!();
+                    }
                 }
             },
             DebuggerCommand::Continue(ContinueSubcommand::For(l)) => {
@@ -157,3 +267,4 @@ fn read_file_into_u32(file: &mut File) -> Vec<u32> {
 
     instructions
 }
+

@@ -48,6 +48,7 @@ pub struct CPU {
     pub cpsr: u32,
     psr: [u32; 6],
     pub decode: u32,
+    cycles: u32,
 }
 
 impl Default for CPU {
@@ -62,6 +63,7 @@ impl Default for CPU {
             psr: [0x1f,0,0,0,0,0],
             cpsr: 0x1f,
             decode: 0x0,
+            cycles: 0,
         }
     }
 }
@@ -225,5 +227,13 @@ impl CPU {
         };
 
         op.run(self, ram);
+        self.cycles +=3 ;
+    }
+
+    pub fn tick_for_cycles(&mut self, ram: &mut SystemMemory, num_of_cycles: u32) {
+        let old_cycles = self.cycles;
+        while self.cycles - old_cycles < num_of_cycles {
+            self.tick(ram);
+        }
     }
 }
