@@ -16,6 +16,8 @@ use gba::debugger::{DebuggerCommand, ContinueSubcommand};
 use gba::system::{MemoryError, SystemMemory};
 use gba::arm::decode_as_arm;
 use gba::thumb::decode_as_thumb;
+use std::time::{Instant, Duration};
+use std::thread::sleep;
 
 use pixels::{Error, Pixels, SurfaceTexture};
 use winit::{
@@ -34,6 +36,7 @@ const CYCLES_PER_FRAME: u32 = 4 * 240 * 226;
 
 fn main() -> Result<(), Error> {
     let args = Args::parse();
+    let frames_per_second = 1.0 / 60.0;
 
     // TODO: Just put test.gba in the root dir
     let mut bios_rom = match File::open(args.bios) {
@@ -59,6 +62,20 @@ fn main() -> Result<(), Error> {
     memory.copy_bios(bios);
     memory.copy_game_pak(game_pak);
 
+    println!("{:?}", args.render);
+
+    match args.render {
+        cli::Renderer::Terminal => debug_bios(cpu, memory),
+        cli::Renderer::Gui => {
+            let _ = run_gui(cpu, memory);
+            ()
+        },
+    };
+
+    Ok(())
+}
+
+fn run_gui(mut cpu: CPU, mut memory: SystemMemory)  -> Result<(), Box<dyn std::error::Error> >{
     let event_loop = EventLoop::new().unwrap();
     let mut input = WinitInputHelper::new();
 
@@ -78,24 +95,41 @@ fn main() -> Result<(), Error> {
         let surface_texture = SurfaceTexture::new(window_size.width, window_size.height, &window);
         Pixels::new(WIDTH, HEIGHT, surface_texture)?
     };
-    let mut counter = 0;
+    let mut add = true;
+    let mut scale: u8 = 0;
+    let ones = 0x11;
 
     let _res = event_loop.run(|event, elwt| {
         elwt.set_control_flow(winit::event_loop::ControlFlow::Poll);
 
         match event {
             Event::WindowEvent { event: WindowEvent::RedrawRequested, .. } => {
+                let current = Instant::now();
                 next_frame(&mut cpu, &mut memory);
-                counter += 100;
                 {
                     let buffer = pixels.frame_mut();
-                    for i in (counter - 100)..counter {
-                        let idx = i % buffer.len();
-                        buffer[idx] = 0x88;
+                    let grey = scale.wrapping_mul(ones) as u8;
+                    for i in 0..(buffer.len()) {
+                        buffer[i] = grey;
+                    }
+                    if scale > 15 {
+                        add = false;
+                    } else if scale < 1 {
+                        add = true;
+                    } 
+
+                    if add {
+                        scale += 1;
+                    } else {
+                        scale -= 1;
                     }
                 }
-
                 let _ = pixels.render();
+                let dt = Instant::now() - current;
+                if dt.as_secs_f64() > 0.0 {
+                    std::thread::sleep(dt);
+                }
+
             },
             _ => (),
         }
@@ -109,8 +143,6 @@ fn main() -> Result<(), Error> {
             window.request_redraw();
         }
     });
-
-    debug_bios(cpu, memory);
     Ok(())
 }
 
