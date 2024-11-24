@@ -18,6 +18,7 @@ use gba::arm::decode_as_arm;
 use gba::thumb::decode_as_thumb;
 use std::time::{Instant, Duration};
 use std::thread::sleep;
+use tracing::{event, Level, span};
 
 use pixels::{Error, Pixels, SurfaceTexture};
 use winit::{
@@ -37,6 +38,7 @@ const CYCLES_PER_FRAME: u32 = 4 * 240 * 226;
 fn main() -> Result<(), Error> {
     let args = Args::parse();
     let frames_per_second = 1.0 / 60.0;
+    event!(Level::INFO, "Hello");
 
     // TODO: Just put test.gba in the root dir
     let mut bios_rom = match File::open(args.bios) {
@@ -61,6 +63,7 @@ fn main() -> Result<(), Error> {
     let mut memory = SystemMemory::default();
     memory.copy_bios(bios);
     memory.copy_game_pak(game_pak);
+    event!(Level::INFO, "Copied the stuff over");
 
     println!("{:?}", args.render);
 
@@ -76,6 +79,7 @@ fn main() -> Result<(), Error> {
 }
 
 fn run_gui(mut cpu: CPU, mut memory: SystemMemory)  -> Result<(), Box<dyn std::error::Error> >{
+    event!(Level::INFO, "Runing GUI");
     let event_loop = EventLoop::new().unwrap();
     let mut input = WinitInputHelper::new();
 
@@ -154,6 +158,7 @@ fn next_frame(cpu: &mut CPU, ram: &mut SystemMemory ) {
 }
 
 fn debug_bios(mut cpu: CPU, mut memory: SystemMemory) {
+    event!(Level::INFO, "Runing Debug session");
     use std::io;
     let mut break_points: HashSet<usize> = HashSet::new();
 
