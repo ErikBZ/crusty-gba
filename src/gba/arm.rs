@@ -454,6 +454,7 @@ impl Operation for BranchExchangeOp {
             }
         };
 
+        cpu.inst_addr = addr as usize;
         if cpu.cpsr & CPSR_T == CPSR_T {
             cpu.set_register(PC, addr + 2);
         } else {
@@ -490,6 +491,7 @@ impl Operation for BranchOp {
             Ok(n) => n,
             Err(_) => 0,
         };
+        cpu.inst_addr = addr as usize;
 
         cpu.set_register(PC, addr + 4);
     }

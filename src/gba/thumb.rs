@@ -354,6 +354,7 @@ impl Operation for HiRegOp {
                         0
                     }
                 };
+                cpu.inst_addr = addr as usize;
 
                 if cpu.cpsr & CPSR_T == CPSR_T {
                     cpu.set_register(PC, addr + 2);
@@ -893,6 +894,7 @@ impl Operation for ConditionalBranchOp {
             Ok(n) => n,
             Err(_) => 0,
         };
+        cpu.inst_addr = addr as usize;
 
         cpu.set_register(PC, addr + 2);
     }
@@ -950,6 +952,7 @@ impl Operation for UnconditionalBranchOp {
                 0
             }
         };
+        cpu.inst_addr = addr as usize;
 
         cpu.set_register(PC, addr + 2);
     }
@@ -996,6 +999,7 @@ impl Operation for LongBranchWithLinkOp {
                     0
                 }
             };
+            cpu.inst_addr = res as usize;
 
             cpu.set_register(PC, cpu.get_register(PC) + 2);
         }

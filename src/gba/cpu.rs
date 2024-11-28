@@ -48,6 +48,7 @@ pub struct CPU {
     pub cpsr: u32,
     psr: [u32; 6],
     pub decode: u32,
+    pub inst_addr: usize,
     cycles: u32,
 }
 
@@ -63,6 +64,7 @@ impl Default for CPU {
             psr: [0x1f,0,0,0,0,0],
             cpsr: 0x1f,
             decode: 0x0,
+            inst_addr: 0x0,
             cycles: 0,
         }
     }
@@ -84,6 +86,10 @@ impl CPU {
     // Program Counter
     pub fn pc(&self) -> usize {
         self.registers[PC] as usize
+    }
+
+    pub fn instruction_address(&self) -> usize {
+        self.inst_addr
     }
 
     // TODO: Do reverse for set_register
@@ -194,6 +200,7 @@ impl CPU {
 
     pub fn tick(&mut self, ram: &mut SystemMemory) {
         let inst = self.decode;
+        self.inst_addr = self.pc();
         let next_inst = if self.is_thumb_mode() {
             ram.read_halfword(self.pc())
         } else {
