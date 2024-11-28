@@ -186,19 +186,19 @@ fn debug_bios(mut cpu: CPU, mut memory: SystemMemory) {
             },
             DebuggerCommand::Continue(ContinueSubcommand::Endless) => {
                 let mut i = 0;
-                while !break_points.contains(&cpu.pc()) {
+                while !break_points.contains(&cpu.instruction_address()) {
                     cpu.tick(&mut memory);
                     i += 1;
 
-                    if cpu.pc() == 0x1776 || cpu.pc() == 0x1778{
+                    if cpu.instruction_address() == 0x1776 || cpu.instruction_address() == 0x1778{
                         panic!();
                     }
                 }
             },
             DebuggerCommand::Continue(ContinueSubcommand::For(l)) => {
                 let mut n = 0;
-                while !break_points.contains(&cpu.pc()) && l > n {
-//                    println!("{:x}", cpu.pc());
+                while !break_points.contains(&cpu.instruction_address()) && l > n {
+//                    println!("{:x}", cpu.instruction_address());
                     cpu.tick(&mut memory);
                     n += 1;
                 }
