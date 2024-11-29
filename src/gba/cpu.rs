@@ -92,6 +92,14 @@ impl CPU {
         self.inst_addr
     }
 
+    pub fn add_cycles(&mut self, cycles: u32) {
+        self.cycles.wrapping_add(cycles);
+    }
+
+    pub fn cycles(&self) -> u32 {
+        self.cycles
+    }
+
     // TODO: Do reverse for set_register
     pub fn get_register(&self, rn: usize) -> u32 {
         let mode = CpuMode::from(self.cpsr);

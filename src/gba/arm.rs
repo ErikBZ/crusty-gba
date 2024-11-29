@@ -134,6 +134,7 @@ impl From<u32> for DataProcessingOp {
 
 impl Operation for DataProcessingOp {
     fn run(&self, cpu: &mut CPU, _mem: &mut SystemMemory) {
+        let cycles = 1;
         let (op2, mut c_out) = self.get_operand2(cpu);
         let operand2 = op2 as u64;
         let rn_value = cpu.get_register(self.rn as usize) as u64;
@@ -204,6 +205,7 @@ impl Operation for DataProcessingOp {
         if self.s {
             cpu.update_cpsr(res, v_status, c_out);
         }
+        cpu.add_cycles(cycles);
     }
 }
 
