@@ -4,6 +4,7 @@ use super::arm::decode_as_arm;
 use super::thumb::decode_as_thumb;
 use super::{is_signed, Conditional, CPSR_C, CPSR_N, CPSR_T, CPSR_V, CPSR_Z};
 use super::system::SystemMemory;
+use tracing::{instrument, info, error, debug};
 
 pub const PC: usize = 15;
 pub const LR: usize = 14;
@@ -35,7 +36,6 @@ impl From<u32> for CpuMode {
     }
 }
 
-#[derive(Debug)]
 pub struct CPU {
     registers: [u32; 16],
     // NOTE: General use banked regs, r8-r12
@@ -79,6 +79,16 @@ impl fmt::Display for CPU {
             write!(f, "r{}\t{:#08x}\n", i + 3, self.get_register(i + 3))?;
         }
         write!(f, "cpsr: {:#8x}\n", self.cpsr)
+    }
+}
+
+// To speed up debugging we'll be printing just the `registers` field
+impl fmt::Debug for CPU {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        for i in 0..16 {
+            write!(f, "r{}: {:#08x}, ", i, self.get_register(i))?;
+        }
+        write!(f, "cpsr: {:08x}", self.cpsr)
     }
 }
 
@@ -232,6 +242,7 @@ impl CPU {
         } else {
             decode_as_thumb(inst)
         };
+        debug!("{:?}", op);
 
         op.run(self, ram);
         self.cycles +=3 ;
