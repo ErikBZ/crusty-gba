@@ -2,6 +2,7 @@ use super::cpu::{LR, PC, SP};
 use super::{add_nums, bit_map_to_array, get_abs_int_value, get_v_from_add, get_v_from_sub, is_signed, subtract_nums, Conditional, Operation, CPSR_C, CPSR_T};
 use crate::utils::shifter::ShiftWithCarry;
 use crate::{SystemMemory, CPU};
+use tracing::warn;
 
 pub fn decode_as_thumb(value: u32) -> Box<dyn Operation> {
     if value & 0xf800 == 0x1800 {
@@ -350,7 +351,7 @@ impl Operation for HiRegOp {
                 cpu.decode = match next_inst {
                     Ok(n) => n,
                     Err(e) => {
-                        println!("Error reading from memory while decoding instruction: {}", e);
+                        warn!("Error reading from memory while decoding instruction: {}", e);
                         0
                     }
                 };
@@ -391,7 +392,7 @@ impl Operation for PcRelativeLoadOp {
         let block_from_mem = match mem.read_word(addr) {
             Ok(n) => n,
             Err(e) => {
-                println!("{}", e);
+                warn!("{}", e);
                 panic!()
             },
         };
@@ -436,7 +437,7 @@ impl Operation for LoadStoreRegOffsetOp {
             let block_from_mem = match mem.read_from_mem(addr) {
                 Ok(n) => n,
                 Err(e) => {
-                    println!("{}", e);
+                    warn!("{}", e);
                     panic!()
                 },
             };
@@ -453,14 +454,14 @@ impl Operation for LoadStoreRegOffsetOp {
                 match mem.write_word(addr, cpu.get_register(self.rd)) {
                     Ok(_) => (),
                     Err(e) => {
-                        println!("{}", e)
+                        warn!("{}", e)
                     }
                 }
             } else {
                 match mem.write_byte(addr, cpu.get_register(self.rd)) {
                     Ok(_) => (),
                     Err(e) => {
-                        println!("{}", e)
+                        warn!("{}", e)
                     }
                 }
             }
@@ -496,7 +497,7 @@ impl Operation for LoadStoreSignExOp {
             match mem.write_halfword(addr, cpu.get_register(self.rd)) {
                 Ok(_) => (),
                 Err(e) => {
-                    println!("{}", e)
+                    warn!("{}", e)
                 }
             }
         } else {
@@ -511,7 +512,7 @@ impl Operation for LoadStoreSignExOp {
             let data = match data {
                 Ok(n) => n,
                 Err(e) => {
-                    println!("{}", e);
+                    warn!("{}", e);
                     0
                 },
             };
@@ -550,7 +551,7 @@ impl Operation for LoadStoreImmOffsetOp {
                 match mem.read_byte(addr) {
                     Ok(n) => n,
                     Err(e) => {
-                        println!("{}", e);
+                        warn!("{}", e);
                         0
                     }
                 }
@@ -558,7 +559,7 @@ impl Operation for LoadStoreImmOffsetOp {
                 match mem.read_word(addr) {
                     Ok(n) => n,
                     Err(e) => {
-                        println!("{}", e);
+                        warn!("{}", e);
                         0
                     }
                 }
@@ -574,7 +575,7 @@ impl Operation for LoadStoreImmOffsetOp {
 
             match res {
                 Ok(_) => (),
-                Err(e) => println!("{}", e),
+                Err(e) => warn!("{}", e),
             }
         }
     }
@@ -606,7 +607,7 @@ impl Operation for LoadStoreHalfWordOp {
             let block_from_mem = match mem.read_halfword(addr) {
                 Ok(n) => n,
                 Err(e) => {
-                    println!("{}", e);
+                    warn!("{}", e);
                     panic!()
                 },
             };
@@ -616,7 +617,7 @@ impl Operation for LoadStoreHalfWordOp {
             match mem.write_halfword(addr, cpu.get_register(self.rd)) {
                 Ok(_) => (),
                 Err(e) => {
-                    println!("{}", e)
+                    warn!("{}", e)
                 }
             }
         }
@@ -648,7 +649,7 @@ impl Operation for SpRelativeLoadOp {
             let block_from_mem = match mem.read_word(addr) {
                 Ok(n) => n,
                 Err(e) => {
-                    println!("{}", e);
+                    warn!("{}", e);
                     panic!();
                 },
             };
@@ -658,7 +659,7 @@ impl Operation for SpRelativeLoadOp {
             match mem.write_word(addr, cpu.get_register(self.rd)) {
                 Ok(_) => (),
                 Err(e) => {
-                    println!("{}", e);
+                    warn!("{}", e);
                     panic!();
                 }
             }
@@ -759,7 +760,7 @@ impl Operation for PushPopRegOp {
                         }
                     },
                     Err(e) => {
-                        println!("{}", e);
+                        warn!("{}", e);
                         0
                     }
                 };
@@ -787,7 +788,7 @@ impl Operation for PushPopRegOp {
                 cpu.set_register(SP, cpu.get_register(SP) - 4);
                 match mem.write_word(cpu.get_register(SP) as usize, cpu.get_register(reg as usize)) {
                     Ok(_) => (),
-                    Err(e) => println!("{}", e),
+                    Err(e) => warn!("{}", e),
                 };
             }
         }
@@ -822,7 +823,7 @@ impl Operation for MultipleLoadStoreOp {
                 let value = match mem.read_word(cpu.get_register(self.rb) as usize) {
                     Ok(n) => n,
                     Err(e) => {
-                        println!("{}", e);
+                        warn!("{}", e);
                         0
                     }
                 };
@@ -831,7 +832,7 @@ impl Operation for MultipleLoadStoreOp {
             } else {
                 match mem.write_word(cpu.get_register(self.rb) as usize, cpu.get_register(i)) {
                     Ok(_) => (),
-                    Err(e) => println!("{}", e),
+                    Err(e) => warn!("{}", e),
                 };
                 cpu.set_register(self.rb, cpu.get_register(self.rb) + 4);
             }
@@ -948,7 +949,7 @@ impl Operation for UnconditionalBranchOp {
         cpu.decode = match mem.read_halfword(addr as usize) {
             Ok(n) => n,
             Err(e) => {
-                println!("{}", e);
+                warn!("{}", e);
                 0
             }
         };
@@ -995,7 +996,7 @@ impl Operation for LongBranchWithLinkOp {
             cpu.decode = match mem.read_halfword(cpu.get_register(PC) as usize) {
                 Ok(n) => n,
                 Err(e) => {
-                    println!("{}", e);
+                    warn!("{}", e);
                     0
                 }
             };

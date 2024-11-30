@@ -13,12 +13,11 @@ use cli::Args;
 use gba::Conditional;
 use gba::cpu::CPU;
 use gba::debugger::{DebuggerCommand, ContinueSubcommand};
-use gba::system::{MemoryError, SystemMemory};
+use gba::system::SystemMemory;
 use gba::arm::decode_as_arm;
 use gba::thumb::decode_as_thumb;
-use std::time::{Instant, Duration};
-use std::thread::sleep;
-use tracing::{instrument, event, Level, span, info, error, debug};
+use std::time::Instant;
+use tracing::{event, Level, error};
 use tracing_subscriber::{filter, fmt, reload, reload::Handle, prelude::*, Registry};
 use tracing_subscriber::filter::LevelFilter;
 
@@ -39,8 +38,11 @@ const CYCLES_PER_FRAME: u32 = 4 * 240 * 226;
 
 fn main() -> Result<(), Error> {
     let args = Args::parse();
+    let filter: LevelFilter = match args.log_level {
+        Some(c) => c.into(),
+        None => LevelFilter::OFF,
+    };
 
-    let filter = filter::LevelFilter::WARN;
     let (filter, reload_handle) = reload::Layer::new(filter);
     tracing_subscriber::registry().with(filter).with(fmt::Layer::default()).init();
 

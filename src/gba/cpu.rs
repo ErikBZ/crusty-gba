@@ -1,10 +1,9 @@
 use core::fmt;
-
 use super::arm::decode_as_arm;
 use super::thumb::decode_as_thumb;
 use super::{is_signed, Conditional, CPSR_C, CPSR_N, CPSR_T, CPSR_V, CPSR_Z};
 use super::system::SystemMemory;
-use tracing::{instrument, info, error, debug};
+use tracing::debug;
 
 pub const PC: usize = 15;
 pub const LR: usize = 14;

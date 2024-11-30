@@ -1,7 +1,6 @@
 use core::fmt;
 
-use crate::utils::shifter::ShiftWithCarry;
-use tracing::{instrument, info, error, debug};
+use tracing::debug;
 
 const KILOBYTE: usize = 1024;
 const WORD: u32 = 0xffffffff;
