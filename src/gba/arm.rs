@@ -1,13 +1,8 @@
-use crate::utils::bit_is_one_at;
+use crate::utils::{bit_is_one_at, Bitable};
 use crate::utils::shifter::ShiftWithCarry;
-use crate::utils::Bitable;
-use super::bit_map_to_array;
-use super::get_v_from_add;
-use super::get_v_from_sub;
-use super::{Operation, SystemMemory};
+use super::{Operation, SystemMemory, get_v_from_sub, get_v_from_add, bit_map_to_array};
 use super::{CPSR_C, CPSR_T};
 use super::cpu::{CPU,PC, LR};
-
 use tracing::warn;
 
 // TODO: currently all regs are u8 or u32 types, maybe they should be usizes
