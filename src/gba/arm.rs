@@ -4,12 +4,11 @@ use crate::utils::Bitable;
 use super::bit_map_to_array;
 use super::get_v_from_add;
 use super::get_v_from_sub;
-use super::Operation;
-use super::SystemMemory;
-use super::CPSR_C;
-
+use super::{Operation, SystemMemory};
+use super::{CPSR_C, CPSR_T};
 use super::cpu::{CPU,PC, LR};
-use super::CPSR_T;
+
+use tracing::warn;
 
 // TODO: currently all regs are u8 or u32 types, maybe they should be usizes
 
@@ -271,7 +270,6 @@ impl DataProcessingOp {
             let rm_value = cpu.get_register(rm);
 
             // TODO Find a way to simplify this
-            // TODO: Change this to enum?
             // NOTE: LSR 0, ASR 0, and ROR 0 encode special things
             match s_type {
                 ShiftType::LSL => {
@@ -289,7 +287,6 @@ impl DataProcessingOp {
                     }
                 },
                 ShiftType::ASR => {
-                    // TODO: ASR #0 encodes a specific function
                     if s == 0 {
                         rm_value.asr_with_carry(32)
                     } else {
@@ -396,19 +393,19 @@ impl Operation for SingleDataSwapOp {
         let address = cpu.get_register(self.rn as usize) as usize;
         match mem.read_from_mem(address) {
             Ok(n) => cpu.set_register(self.rd as usize, n),
-            Err(e) => println!("{}", e),
+            Err(e) => warn!("{}", e),
         }
 
         let data = cpu.get_register(self.rm as usize);
         if self.b {
             match mem.write_byte(address, data) {
                 Ok(_) => (),
-                Err(e) => println!("{}", e),
+                Err(e) => warn!("{}", e),
             }
         } else {
             match mem.write_word(address, data) {
                 Ok(_) => (),
-                Err(e) => println!("{}", e),
+                Err(e) => warn!("{}", e),
             }
         }
     }
@@ -440,7 +437,7 @@ impl Operation for BranchExchangeOp {
             match mem.read_halfword(addr as usize) {
                 Ok(n) => n,
                 Err(e) => {
-                    println!("{}", e);
+                    warn!("{}", e);
                     0
                 }
             }
@@ -448,7 +445,7 @@ impl Operation for BranchExchangeOp {
             match mem.read_word(addr as usize) {
                 Ok(n) => n,
                 Err(e) => {
-                    println!("{}", e);
+                    warn!("{}", e);
                     0
                 }
             }
@@ -489,7 +486,10 @@ impl Operation for BranchOp {
 
         cpu.decode = match mem.read_from_mem(addr as usize) {
             Ok(n) => n,
-            Err(_) => 0,
+            Err(e) => {
+                warn!("{}", e);
+                0
+            },
         };
         cpu.inst_addr = addr as usize;
 
@@ -552,7 +552,7 @@ impl Operation for HalfwordRegOffset {
                 Ok(n) => n,
                 Err(e) => {
                     //TODO: Better error handling
-                    println!("{}", e);
+                    warn!("{}", e);
                     0
                 }
             };
@@ -586,7 +586,7 @@ impl Operation for HalfwordRegOffset {
         } else {
             match mem.write_halfword(address as usize, cpu.get_register(self.rd as usize)) {
                 Ok(_) => (),
-                Err(e) => println!("{}", e),
+                Err(e) => warn!("{}", e),
             }
         }
 
@@ -657,7 +657,7 @@ impl Operation for SingleDataTfx {
             let res = match data_block {
                 Ok(n) => n,
                 Err(e) => {
-                    println!("{}", e);
+                    warn!("{}", e);
                     panic!()
                 },
             };
@@ -672,7 +672,7 @@ impl Operation for SingleDataTfx {
             match res {
                 Ok(_) => (),
                 Err(e) => {
-                    println!("{}", e)
+                    warn!("{}", e)
                 }
             }
         }
@@ -756,7 +756,7 @@ impl Operation for BlockDataTransfer {
                 let res = match mem.read_from_mem(address){
                     Ok(b) => b,
                     Err(e) => {
-                        println!("{}", e);
+                        warn!("{}", e);
                         0
                     }
                 };
@@ -765,7 +765,7 @@ impl Operation for BlockDataTransfer {
                 match mem.write_word(address, cpu.get_register(registers[reg] as usize)) {
                     Ok(_) => (),
                     Err(e) => {
-                        println!("{}", e);
+                        warn!("{}", e);
                     }
                 };
             }
@@ -1016,7 +1016,7 @@ impl Operation for HalfwordDataOp {
                 Ok(n) => n,
                 Err(e) => {
                     //TODO: Better error handling
-                    println!("{}", e);
+                    warn!("{}", e);
                     0
                 }
             };
@@ -1056,7 +1056,7 @@ impl Operation for HalfwordDataOp {
             match mem.write_halfword(address as usize, cpu.get_register(self.rd as usize)) {
                 Ok(_) => (),
                 Err(e) => {
-                    println!("{}", e);
+                    warn!("{}", e);
                 }
             }
         }

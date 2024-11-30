@@ -13,11 +13,13 @@ use cli::Args;
 use gba::Conditional;
 use gba::cpu::CPU;
 use gba::debugger::{DebuggerCommand, ContinueSubcommand};
-use gba::system::{MemoryError, SystemMemory};
+use gba::system::SystemMemory;
 use gba::arm::decode_as_arm;
 use gba::thumb::decode_as_thumb;
-use std::time::{Instant, Duration};
-use std::thread::sleep;
+use std::time::Instant;
+use tracing::{event, Level, error};
+use tracing_subscriber::{filter, fmt, reload, reload::Handle, prelude::*, Registry};
+use tracing_subscriber::filter::LevelFilter;
 
 use pixels::{Error, Pixels, SurfaceTexture};
 use winit::{
@@ -36,13 +38,19 @@ const CYCLES_PER_FRAME: u32 = 4 * 240 * 226;
 
 fn main() -> Result<(), Error> {
     let args = Args::parse();
-    let frames_per_second = 1.0 / 60.0;
+    let filter: LevelFilter = match args.log_level {
+        Some(c) => c.into(),
+        None => LevelFilter::OFF,
+    };
+
+    let (filter, reload_handle) = reload::Layer::new(filter);
+    tracing_subscriber::registry().with(filter).with(fmt::Layer::default()).init();
 
     // TODO: Just put test.gba in the root dir
     let mut bios_rom = match File::open(args.bios) {
         Ok(f) => f,
         Err(e) => {
-            println!("Unable to to open bios file: {:?}", e);
+            error!("Unable to to open bios file: {:?}", e);
             return Ok(());
         }
     };
@@ -50,24 +58,23 @@ fn main() -> Result<(), Error> {
     let mut game_rom = match File::open(args.game) {
         Ok(f) => f,
         Err(e) => {
-            println!("Unable to to open gba file: {:?}", e);
+            error!("Unable to to open gba file: {:?}", e);
             return Ok(());
         }
     };
 
     let bios: Vec<u32> = read_file_into_u32(&mut bios_rom);
     let game_pak: Vec<u32> = read_file_into_u32(&mut game_rom);
-    let mut cpu = CPU::default();
+    let cpu = CPU::default();
     let mut memory = SystemMemory::default();
     memory.copy_bios(bios);
     memory.copy_game_pak(game_pak);
-
-    println!("{:?}", args.render);
+    event!(Level::INFO, "Copied the stuff over");
 
     match args.render {
         cli::Renderer::Terminal => debug_bios(cpu, memory),
         cli::Renderer::Gui => {
-            let _ = run_gui(cpu, memory);
+            let _ = run_gui(cpu, memory, reload_handle);
             ()
         },
     };
@@ -75,7 +82,8 @@ fn main() -> Result<(), Error> {
     Ok(())
 }
 
-fn run_gui(mut cpu: CPU, mut memory: SystemMemory)  -> Result<(), Box<dyn std::error::Error> >{
+fn run_gui(mut cpu: CPU, mut memory: SystemMemory, reload_handle: Handle<LevelFilter, Registry>)  -> Result<(), Box<dyn std::error::Error> >{
+    event!(Level::INFO, "Runing GUI");
     let event_loop = EventLoop::new().unwrap();
     let mut input = WinitInputHelper::new();
 
@@ -140,6 +148,9 @@ fn run_gui(mut cpu: CPU, mut memory: SystemMemory)  -> Result<(), Box<dyn std::e
                 elwt.exit();
                 return;
             }
+            if input.key_pressed(KeyCode::Space) {
+                let _ = reload_handle.modify(|filter| *filter = filter::LevelFilter::DEBUG);
+            }
             window.request_redraw();
         }
     });
@@ -154,6 +165,7 @@ fn next_frame(cpu: &mut CPU, ram: &mut SystemMemory ) {
 }
 
 fn debug_bios(mut cpu: CPU, mut memory: SystemMemory) {
+    event!(Level::INFO, "Runing Debug session");
     use std::io;
     let mut break_points: HashSet<usize> = HashSet::new();
 

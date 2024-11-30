@@ -1,6 +1,6 @@
 use core::fmt;
 
-use crate::utils::shifter::ShiftWithCarry;
+use tracing::debug;
 
 const KILOBYTE: usize = 1024;
 const WORD: u32 = 0xffffffff;
@@ -33,6 +33,20 @@ pub struct SystemMemory {
     // TODO: do this later
     pak_rom: Vec<u32>,
     cart_ram: Vec<u32>,
+}
+
+impl fmt::Debug for SystemMemory {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "system_rom: {}, ", self.system_rom.len())?;
+        write!(f, "ewram: {}, ", self.ewram.len())?;
+        write!(f, "iwram: {}, ", self.iwram.len())?;
+        write!(f, "io_ram: {}, ", self.io_ram.len())?;
+        write!(f, "pal_ram: {}, ", self.pal_ram.len())?;
+        write!(f, "vram: {}, ", self.vram.len())?;
+        write!(f, "oam: {}, ", self.oam.len())?;
+        write!(f, "pak_rom: {}, ", self.pak_rom.len())?;
+        write!(f, "art_ram: {}, ", self.cart_ram.len())
+    }
 }
 
 impl Default for SystemMemory {
@@ -84,6 +98,7 @@ impl SystemMemory {
 
         let mut data = self.read_from_mem(address)?;
         data = (data & !(mask << shift)) | ((block & mask) << shift);
+        debug!("addr: {:x}, old value: {:x}, new_value: {:x}", address, data, block);
 
         let ram: &mut Vec<u32> = self.memory_map(address)?;
         if i > ram.len() {
@@ -125,10 +140,14 @@ impl SystemMemory {
     pub fn read_from_mem(&mut self, address: usize) -> Result<u32, MemoryError> {
         let ram: &Vec<u32> = self.memory_map(address)?;
         let mem_address = (address & 0xffffff) >> 2;
+
+
         if mem_address >= ram.len() {
             Err(MemoryError::OutOfBounds(address, mem_address))
         } else {
-            Ok(ram[mem_address])
+            let data = ram[mem_address];
+            debug!("addr: {:x}, value: {:x}", address, data);
+            Ok(data)
         }
     }
     
