@@ -1,5 +1,4 @@
 use core::fmt;
-
 use tracing::debug;
 
 const KILOBYTE: usize = 1024;
