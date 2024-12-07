@@ -64,7 +64,7 @@ impl Default for CPU {
             cpsr: 0x1f,
             decode: 0x0,
             inst_addr: 0x0,
-            cycles: 0,
+            cycles: 2,
         }
     }
 }
@@ -77,7 +77,7 @@ impl fmt::Display for CPU {
             write!(f, "r{}\t{:#08x}\t", i + 2, self.get_register(i + 2))?;
             write!(f, "r{}\t{:#08x}\n", i + 3, self.get_register(i + 3))?;
         }
-        write!(f, "cpsr: {:#8x}\n", self.cpsr)
+        write!(f, "cpsr: {:#8x}, cycles: {}\n", self.cpsr, self.cycles)
     }
 }
 
@@ -102,7 +102,8 @@ impl CPU {
     }
 
     pub fn add_cycles(&mut self, cycles: u32) {
-        self.cycles.wrapping_add(cycles);
+        trace!("Current cycle count {}. Adding {} to cycle count", self.cycles, cycles);
+        self.cycles = self.cycles.wrapping_add(cycles);
     }
 
     pub fn cycles(&self) -> u32 {
@@ -166,15 +167,6 @@ impl CPU {
             CpuMode::Abort => self.psr[3] = value,
             CpuMode::Undefined => self.psr[4] = value,
         }
-    }
-
-    pub fn add_cycles(&mut self, value: u32) {
-        trace!("Current cycle count {}. Adding {} to cycle count", self.cycles, value);
-        self.cycles += value;
-    }
-
-    pub fn cycles(&self) -> u32 {
-        self.cycles
     }
 
     pub fn update_cpsr(&mut self, res: u32, v: bool, c: bool) {
@@ -262,7 +254,6 @@ impl CPU {
         debug!("{:?}", op);
 
         op.run(self, ram);
-        self.cycles +=3 ;
     }
 
     pub fn tick_for_cycles(&mut self, ram: &mut SystemMemory, num_of_cycles: u32) {

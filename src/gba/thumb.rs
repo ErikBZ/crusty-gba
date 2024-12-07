@@ -390,6 +390,19 @@ impl Operation for HiRegOp {
     }
 }
 
+fn cycles_for_str_ldr(l: bool, pc: bool) -> u32 {
+    if l && pc {
+        // 2S + 2N + 1I
+        5
+    } else if l && !pc {
+        // 1S + 1N + 1I
+        3
+    } else {
+        // 2N
+        2
+    }
+}
+
 #[derive(Debug, PartialEq)]
 struct PcRelativeLoadOp {
     rd: usize,
@@ -420,6 +433,9 @@ impl Operation for PcRelativeLoadOp {
         };
 
         cpu.set_register(self.rd, block_from_mem);
+        cpu.add_cycles(
+            cycles_for_str_ldr(true, self.rd == PC)
+        )
     }
 }
 
@@ -488,6 +504,10 @@ impl Operation for LoadStoreRegOffsetOp {
                 }
             }
         }
+
+        cpu.add_cycles(
+            cycles_for_str_ldr(self.l, self.rd == PC)
+        );
     }
 }
 
@@ -541,6 +561,10 @@ impl Operation for LoadStoreSignExOp {
 
             cpu.set_register(self.rd, data);
         }
+
+        cpu.add_cycles(
+            cycles_for_str_ldr(!(self.s && self.h), self.rd == PC)
+        );
     }
 }
 
@@ -600,6 +624,10 @@ impl Operation for LoadStoreImmOffsetOp {
                 Err(e) => warn!("{}", e),
             }
         }
+
+        cpu.add_cycles(
+            cycles_for_str_ldr(self.l, self.rd == PC)
+        );
     }
 }
 
@@ -643,6 +671,10 @@ impl Operation for LoadStoreHalfWordOp {
                 }
             }
         }
+
+        cpu.add_cycles(
+            cycles_for_str_ldr(self.l, self.rd == PC)
+        );
     }
 }
 
@@ -686,6 +718,10 @@ impl Operation for SpRelativeLoadOp {
                 }
             }
         }
+
+        cpu.add_cycles(
+            cycles_for_str_ldr(self.l, self.rd == PC)
+        );
     }
 }
 
@@ -717,6 +753,13 @@ impl Operation for LoadAddressOp {
         };
 
         cpu.set_register(self.rd, res);
+        if self.rd == PC {
+            // NOTE: (ALU with PC) 2S + 1N
+            cpu.add_cycles(3)
+        } else {
+            // NOTE: (ALU) 1S
+            cpu.add_cycles(1)
+        }
     }
 }
 
@@ -743,6 +786,8 @@ impl Operation for AddOffsetSPOp {
         } else {
             cpu.set_register(SP, cpu.get_register(SP) + self.word);
         }
+        // NOTE: (ALU) 1S
+        cpu.add_cycles(1);
     }
 }
 
@@ -814,6 +859,20 @@ impl Operation for PushPopRegOp {
                 };
             }
         }
+
+        let n = registers.len() as u32;
+        if self.l {
+            if registers.contains(&(PC as u32)) {
+                // NOTE (n+1)S + 2N + 1I when PC is in register_list 
+                cpu.add_cycles(n + 4)
+            } else {
+                // NOTE nS + 1N + 1I
+                cpu.add_cycles(n + 2)
+            }
+        } else {
+            // NOTE: (n-1)S + 2N
+            cpu.add_cycles(n + 1)
+        }
     }
 }
 
@@ -836,6 +895,7 @@ impl From<u32> for MultipleLoadStoreOp {
 
 impl Operation for MultipleLoadStoreOp {
     fn run(&self, cpu: &mut CPU, mem: &mut SystemMemory) {
+        // TODO: use bit_map_to_array function here?
         for i in 0..8 {
             if (self.rlist >> i & 1) == 0 {
                 continue;
@@ -858,6 +918,21 @@ impl Operation for MultipleLoadStoreOp {
                 };
                 cpu.set_register(self.rb, cpu.get_register(self.rb) + 4);
             }
+        }
+
+        let registers = bit_map_to_array(self.rlist.into());
+        let n = registers.len() as u32;
+        if self.l {
+            if registers.contains(&(PC as u32)) {
+                // NOTE (n+1)S + 2N + 1I when PC is in register_list 
+                cpu.add_cycles(n + 4)
+            } else {
+                // NOTE nS + 1N + 1I
+                cpu.add_cycles(n + 2)
+            }
+        } else {
+            // NOTE: (n-1)S + 2N
+            cpu.add_cycles(n + 1)
         }
     }
 }
@@ -920,6 +995,8 @@ impl Operation for ConditionalBranchOp {
         cpu.inst_addr = addr as usize;
 
         cpu.set_register(PC, addr + 2);
+        // NOTE: 3S + 1N
+        cpu.add_cycles(3)
     }
 }
 
@@ -978,6 +1055,8 @@ impl Operation for UnconditionalBranchOp {
         cpu.inst_addr = addr as usize;
 
         cpu.set_register(PC, addr + 2);
+        // NOTE: 2S + 1N
+        cpu.add_cycles(3);
     }
 }
 
@@ -997,6 +1076,7 @@ impl From<u32> for LongBranchWithLinkOp {
 }
 
 impl Operation for LongBranchWithLinkOp {
+    // NOTE: The cycles for this command are split in 2
     fn run(&self, cpu: &mut CPU, mem: &mut SystemMemory) {
         // !self.h runs first, the next addr MUST be another LongBranchWithLinkOp
         // with self.h == true
@@ -1009,6 +1089,8 @@ impl Operation for LongBranchWithLinkOp {
             let res = cpu.get_register(PC).wrapping_add(offset);
 
             cpu.set_register(LR, res);
+            // NOTE: 3S + 1N
+            cpu.add_cycles(1)
         } else {
             let temp = (cpu.get_register(PC) - 2) | 1;
             let res = cpu.get_register(LR).wrapping_add(self.offset << 1);
@@ -1025,6 +1107,8 @@ impl Operation for LongBranchWithLinkOp {
             cpu.inst_addr = res as usize;
 
             cpu.set_register(PC, cpu.get_register(PC) + 2);
+            // NOTE: 3S + 1N
+            cpu.add_cycles(3);
         }
     }
 }

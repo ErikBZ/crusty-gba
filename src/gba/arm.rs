@@ -507,6 +507,9 @@ impl Operation for BranchExchangeOp {
         } else {
             cpu.set_register(PC, addr + 4);
         }
+
+        // NOTE: 2S + 1N
+        cpu.add_cycles(3);
     }
 }
 
@@ -544,6 +547,8 @@ impl Operation for BranchOp {
         cpu.inst_addr = addr as usize;
 
         cpu.set_register(PC, addr + 4);
+        // NOTE: 2S + 1N
+        cpu.add_cycles(3);
     }
 }
 
@@ -1007,6 +1012,8 @@ impl Operation for PsrTransferOp {
                 }
             },
         }
+        // NOTE: (MSR, MRS) 1S
+        cpu.add_cycles(1)
     }
 }
 
