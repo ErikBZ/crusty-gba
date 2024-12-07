@@ -3,7 +3,7 @@ use super::arm::decode_as_arm;
 use super::thumb::decode_as_thumb;
 use super::{is_signed, Conditional, CPSR_C, CPSR_N, CPSR_T, CPSR_V, CPSR_Z};
 use super::system::SystemMemory;
-use tracing::debug;
+use tracing::{debug, trace};
 
 pub const PC: usize = 15;
 pub const LR: usize = 14;
@@ -64,7 +64,7 @@ impl Default for CPU {
             cpsr: 0x1f,
             decode: 0x0,
             inst_addr: 0x0,
-            cycles: 0,
+            cycles: 2,
         }
     }
 }
@@ -77,7 +77,7 @@ impl fmt::Display for CPU {
             write!(f, "r{}\t{:#08x}\t", i + 2, self.get_register(i + 2))?;
             write!(f, "r{}\t{:#08x}\n", i + 3, self.get_register(i + 3))?;
         }
-        write!(f, "cpsr: {:#8x}\n", self.cpsr)
+        write!(f, "cpsr: {:#8x}, cycles: {}\n", self.cpsr, self.cycles)
     }
 }
 
@@ -99,6 +99,15 @@ impl CPU {
 
     pub fn instruction_address(&self) -> usize {
         self.inst_addr
+    }
+
+    pub fn add_cycles(&mut self, cycles: u32) {
+        trace!("Current cycle count {}. Adding {} to cycle count", self.cycles, cycles);
+        self.cycles = self.cycles.wrapping_add(cycles);
+    }
+
+    pub fn cycles(&self) -> u32 {
+        self.cycles
     }
 
     // TODO: Do reverse for set_register
@@ -235,6 +244,7 @@ impl CPU {
         let op = if !self.is_thumb_mode() {
             let cond = Conditional::from(inst);
             if !cond.should_run(self.cpsr) {
+                self.add_cycles(1);
                 return;
             }
             decode_as_arm(inst)
@@ -244,7 +254,6 @@ impl CPU {
         debug!("{:?}", op);
 
         op.run(self, ram);
-        self.cycles +=3 ;
     }
 
     pub fn tick_for_cycles(&mut self, ram: &mut SystemMemory, num_of_cycles: u32) {
