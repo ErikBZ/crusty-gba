@@ -105,6 +105,13 @@ impl Operation for MoveShiftedRegisterOp {
         // TODO: This probably sets carry
         cpu.update_cpsr(res, false, c_carry);
         cpu.set_register(self.rd, res);
+        let mut cycles = 2;
+        if self.rd == PC {
+            // NOTE: 1S + 1N
+            cycles += 2;
+        }
+        // NOTE: 1S + 1I (for shift)
+        cpu.add_cycles(cycles);
     }
 }
 
@@ -151,6 +158,14 @@ impl Operation for AddSubtractOp {
 
         cpu.update_cpsr(res, v_status, c_status);
         cpu.set_register(self.rd, res);
+
+        if self.rd == PC {
+            // NOTE: 1S + 1N
+            cpu.add_cycles(3);
+        } else {
+            // NOTE: 1S
+            cpu.add_cycles(1);
+        }
     }
 }
 
@@ -208,6 +223,13 @@ impl Operation for MathImmOp {
             _ => cpu.set_register(self.rd, res),
         }
         cpu.update_cpsr(res, v_status, c_status);
+        if self.rd == PC {
+            // NOTE: 2S + 1N + 1I
+            cpu.add_cycles(4)
+        } else {
+            // NOTE: 1S + 1I
+            cpu.add_cycles(2)
+        }
     }
 }
 

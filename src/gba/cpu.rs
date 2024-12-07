@@ -3,7 +3,7 @@ use super::arm::decode_as_arm;
 use super::thumb::decode_as_thumb;
 use super::{is_signed, Conditional, CPSR_C, CPSR_N, CPSR_T, CPSR_V, CPSR_Z};
 use super::system::SystemMemory;
-use tracing::debug;
+use tracing::{debug, trace};
 
 pub const PC: usize = 15;
 pub const LR: usize = 14;
@@ -168,6 +168,15 @@ impl CPU {
         }
     }
 
+    pub fn add_cycles(&mut self, value: u32) {
+        trace!("Current cycle count {}. Adding {} to cycle count", self.cycles, value);
+        self.cycles += value;
+    }
+
+    pub fn cycles(&self) -> u32 {
+        self.cycles
+    }
+
     pub fn update_cpsr(&mut self, res: u32, v: bool, c: bool) {
         let zero = if res == 0 {
             CPSR_Z
@@ -243,6 +252,7 @@ impl CPU {
         let op = if !self.is_thumb_mode() {
             let cond = Conditional::from(inst);
             if !cond.should_run(self.cpsr) {
+                self.add_cycles(1);
                 return;
             }
             decode_as_arm(inst)

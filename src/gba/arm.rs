@@ -44,6 +44,8 @@ pub fn decode_as_arm(inst: u32) -> Box<dyn Operation> {
 #[derive(Debug)]
 struct UndefinedInstruction;
 impl Operation for UndefinedInstruction {
+    // TODO: Implement. Take undef trap
+    // TODO: Track Cycles 2S + 1I + 1N
     fn run(&self, _cpu: &mut CPU, _mem: &mut SystemMemory) {
         unreachable!()
     }
@@ -52,6 +54,8 @@ impl Operation for UndefinedInstruction {
 #[derive(Debug)]
 struct SoftwareInterruptOp;
 impl Operation for SoftwareInterruptOp {
+    // TODO: Implement
+    // TODO: Track Cycles 2S + 1N
     fn run(&self, _cpu: &mut CPU, _mem: &mut SystemMemory) {
         todo!()
     }
@@ -129,9 +133,24 @@ impl From<u32> for DataProcessingOp {
 impl Operation for DataProcessingOp {
     fn run(&self, cpu: &mut CPU, _mem: &mut SystemMemory) {
         let cycles = 1;
-        let (op2, mut c_out) = self.get_operand2(cpu);
-        let operand2 = op2 as u64;
+        let (rhs, c_out) = self.get_operand2(cpu);
+        let mut cycles = 1;
         let rn_value = cpu.get_register(self.rn as usize) as u64;
+
+        let op2 = match rhs {
+            Operand::Imm(x) => x,
+            Operand::Shift(x) => {
+                cycles += 1;
+                x
+            },
+        };
+        let operand2 = op2 as u64;
+
+        if self.rn as usize == PC {
+            cycles += 1;
+        }
+
+        let operand2 = op2 as u64;
         let carry = ((cpu.cpsr & CPSR_C) >> 29) as u64;
         let mut v_status = false;
 
@@ -188,7 +207,7 @@ impl Operation for DataProcessingOp {
                 !operand2
             }
         };
-        c_out = if self.is_logical_operation() { c_out } else { res.bit_is_high(32) };
+        let c_out = if self.is_logical_operation() { c_out } else { res.bit_is_high(32) };
         let res: u32 = (res & 0xffffffff) as u32;
 
         if !(self.opcode == DataProcessingType::CMP || self.opcode == DataProcessingType::TST ||
@@ -223,6 +242,11 @@ impl From<u32> for ShiftType {
     }
 }
 
+enum Operand {
+    Imm(u32),
+    Shift(u32)
+}
+
 impl DataProcessingOp {
     fn is_logical_operation(&self) -> bool {
         self.opcode == DataProcessingType::AND ||
@@ -235,18 +259,19 @@ impl DataProcessingOp {
         self.opcode == DataProcessingType::MVN
     }
 
-    fn get_operand2(&self, cpu: &CPU) -> (u32, bool) {
+    fn get_operand2(&self, cpu: &CPU) -> (Operand, bool) {
         let c_in = (cpu.cpsr & CPSR_C) != 0;
         if self.i {
             let rotate = (self.operand >> 8 & 0xf) as u32;
             let op = (self.operand & 0xff) as u32;
-            if rotate == 0 {
+            let (res, c_out) = if rotate == 0 {
                 // If ror is 0, just bump carry?
                 (op, c_in)
             } else {
                 // we gotta rotate by twice the amount
                 op.ror_with_carry(rotate * 2)
-            }
+            };
+            (Operand::Imm(res), c_out)
         }
         else {
             let shift = (self.operand >> 4 & 0xff) as u32;
@@ -268,7 +293,7 @@ impl DataProcessingOp {
 
             // TODO Find a way to simplify this
             // NOTE: LSR 0, ASR 0, and ROR 0 encode special things
-            match s_type {
+            let (res, c_out) = match s_type {
                 ShiftType::LSL => {
                     if s == 0 {
                         (rm_value, c_in)
@@ -297,7 +322,8 @@ impl DataProcessingOp {
                         rm_value.ror_with_carry(s)
                     }
                 },
-            }
+            };
+            (Operand::Shift(res), c_out)
         }
     }
 }
@@ -325,8 +351,32 @@ impl Operation for MultiplyOp{
         }
 
         cpu.set_register(self.rd as usize, res);
-        // TODO: Update v and c for this
+        // TODO: C is meaningless and V is unaffected. Update this to reflect this
         cpu.update_cpsr(res, false, false);
+        // NOTE:
+        //      MUL: 1S +(m)I
+        //      MLA: 1S +(m+1)I
+        cpu.add_cycles(self.count_cycles(rs_value));
+    }
+}
+
+impl MultiplyOp {
+    fn count_cycles(&self, mult_operand: u32) -> u32 {
+        let mut m = if (mult_operand & 0xffffff00) == 0 || (mult_operand & 0xffffff00 == 0xffffff00) {
+            1
+        } else if (mult_operand & 0xffff0000) == 0 || (mult_operand & 0xffff0000 == 0xffff0000) {
+            2
+        } else if (mult_operand & 0xff000000) == 0 || (mult_operand & 0xff000000 == 0xff000000) {
+            3
+        } else {
+            4
+        };
+
+        if self.a {
+            m += 1;
+        }
+
+        1 + m
     }
 }
 
@@ -357,6 +407,8 @@ pub struct MultiplyLongOp {
 }
 
 impl Operation for MultiplyLongOp {
+    // TODO: Implement
+    // TODO: Track Cycles
     fn run(&self, _cpu: &mut CPU, _mem: &mut SystemMemory) {
         todo!()
     }
@@ -386,6 +438,7 @@ pub struct SingleDataSwapOp {
 
 impl Operation for SingleDataSwapOp {
     // TODO: Propogate Error for ABORT signals
+    // TODO: Track Cycles
     fn run(&self, cpu: &mut CPU, mem: &mut SystemMemory) {
         let address = cpu.get_register(self.rn as usize) as usize;
         match mem.read_from_mem(address) {
@@ -405,6 +458,8 @@ impl Operation for SingleDataSwapOp {
                 Err(e) => warn!("{}", e),
             }
         }
+        // TODO: 1S + 2N + 1I
+        cpu.add_cycles(4);
     }
 }
 
@@ -659,7 +714,16 @@ impl Operation for SingleDataTfx {
                 },
             };
             cpu.set_register(self.rd as usize, res);
+            if self.rd as usize == PC {
+                // NOTE: 2S + 2N + 1I
+                cpu.add_cycles(5);
+            } else {
+                // NOTE: 1S + 1N + 1I
+                cpu.add_cycles(3);
+            }
         } else {
+            // NOTE: 2N
+            cpu.add_cycles(2);
             let res = if self.b {
                 mem.write_byte(tfx_add as usize, cpu.get_register(self.rd as usize))
             } else {
@@ -775,6 +839,20 @@ impl Operation for BlockDataTransfer {
                 }
                 cpu.set_register(self.rn as usize, address as u32);
             }
+        }
+
+        let n = registers.len() as u32;
+        if self.l {
+            // NOTE nS + 1N + 1I
+            // NOTE (n+1)S + 2N + 1I when PC is in register_list 
+            if registers.contains(&(PC as u32)) {
+                cpu.add_cycles(n + 4)
+            } else {
+                cpu.add_cycles(n + 2)
+            }
+        } else {
+            // NOTE: (n-1)S + 2N
+            cpu.add_cycles(n + 1)
         }
     }
 }
@@ -1045,6 +1123,13 @@ impl Operation for HalfwordDataOp {
             };
 
             cpu.set_register(self.rd as usize, value);
+            if self.rd as usize == PC {
+                // NOTE: 2I + 2N 1I
+                cpu.add_cycles(5);
+            } else {
+                // NOTE: 1I + 1N 1I
+                cpu.add_cycles(3);
+            }
         } else {
             if self.s || !self.h{
                 unreachable!();
@@ -1056,6 +1141,8 @@ impl Operation for HalfwordDataOp {
                     warn!("{}", e);
                 }
             }
+            // NOTE: 2N
+            cpu.add_cycles(2);
         }
 
         if !self.p {
