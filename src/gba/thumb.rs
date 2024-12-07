@@ -225,10 +225,10 @@ impl Operation for MathImmOp {
         cpu.update_cpsr(res, v_status, c_status);
         if self.rd == PC {
             // NOTE: 2S + 1N + 1I
-            cpu.add_cycles(4)
+            cpu.add_cycles(3)
         } else {
             // NOTE: 1S + 1I
-            cpu.add_cycles(2)
+            cpu.add_cycles(1)
         }
     }
 }
@@ -386,6 +386,12 @@ impl Operation for HiRegOp {
                 }
             },
             _ => unreachable!(), 
+        }
+
+        if self.op == 0b11 {
+            cpu.add_cycles(3);
+        } else {
+            cpu.add_cycles(2);
         }
     }
 }
@@ -971,6 +977,7 @@ impl From<u32> for ConditionalBranchOp {
 impl Operation for ConditionalBranchOp {
     fn run(&self, cpu: &mut CPU, mem: &mut SystemMemory) {
         if !self.cond.should_run(cpu.cpsr) {
+            cpu.add_cycles(1);
             return;
         }
 

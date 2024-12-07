@@ -144,7 +144,7 @@ impl Operation for DataProcessingOp {
             },
         };
 
-        if self.rn as usize == PC {
+        if self.rd as usize == PC {
             cycles += 1;
         }
 

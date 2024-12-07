@@ -77,7 +77,7 @@ impl fmt::Display for CPU {
             write!(f, "r{}\t{:#08x}\t", i + 2, self.get_register(i + 2))?;
             write!(f, "r{}\t{:#08x}\n", i + 3, self.get_register(i + 3))?;
         }
-        write!(f, "cpsr: {:#8x}, cycles: {}\n", self.cpsr, self.cycles)
+        write!(f, "cpsr: {:#8x}, cycles: {}, instruction address: {:#08x}\n", self.cpsr, self.cycles, self.instruction_address())
     }
 }
 
@@ -218,6 +218,7 @@ impl CPU {
 
     pub fn tick(&mut self, ram: &mut SystemMemory) {
         let inst = self.decode;
+        let i_addr = self.inst_addr;
         self.inst_addr = self.pc();
         let next_inst = if self.is_thumb_mode() {
             ram.read_halfword(self.pc())
@@ -251,7 +252,7 @@ impl CPU {
         } else {
             decode_as_thumb(inst)
         };
-        debug!("{:?}", op);
+        debug!("{:#08x}: {:#08x} - {:?}", i_addr, inst, op);
 
         op.run(self, ram);
     }

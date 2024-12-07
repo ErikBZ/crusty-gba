@@ -30,7 +30,6 @@ use winit::{
     keyboard::KeyCode,
 };
 use winit_input_helper::WinitInputHelper;
-
 const WIDTH: u32 = 400;
 const HEIGHT: u32 = 300;
 const CYCLES_PER_SCANLINE: u32 = 4 * 240;
@@ -197,21 +196,27 @@ fn debug_bios(mut cpu: CPU, mut memory: SystemMemory) {
                 }
             },
             DebuggerCommand::Continue(ContinueSubcommand::Endless) => {
-                let mut i = 0;
                 while !break_points.contains(&cpu.instruction_address()) {
                     cpu.tick(&mut memory);
-                    i += 1;
-
-                    if cpu.instruction_address() == 0x1776 || cpu.instruction_address() == 0x1778{
-                        panic!();
-                    }
                 }
             },
             DebuggerCommand::Continue(ContinueSubcommand::For(l)) => {
                 let mut n = 0;
                 while !break_points.contains(&cpu.instruction_address()) && l > n {
-//                    println!("{:x}", cpu.instruction_address());
                     cpu.tick(&mut memory);
+                    let op = if !cpu.is_thumb_mode() {
+                        decode_as_arm(cpu.decode)
+                    } else {
+                        decode_as_thumb(cpu.decode)
+                    };
+                    let cond = Conditional::from(cpu.decode);
+
+                    println!("{}", cpu);
+                    if cpu.is_thumb_mode() {
+                        println!("{:#04x} {:?} {:?}", cpu.decode, cond, op);
+                    } else {
+                        println!("{:#08x} {:?} {:?}", cpu.decode, cond, op);
+                    }
                     n += 1;
                 }
             },
