@@ -105,7 +105,7 @@ impl Operation for MoveShiftedRegisterOp {
         // TODO: This probably sets carry
         cpu.update_cpsr(res, false, c_carry);
         cpu.set_register(self.rd, res);
-        let mut cycles = 2;
+        let mut cycles = 1;
         if self.rd == PC {
             // NOTE: 1S + 1N
             cycles += 2;
@@ -312,6 +312,9 @@ impl Operation for ALUOp {
         }
 
         cpu.update_cpsr(res, v_status, c_status);
+        // TODO: Do we need to add the 1S for shifts?
+        // NOTE: 1S
+        cpu.add_cycles(1);
     }
 }
 
@@ -391,7 +394,7 @@ impl Operation for HiRegOp {
         if self.op == 0b11 {
             cpu.add_cycles(3);
         } else {
-            cpu.add_cycles(2);
+            cpu.add_cycles(1);
         }
     }
 }
