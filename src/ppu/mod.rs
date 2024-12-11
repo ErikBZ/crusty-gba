@@ -1,4 +1,4 @@
-use tracing::warn;
+use tracing::{warn, trace, debug};
 use crate::{gba::system::MemoryError, SystemMemory};
 // Base off of https://github.com/tuzz/game-loop 
 
@@ -11,74 +11,93 @@ const V_BLANK_FLAG: u32 = 0b00000001;
 const H_BLANK_FLAG: u32 = 0b00000010;
 const V_COUNTER_FLAG: u32 = 0b00000100;
 
-fn set_flag_high(flag: u32, addr: usize, ram: &mut SystemMemory) -> Result<(), MemoryError> {
+fn set_bit_high(ram: &mut SystemMemory, addr: usize, flag: u32) -> Result<(), MemoryError> {
     let data = ram.read_halfword(addr)?;
     ram.write_halfword(addr, data | flag)
 }
 
-fn set_flag_low(flag: u32, addr: usize, ram: &mut SystemMemory) -> Result<(), MemoryError> {
+fn set_bit_low(ram: &mut SystemMemory, addr: usize, flag: u32) -> Result<(), MemoryError> {
     let data = ram.read_halfword(addr)?;
     ram.write_halfword(addr, data & !flag)
 }
 
 pub struct PPU {
     old_cycle: u32,
-    frame_ready: bool,
+    h_count: u32,
+    v_count: u32,
+}
+
+impl Default for PPU {
+    fn default() -> Self {
+        PPU {
+            old_cycle: 0,
+            h_count: 0,
+            v_count: 0,
+        }
+    }
 }
 
 impl PPU {
-    pub fn new() -> PPU {
-        PPU {
-            old_cycle: 0,
-            frame_ready: false,
+    pub fn tick(&mut self, cycle: u32, ram: &mut SystemMemory) -> bool {
+        if cycle >> 2 == self.old_cycle {
+            return false;
+        }
+        let delta_cycle = (cycle >> 2) - self.old_cycle;
+        self.old_cycle = cycle >> 2;
+
+        match self.update_io_registers(delta_cycle, ram) {
+            Ok(b) => b,
+            Err(e) => {
+                warn!("{}", e);
+                false
+            }
         }
     }
 
-    // A tick for the PPU is 4 cycles since that's how long it takes for 1 pixel to be drawn
-    pub fn update(&mut self, cycle: u32, ram: &mut SystemMemory) {
-        let new_cycle = cycle >> 2;
-        if new_cycle == self.old_cycle {
-            return;
-        }
-        let delta_cycle = new_cycle - self.old_cycle;
-
-        for _ in 0..delta_cycle {
-            self.internal_tick(ram);
-        }
-
-        self.old_cycle = new_cycle;
-    }
-
-    fn internal_tick(&mut self, ram: &mut SystemMemory) {
-        match self.update_v_count(ram) {
-            Ok(_) => (),
-            Err(e) => warn!("{}", e)
-        }
-    }
-
-    fn frame_done(&self) -> bool {
-        self.old_cycle / 960 == 0
-    }
-
-    fn update_v_count(&self, ram: &mut SystemMemory) -> Result<(), MemoryError> {
-        let mut data = ram.read_byte(V_COUNT_ADDR)?;
-        let disp_stat_data = ram.read_byte(DISP_STAT_ADDR)?;
-
-        if data >= 227 {
-            data = 0;
-            ram.write_byte(DISP_STAT_ADDR, disp_stat_data & !V_BLANK_FLAG)?;
+    fn update_io_registers(&mut self, d_cycle: u32, ram: &mut SystemMemory) -> Result<bool, MemoryError> {
+        let new_v = self.update_h_count(d_cycle, ram)?;
+        if new_v {
+            self.update_v_count(ram)
         } else {
-            data += 1;
+            Ok(false)
         }
-
-        if data > 160 {
-            ram.write_byte(DISP_STAT_ADDR, disp_stat_data | V_BLANK_FLAG)?;
-        }
-
-        ram.write_byte(V_COUNT_ADDR, data)
     }
 
-    pub fn generate_frame(&mut self) {
-        self.frame_ready = false;
+    fn update_h_count(&mut self, d_cycle: u32, ram: &mut SystemMemory) -> Result<bool, MemoryError> {
+        let next_h_count = self.h_count + d_cycle;
+
+        if self.h_count < 960 && next_h_count >= 960 {
+            self.h_count = next_h_count;
+            debug!("Setting H_BLANK_FLAG hi");
+            set_bit_high(ram, DISP_STAT_ADDR, H_BLANK_FLAG).map(|_| false)
+        } else if self.h_count < 1232 && next_h_count >= 1232 {
+            self.h_count = next_h_count - 1232;
+            debug!("Setting H_BLANK_FLAG low");
+            set_bit_low(ram, DISP_STAT_ADDR, H_BLANK_FLAG).map(|_| true)
+        } else {
+            self.h_count = next_h_count;
+            Ok(false)
+        }
+    }
+
+    // if v goes from 227 to 0, the frame is done
+    fn update_v_count(&mut self, ram: &mut SystemMemory) -> Result<bool, MemoryError> {
+        // TODO, well this propogate the error in set_bit_x?
+        if self.v_count == 160 {
+            debug!("Setting V_BLANK_FLAG hi");
+            set_bit_high(ram, DISP_STAT_ADDR, V_BLANK_FLAG)?;
+        } else if self.v_count == 226 {
+            debug!("Setting V_BLANK_FLAG low");
+            set_bit_low(ram, DISP_STAT_ADDR, V_BLANK_FLAG)?;
+        } else if self.v_count == 228 {
+            self.v_count = 0;
+        }
+
+        debug!("Setting VCOUNT to {}", self.v_count);
+        if self.v_count == 0 {
+            ram.write_byte(V_COUNT_ADDR, self.v_count).map(|_| true)
+        } else {
+            ram.write_byte(V_COUNT_ADDR, self.v_count).map(|_| false)
+        }
     }
 } 
