@@ -6,7 +6,6 @@ mod color_effect;
 use tracing::{warn, trace, debug};
 use crate::{gba::system::MemoryError, utils::Bitable, SystemMemory};
 use disp_control::DisplayControl;
-
 // Base off of https://github.com/tuzz/game-loop 
 
 // Values for controlling how the PPU draws pixels to the display
