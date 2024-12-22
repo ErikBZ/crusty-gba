@@ -1,5 +1,12 @@
+mod disp_control;
+mod bg_control;
+mod window_control;
+mod color_effect;
+
 use tracing::{warn, trace, debug};
-use crate::{gba::system::MemoryError, SystemMemory};
+use crate::{gba::system::MemoryError, utils::Bitable, SystemMemory};
+use disp_control::DisplayControl;
+
 // Base off of https://github.com/tuzz/game-loop 
 
 // Values for controlling how the PPU draws pixels to the display
@@ -101,3 +108,21 @@ impl PPU {
         }
     }
 } 
+
+struct Mosaic {
+    bg_h: i32,
+    bg_v: i32,
+    obj_h: i32,
+    obj_v: i32,
+}
+
+impl From<u32> for Mosaic {
+    fn from(value: u32) -> Self {
+        Mosaic {
+            bg_h: (value.half_byte_at(0) as i32) - 1,
+            bg_v: (value.half_byte_at(4) as i32) - 1,
+            obj_h: (value.half_byte_at(8) as i32) - 1,
+            obj_v: (value.half_byte_at(12) as i32) - 1,
+        }
+    }
+}

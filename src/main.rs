@@ -10,13 +10,10 @@ extern crate strum_macros;
 
 use clap::Parser;
 use cli::Args;
-use gba::Conditional;
 use gba::cpu::CPU;
 use crate::ppu::PPU;
 use gba::debugger::{DebuggerCommand, ContinueSubcommand};
 use gba::system::SystemMemory;
-use gba::arm::decode_as_arm;
-use gba::thumb::decode_as_thumb;
 use std::time::Instant;
 use tracing::{event, Level, error};
 use tracing_subscriber::{filter, fmt, reload, reload::Handle, prelude::*, Registry};
