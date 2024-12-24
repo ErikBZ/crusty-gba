@@ -3,6 +3,7 @@ pub mod debugger;
 pub mod arm;
 pub mod thumb;
 pub mod system;
+mod dma;
 
 pub const CPSR_N: u32 = 0x80000000;
 pub const CPSR_Z: u32 = 0x40000000;

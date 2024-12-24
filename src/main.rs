@@ -10,12 +10,10 @@ extern crate strum_macros;
 
 use clap::Parser;
 use cli::Args;
-use gba::Conditional;
 use gba::cpu::CPU;
+use crate::ppu::PPU;
 use gba::debugger::{DebuggerCommand, ContinueSubcommand};
 use gba::system::SystemMemory;
-use gba::arm::decode_as_arm;
-use gba::thumb::decode_as_thumb;
 use std::time::Instant;
 use tracing::{event, Level, error};
 use tracing_subscriber::{filter, fmt, reload, reload::Handle, prelude::*, Registry};
@@ -65,13 +63,14 @@ fn main() -> Result<(), Error> {
     let bios: Vec<u32> = read_file_into_u32(&mut bios_rom);
     let game_pak: Vec<u32> = read_file_into_u32(&mut game_rom);
     let cpu = CPU::default();
+    let ppu = PPU::default();
     let mut memory = SystemMemory::default();
     memory.copy_bios(bios);
     memory.copy_game_pak(game_pak);
     event!(Level::INFO, "Copied the stuff over");
 
     match args.render {
-        cli::Renderer::Terminal => debug_bios(cpu, memory, reload_handle),
+        cli::Renderer::Terminal => debug_bios(cpu, memory, ppu, reload_handle),
         cli::Renderer::Gui => {
             let _ = run_gui(cpu, memory, reload_handle);
             ()
@@ -163,7 +162,7 @@ fn next_frame(cpu: &mut CPU, ram: &mut SystemMemory ) {
     }
 }
 
-fn debug_bios(mut cpu: CPU, mut memory: SystemMemory, reload_handle: Handle<LevelFilter, Registry>) {
+fn debug_bios(mut cpu: CPU, mut memory: SystemMemory, mut ppu: PPU, reload_handle: Handle<LevelFilter, Registry>) {
     event!(Level::INFO, "Runing Debug session");
     use std::io;
     let mut break_points: HashSet<usize> = HashSet::new();
@@ -198,58 +197,30 @@ fn debug_bios(mut cpu: CPU, mut memory: SystemMemory, reload_handle: Handle<Leve
             DebuggerCommand::Continue(ContinueSubcommand::Endless) => {
                 while !break_points.contains(&cpu.instruction_address()) {
                     cpu.tick(&mut memory);
+                    if ppu.tick(cpu.cycles(), &mut memory) {
+                        println!("{}", cpu);
+                    }
                 }
             },
             DebuggerCommand::Continue(ContinueSubcommand::For(l)) => {
                 let mut n = 0;
                 while !break_points.contains(&cpu.instruction_address()) && l > n {
                     cpu.tick(&mut memory);
-                    let op = if !cpu.is_thumb_mode() {
-                        decode_as_arm(cpu.decode)
-                    } else {
-                        decode_as_thumb(cpu.decode)
-                    };
-                    let cond = Conditional::from(cpu.decode);
+                    ppu.tick(cpu.cycles(), &mut memory);
 
                     println!("{}", cpu);
-                    if cpu.is_thumb_mode() {
-                        println!("{:#04x} {:?} {:?}", cpu.decode, cond, op);
-                    } else {
-                        println!("{:#08x} {:?} {:?}", cpu.decode, cond, op);
-                    }
                     n += 1;
                 }
             },
             DebuggerCommand::Next => {
                 cpu.tick(&mut memory);
-                let op = if !cpu.is_thumb_mode() {
-                    decode_as_arm(cpu.decode)
-                } else {
-                    decode_as_thumb(cpu.decode)
-                };
-                let cond = Conditional::from(cpu.decode);
+                ppu.tick(cpu.cycles(), &mut memory);
 
                 println!("{}", cpu);
-                if cpu.is_thumb_mode() {
-                    println!("{:#04x} {:?} {:?}", cpu.decode, cond, op);
-                } else {
-                    println!("{:#08x} {:?} {:?}", cpu.decode, cond, op);
-                }
             },
             DebuggerCommand::Info => {
-                let op = if !cpu.is_thumb_mode() {
-                    decode_as_arm(cpu.decode)
-                } else {
-                    decode_as_thumb(cpu.decode)
-                };
-                let cond = Conditional::from(cpu.decode);
-
                 println!("{}", cpu);
-                if cpu.is_thumb_mode() {
-                    println!("{:#04x} {:?} {:?}", cpu.decode, cond, op);
-                } else {
-                    println!("{:#08x} {:?} {:?}", cpu.decode, cond, op);
-                }            },
+            },
             DebuggerCommand::Quit => break,
             DebuggerCommand::LogLevel(lf) => {
                 let _ = reload_handle.modify(|filter| *filter = lf);

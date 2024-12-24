@@ -77,7 +77,16 @@ impl fmt::Display for CPU {
             write!(f, "r{}\t{:#08x}\t", i + 2, self.get_register(i + 2))?;
             write!(f, "r{}\t{:#08x}\n", i + 3, self.get_register(i + 3))?;
         }
-        write!(f, "cpsr: {:#8x}, cycles: {}, instruction address: {:#08x}\n", self.cpsr, self.cycles, self.instruction_address())
+        write!(f, "cpsr: {:#8x}, cycles: {}, instruction address: {:#08x}\n", self.cpsr, self.cycles, self.instruction_address())?;
+
+        let cond = Conditional::from(self.decode);
+        if self.is_thumb_mode() {
+            let op = decode_as_thumb(self.decode);
+            write!(f, "{:#04x} {:?} {:?}", self.decode, cond, op)
+        } else {
+            let op = decode_as_arm(self.decode);
+            write!(f, "{:#08x} {:?} {:?}", self.decode, cond, op)
+        }
     }
 }
 

@@ -1,10 +1,17 @@
 use core::fmt;
 use tracing::trace;
+use super::dma::DmaControl;
+
 
 const KILOBYTE: usize = 1024;
 const WORD: u32 = 0xffffffff;
 const HALFWORD: u32 = 0xffff;
 const BYTE: u32 = 0xff;
+
+const INTERNAL_DMA_CONTROL_0: usize = 0x0000ba;
+const INTERNAL_DMA_CONTROL_1: usize = 0x0000c6;
+const INTERNAL_DMA_CONTROL_2: usize = 0x0000d2;
+const INTERNAL_DMA_CONTROL_3: usize = 0x0000de;
 
 #[derive(Debug, PartialEq, Clone)]
 pub enum MemoryError {
@@ -53,7 +60,7 @@ impl Default for SystemMemory {
         Self {
             system_rom: vec![0; 16 * KILOBYTE],
             ewram: vec![0; 256 * KILOBYTE],
-            iwram: vec![0; 32 * KILOBYTE],
+            iwram: vec![0; 0x1000000],
             io_ram: vec![0; 1 * KILOBYTE],
             pal_ram: vec![0; 1 * KILOBYTE],
             vram: vec![0; 96 * KILOBYTE],
@@ -148,6 +155,21 @@ impl SystemMemory {
             trace!("addr: {:x}, value: {:x}", address, data);
             Ok(data)
         }
+    }
+
+    pub fn is_dma_enabled(&self) -> bool {
+        let mut enabled = false;
+        enabled = DmaControl::from(self.io_ram[INTERNAL_DMA_CONTROL_0]).dma_enabled || enabled;
+        enabled = DmaControl::from(self.io_ram[INTERNAL_DMA_CONTROL_1]).dma_enabled || enabled;
+        enabled = DmaControl::from(self.io_ram[INTERNAL_DMA_CONTROL_2]).dma_enabled || enabled;
+        enabled = DmaControl::from(self.io_ram[INTERNAL_DMA_CONTROL_3]).dma_enabled || enabled;
+        enabled
+    }
+
+
+    // should return cycles run
+    pub fn run_dma(&mut self) -> Result<u32, MemoryError> {
+        todo!()
     }
     
     // deal with lifetimes later
