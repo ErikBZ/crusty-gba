@@ -1,5 +1,5 @@
 use core::fmt;
-use tracing::debug;
+use tracing::trace;
 
 const KILOBYTE: usize = 1024;
 const WORD: u32 = 0xffffffff;
@@ -97,7 +97,7 @@ impl SystemMemory {
 
         let mut data = self.read_from_mem(address)?;
         data = (data & !(mask << shift)) | ((block & mask) << shift);
-        debug!("addr: {:x}, old value: {:x}, new_value: {:x}", address, data, block);
+        trace!("addr: {:x}, old value: {:x}, new_value: {:x}", address, data, block);
 
         let ram: &mut Vec<u32> = self.memory_map(address)?;
         if i > ram.len() {
@@ -145,7 +145,7 @@ impl SystemMemory {
             Err(MemoryError::OutOfBounds(address, mem_address))
         } else {
             let data = ram[mem_address];
-            debug!("addr: {:x}, value: {:x}", address, data);
+            trace!("addr: {:x}, value: {:x}", address, data);
             Ok(data)
         }
     }
