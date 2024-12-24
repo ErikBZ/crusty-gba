@@ -3,7 +3,7 @@ mod bg_control;
 mod window_control;
 mod color_effect;
 
-use tracing::{warn, trace, debug};
+use tracing::{warn, trace, info, debug};
 use crate::{gba::system::MemoryError, utils::Bitable, SystemMemory};
 use disp_control::DisplayControl;
 // Base off of https://github.com/tuzz/game-loop 
@@ -31,6 +31,7 @@ pub struct PPU {
     old_cycle: u32,
     h_count: u32,
     v_count: u32,
+    frame: u32,
 }
 
 impl Default for PPU {
@@ -39,6 +40,7 @@ impl Default for PPU {
             old_cycle: 0,
             h_count: 0,
             v_count: 0,
+            frame: 0,
         }
     }
 }
@@ -71,6 +73,7 @@ impl PPU {
 
     fn update_h_count(&mut self, d_cycle: u32, ram: &mut SystemMemory) -> Result<bool, MemoryError> {
         let next_h_count = self.h_count + d_cycle;
+        trace!("setting h_blank to {}", next_h_count);
 
         if self.h_count < 960 && next_h_count >= 960 {
             self.h_count = next_h_count;
@@ -88,6 +91,7 @@ impl PPU {
 
     // if v goes from 227 to 0, the frame is done
     fn update_v_count(&mut self, ram: &mut SystemMemory) -> Result<bool, MemoryError> {
+        self.v_count += 1;
         // TODO, well this propogate the error in set_bit_x?
         if self.v_count == 160 {
             debug!("Setting V_BLANK_FLAG hi");
@@ -96,6 +100,8 @@ impl PPU {
             debug!("Setting V_BLANK_FLAG low");
             set_bit_low(ram, DISP_STAT_ADDR, V_BLANK_FLAG)?;
         } else if self.v_count == 228 {
+            self.frame += 1;
+            info!("Frame done {}", self.frame);
             self.v_count = 0;
         }
 

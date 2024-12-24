@@ -60,7 +60,7 @@ impl Default for SystemMemory {
         Self {
             system_rom: vec![0; 16 * KILOBYTE],
             ewram: vec![0; 256 * KILOBYTE],
-            iwram: vec![0; 32 * KILOBYTE],
+            iwram: vec![0; 0x1000000],
             io_ram: vec![0; 1 * KILOBYTE],
             pal_ram: vec![0; 1 * KILOBYTE],
             vram: vec![0; 96 * KILOBYTE],
