@@ -70,7 +70,7 @@ fn main() -> Result<(), Error> {
     event!(Level::INFO, "Copied the stuff over");
 
     match args.render {
-        cli::Renderer::Terminal => debug_bios(cpu, memory, ppu),
+        cli::Renderer::Terminal => debug_bios(cpu, memory, ppu, reload_handle),
         cli::Renderer::Gui => {
             let _ = run_gui(cpu, memory, reload_handle);
             ()
@@ -162,7 +162,7 @@ fn next_frame(cpu: &mut CPU, ram: &mut SystemMemory ) {
     }
 }
 
-fn debug_bios(mut cpu: CPU, mut memory: SystemMemory, mut ppu: PPU) {
+fn debug_bios(mut cpu: CPU, mut memory: SystemMemory, mut ppu: PPU, reload_handle: Handle<LevelFilter, Registry>) {
     event!(Level::INFO, "Runing Debug session");
     use std::io;
     let mut break_points: HashSet<usize> = HashSet::new();
@@ -220,6 +220,9 @@ fn debug_bios(mut cpu: CPU, mut memory: SystemMemory, mut ppu: PPU) {
                 println!("{}", cpu);
             },
             DebuggerCommand::Quit => break,
+            DebuggerCommand::LogLevel(lf) => {
+                let _ = reload_handle.modify(|filter| *filter = lf);
+            },
             DebuggerCommand::ReadMem(address) => {
                 match memory.read_word(address) {
                     Ok(d) =>  println!("{:x}: {:x}", address, d),

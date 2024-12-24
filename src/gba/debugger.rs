@@ -1,5 +1,6 @@
 use core::fmt;
 use std::str::SplitWhitespace;
+use tracing_subscriber::filter::LevelFilter;
 
 #[derive(Debug, PartialEq)]
 pub enum DebuggerCommand {
@@ -8,6 +9,7 @@ pub enum DebuggerCommand {
     Info,
     ReadMem(usize),
     WriteMem(u32, usize),
+    LogLevel(LevelFilter),
     Next,
     Quit,
 }
@@ -67,7 +69,22 @@ impl DebuggerCommand {
                 };
 
                 DebuggerCommand::Continue(ContinueSubcommand::For(lines as usize))
-            }
+            },
+            "l" | "log_level" => {
+                if let Some(l) = cmd_iter.next() {
+                    match l {
+                        "error" => DebuggerCommand::LogLevel(LevelFilter::ERROR),
+                        "warn" => DebuggerCommand::LogLevel(LevelFilter::WARN),
+                        "info" => DebuggerCommand::LogLevel(LevelFilter::INFO),
+                        "debug" => DebuggerCommand::LogLevel(LevelFilter::DEBUG),
+                        "trace" => DebuggerCommand::LogLevel(LevelFilter::TRACE),
+                        "off" => DebuggerCommand::LogLevel(LevelFilter::OFF),
+                        _ => return Err(CommandParseError::CommandNotRecognized(command.to_string()))
+                    }
+                } else {
+                    return Err(CommandParseError::CommandMissingArguments(command.to_string()))
+                }
+            },
             "i" | "info" => DebuggerCommand::Info,
             "n" | "next" => DebuggerCommand::Next,
             "q" | "quit" => DebuggerCommand::Quit,
