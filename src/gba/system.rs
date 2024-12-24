@@ -1,7 +1,7 @@
 use core::fmt;
 use tracing::trace;
-
 use super::dma::DmaControl;
+
 
 const KILOBYTE: usize = 1024;
 const WORD: u32 = 0xffffffff;
