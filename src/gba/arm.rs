@@ -132,17 +132,15 @@ impl From<u32> for DataProcessingOp {
 
 impl Operation for DataProcessingOp {
     fn run(&self, cpu: &mut CPU, _mem: &mut SystemMemory) {
-        let (rhs, c_out) = self.get_operand2(cpu);
+        let (rhs, c_out, cycle) = self.get_operand2(cpu);
         let mut cycles = 1;
         let rn_value = cpu.get_register(self.rn as usize) as u64;
 
         let op2 = match rhs {
             Operand::Imm(x) => x,
-            Operand::Shift(x) => {
-                cycles += 1;
-                x
-            },
+            Operand::Shift(x) => x
         };
+        cycles += cycle;
 
         if self.rd as usize == PC {
             cycles += 1;
@@ -257,7 +255,7 @@ impl DataProcessingOp {
         self.opcode == DataProcessingType::MVN
     }
 
-    fn get_operand2(&self, cpu: &CPU) -> (Operand, bool) {
+    fn get_operand2(&self, cpu: &CPU) -> (Operand, bool, u32) {
         let c_in = (cpu.cpsr & CPSR_C) != 0;
         if self.i {
             let rotate = (self.operand >> 8 & 0xf) as u32;
@@ -269,21 +267,22 @@ impl DataProcessingOp {
                 // we gotta rotate by twice the amount
                 op.ror_with_carry(rotate * 2)
             };
-            (Operand::Imm(res), c_out)
+            (Operand::Imm(res), c_out, 0)
         }
         else {
             let shift = (self.operand >> 4 & 0xff) as u32;
 
             // TODO: This is hard to read
-            let (s, s_type) = if bit_is_one_at(shift, 0) {
+            // TODO: Only add another cycle if we shift by register
+            let (s, s_type, cycle) = if bit_is_one_at(shift, 0) {
                 let val = cpu.get_register((shift >> 4 & 0xf) as usize);
                 if val == 0 {
-                    (val, ShiftType::LSL)
+                    (val, ShiftType::LSL, 0)
                 } else {
-                    (val, ShiftType::from((shift >> 1) & 3))
+                    (val, ShiftType::from((shift >> 1) & 3), 1)
                 }
             } else {
-                ((shift >> 3) & 0x1f, ShiftType::from((shift >> 1) & 3))
+                ((shift >> 3) & 0x1f, ShiftType::from((shift >> 1) & 3), 0)
             };
 
             let rm = (self.operand & 0xf) as usize;
@@ -321,7 +320,7 @@ impl DataProcessingOp {
                     }
                 },
             };
-            (Operand::Shift(res), c_out)
+            (Operand::Shift(res), c_out, cycle)
         }
     }
 }
