@@ -195,12 +195,16 @@ fn debug_bios(mut cpu: CPU, mut memory: SystemMemory, mut ppu: PPU, reload_handl
                 }
             },
             DebuggerCommand::Continue(ContinueSubcommand::Endless) => {
+                cpu.tick(&mut memory);
+                ppu.tick(cpu.cycles(), &mut memory);
+
                 while !break_points.contains(&cpu.instruction_address()) {
                     cpu.tick(&mut memory);
                     if ppu.tick(cpu.cycles(), &mut memory) {
                         println!("{}", cpu);
                     }
                 }
+                println!("{}", cpu);
             },
             DebuggerCommand::Continue(ContinueSubcommand::For(l)) => {
                 let mut n = 0;

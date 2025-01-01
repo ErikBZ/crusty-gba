@@ -1,5 +1,6 @@
 use crate::utils::{bit_is_one_at, Bitable};
 use crate::utils::shifter::ShiftWithCarry;
+use super::system::read_cycles_for_address;
 use super::{Operation, SystemMemory, get_v_from_sub, get_v_from_add, bit_map_to_array};
 use super::{CPSR_C, CPSR_T};
 use super::cpu::{CPU,PC, LR};
@@ -844,6 +845,7 @@ impl Operation for BlockDataTransfer {
         }
 
         let n = registers.len() as u32;
+        let cycles_per = read_cycles_for_address(address);
         if self.l {
             // NOTE nS + 1N + 1I
             // NOTE (n+1)S + 2N + 1I when PC is in register_list 
@@ -854,7 +856,8 @@ impl Operation for BlockDataTransfer {
             }
         } else {
             // NOTE: (n-1)S + 2N
-            cpu.add_cycles(n + 1)
+            let x = (cycles_per * n) + 1;
+            cpu.add_cycles(x)
         }
     }
 }
