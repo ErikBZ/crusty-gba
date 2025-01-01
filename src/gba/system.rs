@@ -17,8 +17,8 @@ pub fn read_cycles_for_address(address: usize) -> u32 {
     let mem_type = address >> 24 & 0xf;
     match mem_type {
         0x0 | 0x3 | 0x4 |0x7 => 1,
-        0x2 | 0x6 => 6,
-        0x5 => 2,
+        0x2 => 6,
+        0x5 | 0x6 => 2,
         // Might be differnet
         0x8 | 0x9 => 1,
         0xa | 0xb => 2,
