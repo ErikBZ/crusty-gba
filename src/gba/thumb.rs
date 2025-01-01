@@ -869,6 +869,7 @@ impl Operation for PushPopRegOp {
             }
         }
 
+        // NOTE: This only read from the SP so it's always a cycle per entry of 1
         let n = registers.len() as u32;
         if self.l {
             if registers.contains(&(PC as u32)) {

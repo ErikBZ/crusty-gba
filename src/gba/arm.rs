@@ -6,8 +6,23 @@ use super::{CPSR_C, CPSR_T};
 use super::cpu::{CPU,PC, LR};
 use tracing::warn;
 
-// TODO: currently all regs are u8 or u32 types, maybe they should be usizes
+pub fn calc_cycles_for_stm_ldm(cycles_per_entry: u32, entries: u32, load: bool, is_pc: bool) -> u32 {
+    // TODO: Double check this. It may be wrong, but assuming it's right for now
+    if load {
+        if is_pc {
+            // NOTE (n+1)S + 2N + 1I when PC is in register_list
+            (cycles_per_entry * entries) + 4
+        } else {
+            // NOTE nS + 1N + 1I
+            (cycles_per_entry * entries) + 2
+        }
+    } else {
+        // NOTE: (n-1)S + 2N
+        (cycles_per_entry * entries) + 1
+    }
+}
 
+// TODO: currently all regs are u8 or u32 types, maybe they should be usizes
 pub fn decode_as_arm(inst: u32) -> Box<dyn Operation> {
     if is_multiply(inst) {
        Box::new(MultiplyOp::from(inst))
@@ -844,21 +859,10 @@ impl Operation for BlockDataTransfer {
             }
         }
 
-        let n = registers.len() as u32;
-        let cycles_per = read_cycles_for_address(address);
-        if self.l {
-            // NOTE nS + 1N + 1I
-            // NOTE (n+1)S + 2N + 1I when PC is in register_list 
-            if registers.contains(&(PC as u32)) {
-                cpu.add_cycles(n + 4)
-            } else {
-                cpu.add_cycles(n + 2)
-            }
-        } else {
-            // NOTE: (n-1)S + 2N
-            let x = (cycles_per * n) + 1;
-            cpu.add_cycles(x)
-        }
+        let entries = registers.len() as u32;
+        let cycles_per_entry = read_cycles_for_address(address);
+        let cycles = calc_cycles_for_stm_ldm(cycles_per_entry, entries, self.l, registers.contains(&(PC as u32)));
+        cpu.add_cycles(cycles);
     }
 }
 
