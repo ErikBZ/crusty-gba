@@ -64,7 +64,7 @@ fn main() -> Result<(), Error> {
     let game_pak: Vec<u32> = read_file_into_u32(&mut game_rom);
     let cpu = CPU::default();
     let ppu = PPU::default();
-    let mut memory = SystemMemory::default();
+    let mut memory = SystemMemory::new();
     memory.copy_bios(bios);
     memory.copy_game_pak(game_pak);
     event!(Level::INFO, "Copied the stuff over");

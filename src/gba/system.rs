@@ -1,5 +1,5 @@
 use core::fmt;
-use tracing::trace;
+use tracing::{trace, warn};
 use super::dma::DmaControl;
 
 
@@ -87,6 +87,12 @@ impl Default for SystemMemory {
 }
 
 impl SystemMemory {
+    pub fn new() -> Self {
+        let mut x = Self::default();
+        let _ = x.write_word(0x4000088, 0x200);
+        x
+    }
+
     pub fn copy_bios(&mut self, bios: Vec<u32>) {
         self.system_rom = bios;
     }
@@ -117,15 +123,15 @@ impl SystemMemory {
         let i = (address & 0xffffff) >> 2;
         let shift = (address & 0x3) * 8;
 
-        let mut data = self.read_from_mem(address)?;
-        data = (data & !(mask << shift)) | ((block & mask) << shift);
-        trace!("addr: {:x}, old value: {:x}, new_value: {:x}", address, data, block);
+        let old_data = self.read_from_mem(address)?;
+        let new_data = (old_data & !(mask << shift)) | ((block & mask) << shift);
+        trace!("addr: {:x}, old value: {:x}, new_value: {:x}", address, old_data, new_data);
 
         let ram: &mut Vec<u32> = self.memory_map(address)?;
         if i > ram.len() {
             Err(MemoryError::OutOfBounds(address, i))
         } else {
-            ram[i] = data;
+            ram[i] = new_data;
             Ok(())
         }
     }
