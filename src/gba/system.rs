@@ -13,6 +13,10 @@ const INTERNAL_DMA_CONTROL_1: usize = 0x0000c6;
 const INTERNAL_DMA_CONTROL_2: usize = 0x0000d2;
 const INTERNAL_DMA_CONTROL_3: usize = 0x0000de;
 
+fn address_shift(addr: usize) -> usize {
+    (addr & 0xffffff) >> 2
+}
+
 pub fn read_cycles_for_address(address: usize) -> u32 {
     let mem_type = address >> 24 & 0xf;
     match mem_type {
@@ -42,6 +46,8 @@ impl fmt::Display for MemoryError {
         }
     } 
 }
+
+struct ReadOnlyMapping(Vec<u32>);
 
 pub struct SystemMemory {
     system_rom: Vec<u32>,
@@ -104,6 +110,15 @@ impl SystemMemory {
 
 
 impl SystemMemory {
+    fn get_readonly_mask(&self, addr: usize) -> Option<u32> {
+        match addr {
+            0x4000004 => Some(0xff0043),
+            0x4000080 => Some(0x88000000),
+            0x4000084 => Some(0x0000000b),
+            _ => None,
+        }
+    }
+
     pub fn write_word(&mut self, address: usize, block: u32) -> Result<(), MemoryError> {
         self.write_with_mask(address, block, WORD)?;
         Ok(())
@@ -124,7 +139,14 @@ impl SystemMemory {
         let shift = (address & 0x3) * 8;
 
         let old_data = self.read_from_mem(address)?;
-        let new_data = (old_data & !(mask << shift)) | ((block & mask) << shift);
+        // Make sure we don't overwrite readonly data
+        let write_only_block = if let Some(readonly_mask) = self.get_readonly_mask(address) {
+            old_data & readonly_mask | block & !readonly_mask
+        } else {
+            block
+        };
+
+        let new_data = (old_data & !(mask << shift)) | ((write_only_block & mask) << shift);
         trace!("addr: {:x}, old value: {:x}, new_value: {:x}", address, old_data, new_data);
 
         let ram: &mut Vec<u32> = self.memory_map(address)?;
@@ -167,7 +189,6 @@ impl SystemMemory {
     pub fn read_from_mem(&mut self, address: usize) -> Result<u32, MemoryError> {
         let ram: &Vec<u32> = self.memory_map(address)?;
         let mem_address = (address & 0xffffff) >> 2;
-
 
         if mem_address >= ram.len() {
             Err(MemoryError::OutOfBounds(address, mem_address))
