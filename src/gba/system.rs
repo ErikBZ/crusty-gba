@@ -17,17 +17,27 @@ fn address_shift(addr: usize) -> usize {
     (addr & 0xffffff) >> 2
 }
 
-pub fn read_cycles_for_address(address: usize) -> u32 {
+pub fn read_cycles_per_8_16(address: usize) -> u32 {
     let mem_type = address >> 24 & 0xf;
     match mem_type {
         0x0 | 0x3 | 0x4 |0x7 => 1,
+        0x2 => 3,
+        0x5 | 0x6 => 1,
+        // Might be differnet
+        0x8 | 0x9 | 0xa | 0xb | 0xc | 0xd => 5,
+        0xe => 5,
+        _ => 1,
+    }
+}
+
+pub fn read_cycles_per_32(address: usize) -> u32 {
+    let mem_type = address >> 24 & 0xf;
+    match mem_type {
         0x2 => 6,
         0x5 | 0x6 => 2,
-        // Might be differnet
-        0x8 | 0x9 => 1,
-        0xa | 0xb => 2,
-        0xc | 0xd => 3,
-        0xe => 5,
+        // Might be differnet in certain cases?
+        0x8 | 0x9 | 0xa | 0xb | 0xc | 0xd => 8,
+        0xe => panic!(),
         _ => 1,
     }
 }

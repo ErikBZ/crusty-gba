@@ -1,4 +1,7 @@
+use std::fs::read;
+
 use super::cpu::{LR, PC, SP};
+use super::system::{read_cycles_per_32, read_cycles_per_8_16};
 use super::{add_nums, bit_map_to_array, get_abs_int_value, get_v_from_add, get_v_from_sub, is_signed, subtract_nums, Conditional, Operation, CPSR_C, CPSR_T};
 use crate::utils::shifter::ShiftWithCarry;
 use crate::{SystemMemory, CPU};
@@ -399,13 +402,13 @@ impl Operation for HiRegOp {
     }
 }
 
-fn cycles_for_str_ldr(l: bool, pc: bool) -> u32 {
+fn cycles_for_str_ldr(l: bool, pc: bool, cycles: u32) -> u32 {
     if l && pc {
         // 2S + 2N + 1I
-        5
+        4 + cycles
     } else if l && !pc {
         // 1S + 1N + 1I
-        3
+        2 + cycles
     } else {
         // 2N
         2
@@ -443,7 +446,8 @@ impl Operation for PcRelativeLoadOp {
 
         cpu.set_register(self.rd, block_from_mem);
         cpu.add_cycles(
-            cycles_for_str_ldr(true, self.rd == PC)
+            // TOOD: will this ever be anything other than 1?
+            cycles_for_str_ldr(true, self.rd == PC, 1)
         )
     }
 }
@@ -481,41 +485,44 @@ impl Operation for LoadStoreRegOffsetOp {
         };
 
         if self.l {
-            let block_from_mem = match mem.read_from_mem(addr) {
+            let block = if self.b {
+                mem.read_byte(addr)
+            } else {
+                mem.read_word(addr)
+            };
+
+            let data = match block {
                 Ok(n) => n,
                 Err(e) => {
                     warn!("{}", e);
                     panic!()
-                },
-            };
-
-            let data = if self.b {
-                block_from_mem
-            } else {
-                block_from_mem & 0xff
+                }
             };
             cpu.set_register(self.rd, data);
         } else {
             // TODO: Rewrite with let x if, and match on the result x
-            if self.b {
-                match mem.write_word(addr, cpu.get_register(self.rd)) {
-                    Ok(_) => (),
-                    Err(e) => {
-                        warn!("{}", e)
-                    }
-                }
+            let res = if self.b {
+                mem.write_word(addr, cpu.get_register(self.rd))
             } else {
-                match mem.write_byte(addr, cpu.get_register(self.rd)) {
-                    Ok(_) => (),
-                    Err(e) => {
-                        warn!("{}", e)
-                    }
+                mem.write_byte(addr, cpu.get_register(self.rd))
+            };
+
+            match res {
+                Ok(_) => (),
+                Err(e) => {
+                    warn!("{}", e)
                 }
             }
         }
 
+        let cycles = if self.b {
+            read_cycles_per_8_16(addr)
+        } else {
+            read_cycles_per_32(addr)
+        };
+
         cpu.add_cycles(
-            cycles_for_str_ldr(self.l, self.rd == PC)
+            cycles_for_str_ldr(self.l, self.rd == PC, cycles)
         );
     }
 }
@@ -571,8 +578,9 @@ impl Operation for LoadStoreSignExOp {
             cpu.set_register(self.rd, data);
         }
 
+        let cycles = read_cycles_per_8_16(addr);
         cpu.add_cycles(
-            cycles_for_str_ldr(!(self.s && self.h), self.rd == PC)
+            cycles_for_str_ldr(self.s || self.h, self.rd == PC, cycles)
         );
     }
 }
@@ -602,24 +610,19 @@ impl Operation for LoadStoreImmOffsetOp {
     fn run(&self, cpu: &mut CPU, mem: &mut SystemMemory) {
         let addr = (cpu.get_register(self.rb) + if self.b { self.offset } else { self.offset << 2 }) as usize;
         if self.l {
-            let res = if self.b {
-                match mem.read_byte(addr) {
-                    Ok(n) => n,
-                    Err(e) => {
-                        warn!("{}", e);
-                        0
-                    }
-                }
+            let val = if self.b {
+                mem.read_byte(addr)
             } else {
-                match mem.read_word(addr) {
-                    Ok(n) => n,
-                    Err(e) => {
-                        warn!("{}", e);
-                        0
-                    }
-                }
+                mem.read_word(addr)
             };
 
+            let res = match val {
+                Ok(n) => n,
+                Err(e) => {
+                    warn!("{}", e);
+                    0
+                }
+            };
             cpu.set_register(self.rd, res);
         } else {
             let res = if self.b {
@@ -634,8 +637,14 @@ impl Operation for LoadStoreImmOffsetOp {
             }
         }
 
+        let cycles = if self.b {
+            read_cycles_per_8_16(addr)
+        } else {
+            read_cycles_per_32(addr)
+        };
+
         cpu.add_cycles(
-            cycles_for_str_ldr(self.l, self.rd == PC)
+            cycles_for_str_ldr(self.l, self.rd == PC, cycles)
         );
     }
 }
@@ -681,8 +690,10 @@ impl Operation for LoadStoreHalfWordOp {
             }
         }
 
+        let cycles = read_cycles_per_32(addr);
+
         cpu.add_cycles(
-            cycles_for_str_ldr(self.l, self.rd == PC)
+            cycles_for_str_ldr(self.l, self.rd == PC, cycles)
         );
     }
 }
@@ -727,9 +738,10 @@ impl Operation for SpRelativeLoadOp {
                 }
             }
         }
+        let cycles = read_cycles_per_32(addr);
 
         cpu.add_cycles(
-            cycles_for_str_ldr(self.l, self.rd == PC)
+            cycles_for_str_ldr(self.l, self.rd == PC, cycles)
         );
     }
 }
@@ -758,7 +770,7 @@ impl Operation for LoadAddressOp {
         } else {
             // TODO: Adding 2 here because it's 2 ahead where it should be.
             // BUG: Fix Pipeline
-            (cpu.get_register(PC) & !1) + self.word - 2
+            (cpu.get_register(PC) & !1) + self.word
         };
 
         cpu.set_register(self.rd, res);

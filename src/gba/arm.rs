@@ -1,6 +1,6 @@
 use crate::utils::{bit_is_one_at, Bitable};
 use crate::utils::shifter::ShiftWithCarry;
-use super::system::read_cycles_for_address;
+use super::system::{read_cycles_per_32, read_cycles_per_8_16};
 use super::{Operation, SystemMemory, get_v_from_sub, get_v_from_add, bit_map_to_array};
 use super::{CPSR_C, CPSR_T};
 use super::cpu::{CPU,PC, LR};
@@ -860,7 +860,7 @@ impl Operation for BlockDataTransfer {
         }
 
         let entries = registers.len() as u32;
-        let cycles_per_entry = read_cycles_for_address(address);
+        let cycles_per_entry = read_cycles_per_32(address);
         let cycles = calc_cycles_for_stm_ldm(cycles_per_entry, entries, self.l, registers.contains(&(PC as u32)));
         cpu.add_cycles(cycles);
     }
