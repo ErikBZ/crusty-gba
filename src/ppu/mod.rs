@@ -43,7 +43,7 @@ impl Default for PPU {
             h_count: 0,
             v_count: 0,
             frame: 0,
-            next_frame: vec![0; 240 * 160 * 4]
+            next_frame: vec![20; 240 * 160 * 4]
         }
     }
 }

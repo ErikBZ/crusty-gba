@@ -14,7 +14,7 @@ use gba::system::SystemMemory;
 use tracing::{error, event, Level};
 use tracing_subscriber::{fmt, reload, prelude::*};
 use tracing_subscriber::filter::LevelFilter;
-use crate::renderer::{run_gui, run_debug};
+use crate::renderer::{run_gui, run_debug, run_ratatui};
 
 use pixels::Error;
 
@@ -60,7 +60,10 @@ fn main() -> Result<(), Error> {
             let _ = run_gui(cpu, memory, reload_handle);
             ()
         },
-        _ => (),
+        cli::Renderer::Ratatui => {
+            let _ = run_ratatui();
+            ()
+        },
     };
 
     Ok(())

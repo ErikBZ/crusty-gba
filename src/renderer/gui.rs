@@ -63,7 +63,7 @@ pub fn run_gui(mut cpu: CPU, mut memory: SystemMemory, reload_handle: Handle<Lev
                         pixel[0] = ppu_buffer[i];
                         pixel[1] = ppu_buffer[i + 1];
                         pixel[2] = ppu_buffer[i + 2];
-                        pixel[3] = ppu_buffer[i + 3];
+                        pixel[3] = u8::max_value();
                         i += 4;
                     }
                 }
