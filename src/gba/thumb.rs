@@ -775,7 +775,7 @@ impl Operation for LoadAddressOp {
         } else {
             // TODO: Adding 2 here because it's 2 ahead where it should be.
             // BUG: Fix Pipeline
-            (cpu.get_register(PC) & !1) + self.word
+            (cpu.get_register(PC) & !3) + self.word
         };
 
         cpu.set_register(self.rd, res);
