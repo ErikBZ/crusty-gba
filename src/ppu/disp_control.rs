@@ -1,4 +1,16 @@
-use crate::utils::{bit_is_one_at, Bitable};
+use crate::{gba::system::{MemoryError, SystemMemory}, utils::{bit_is_one_at, Bitable}};
+const DISP_STAT: usize = 0x4000000;
+const DISP_CONTROL: usize = 0x4000004;
+
+pub fn display_control(ram: &mut SystemMemory) -> Result<DisplayControl, MemoryError> {
+    let data = ram.read_word(DISP_CONTROL)?;
+    Ok(DisplayControl::from(data))
+}
+
+pub fn display_stat(ram: &mut SystemMemory) -> Result<DisplayStat, MemoryError> {
+    let data = ram.read_word(DISP_STAT)?;
+    Ok(DisplayStat::from(data))
+}
 
 pub(super) struct DisplayControl {
     pub bg_mode: u32,

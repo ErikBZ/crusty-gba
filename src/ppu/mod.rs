@@ -3,9 +3,10 @@ mod bg_control;
 mod window_control;
 mod color_effect;
 
-use tracing::{warn, trace, info, debug};
+use bg_control::{bg_control0, bg_control1, bg_control2, bg_control3, BgControl};
+use tracing::{warn, trace, info, debug, error};
 use crate::{gba::system::MemoryError, utils::Bitable, SystemMemory};
-use disp_control::DisplayControl;
+use disp_control::{display_control, DisplayControl};
 // Base off of https://github.com/tuzz/game-loop 
 
 // Values for controlling how the PPU draws pixels to the display
@@ -116,10 +117,48 @@ impl PPU {
         }
     }
 
-    pub fn get_next_frame(&mut self, ram: &SystemMemory) -> Vec<u8> {
+    pub fn get_next_frame(&mut self, ram: &mut SystemMemory) -> Vec<u8> {
+        let disp_control = display_control(ram).expect("Something went wrong grabbing the display control");
+        let bgs: Vec<BgControl> = match get_bgs(&disp_control, ram) {
+            Ok(b) => b,
+            Err(e) => {
+                panic!("Err occured: {}", e)
+            }
+        };
+
         self.next_frame.clone()
     }
 } 
+
+fn get_bgs(disp_control: &DisplayControl, ram: &mut SystemMemory) -> Result<Vec<BgControl>, MemoryError> {
+    let mut bgs: Vec<BgControl> = Vec::new();
+
+    match disp_control.bg_mode {
+        0 => {
+            if disp_control.display_bg0 { bgs.push(bg_control0(ram)?); }
+            if disp_control.display_bg1 { bgs.push(bg_control1(ram)?); }
+            if disp_control.display_bg2 { bgs.push(bg_control2(ram)?); }
+            if disp_control.display_bg3 { bgs.push(bg_control3(ram)?); }
+        },
+        1 => {
+            if disp_control.display_bg0 { bgs.push(bg_control0(ram)?); }
+            if disp_control.display_bg1 { bgs.push(bg_control1(ram)?); }
+            if disp_control.display_bg2 { bgs.push(bg_control2(ram)?); }
+        },
+        2 => {
+            if disp_control.display_bg2 { bgs.push(bg_control2(ram)?); }
+            if disp_control.display_bg3 { bgs.push(bg_control3(ram)?); }
+        }
+        3 | 4| 5 => {
+            if disp_control.display_bg2 { bgs.push(bg_control2(ram)?); }
+        }
+        _ => {
+            error!("Background Mode cannot be more than 5");
+            panic!()
+        }
+    }
+    Ok(bgs)
+}
 
 struct Mosaic {
     bg_h: i32,

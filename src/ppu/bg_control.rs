@@ -1,4 +1,25 @@
-use crate::utils::Bitable;
+use crate::{gba::system::{MemoryError, SystemMemory}, utils::Bitable};
+const BG_CONTROL0: usize = 0x4000008;
+const BG_CONTROL1: usize = 0x400000a;
+const BG_CONTROL2: usize = 0x400000c;
+const BG_CONTROL3: usize = 0x400000e;
+
+pub fn bg_control0(ram: &mut SystemMemory) -> Result<BgControl, MemoryError> {
+    let data = ram.read_halfword(BG_CONTROL0)?;
+    Ok(BgControl::from(data))
+}
+pub fn bg_control1(ram: &mut SystemMemory) -> Result<BgControl, MemoryError> {
+    let data = ram.read_halfword(BG_CONTROL0)?;
+    Ok(BgControl::from(data))
+}
+pub fn bg_control2(ram: &mut SystemMemory) -> Result<BgControl, MemoryError> {
+    let data = ram.read_halfword(BG_CONTROL0)?;
+    Ok(BgControl::from(data))
+}
+pub fn bg_control3(ram: &mut SystemMemory) -> Result<BgControl, MemoryError> {
+    let data = ram.read_halfword(BG_CONTROL0)?;
+    Ok(BgControl::from(data))
+}
 
 pub(super) struct BgControl {
     pub bg_priority: u32,
@@ -8,7 +29,6 @@ pub(super) struct BgControl {
     pub screen_base_block: usize,
     pub display_area_wraparound: bool,
     pub screen_size: u32,
-
 }
 
 impl From<u32> for BgControl {

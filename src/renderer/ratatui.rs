@@ -29,8 +29,8 @@ pub fn run_ratatui() -> Result<(), std::io::Error> {
 
 // will probably have to split each char
 fn render(frame: &mut Frame) {
-    let area = ratatui::layout::Rect { x: 0, y: 0, width: 100, height: 100 };
+    let area = ratatui::layout::Rect { x: 3, y: 1, width: 1, height: 4 };
     let mut thing = Cell::new("x");
-    thing.set_bg(Color::from_u32(0x60606060));
+    thing.set_bg(Color::from_u32(0x60ff6060));
     *frame.buffer_mut() = Buffer::filled(area, thing)
 }

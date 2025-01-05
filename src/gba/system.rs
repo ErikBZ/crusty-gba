@@ -168,6 +168,7 @@ impl SystemMemory {
         }
     }
 
+    // TODO: Makes this only borrow
     pub fn read_word(&mut self, address: usize) -> Result<u32, MemoryError> {
         let res = self.read_from_mem(address)?;
         Ok(res)
