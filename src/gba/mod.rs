@@ -172,3 +172,15 @@ pub fn bit_map_to_array(bitmap: u32) -> Vec<u32> {
     arr
 }
 
+fn count_cycles(mult_operand: u32) -> u32 {
+    if (mult_operand & 0xffffff00) == 0 || (mult_operand & 0xffffff00 == 0xffffff00) {
+        2
+    } else if (mult_operand & 0xffff0000) == 0 || (mult_operand & 0xffff0000 == 0xffff0000) {
+        3
+    } else if (mult_operand & 0xff000000) == 0 || (mult_operand & 0xff000000 == 0xff000000) {
+        4
+    } else {
+        5
+    }
+}
+

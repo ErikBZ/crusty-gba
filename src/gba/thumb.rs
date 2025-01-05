@@ -2,7 +2,7 @@ use std::fs::read;
 
 use super::cpu::{LR, PC, SP};
 use super::system::{read_cycles_per_32, read_cycles_per_8_16};
-use super::{add_nums, bit_map_to_array, get_abs_int_value, get_v_from_add, get_v_from_sub, is_signed, subtract_nums, Conditional, Operation, CPSR_C, CPSR_T};
+use super::{add_nums, bit_map_to_array, count_cycles, get_abs_int_value, get_v_from_add, get_v_from_sub, is_signed, subtract_nums, Conditional, Operation, CPSR_C, CPSR_T};
 use crate::utils::shifter::ShiftWithCarry;
 use crate::{SystemMemory, CPU};
 use tracing::warn;
@@ -143,6 +143,7 @@ impl From<u32> for AddSubtractOp {
 }
 
 impl Operation for AddSubtractOp {
+    // TODO: PC is being tracked incorrectly. Gotta fix that
     fn run(&self, cpu: &mut super::cpu::CPU, _mem: &mut SystemMemory) {
         let offset = if self.i {
             self.offset
@@ -314,10 +315,14 @@ impl Operation for ALUOp {
             _ => cpu.set_register(self.rd, res),
         }
 
+        let cycles = match self.op {
+            7 => 2,
+            13 => count_cycles(rs_value as u32),
+            _ => 1,
+        };
+
         cpu.update_cpsr(res, v_status, c_status);
-        // TODO: Do we need to add the 1S for shifts?
-        // NOTE: 1S
-        cpu.add_cycles(1);
+        cpu.add_cycles(cycles);
     }
 }
 
