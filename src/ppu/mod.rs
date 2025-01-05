@@ -31,7 +31,9 @@ pub struct PPU {
     old_cycle: u32,
     h_count: u32,
     v_count: u32,
+    // rename to frame_counter?
     frame: u32,
+    next_frame: Vec<u8>,
 }
 
 impl Default for PPU {
@@ -41,6 +43,7 @@ impl Default for PPU {
             h_count: 0,
             v_count: 0,
             frame: 0,
+            next_frame: vec![0; 240 * 160 * 4]
         }
     }
 }
@@ -111,6 +114,10 @@ impl PPU {
         } else {
             ram.write_byte(V_COUNT_ADDR, self.v_count).map(|_| false)
         }
+    }
+
+    pub fn get_next_frame(&mut self, ram: &SystemMemory) -> Vec<u8> {
+        self.next_frame.clone()
     }
 } 
 
