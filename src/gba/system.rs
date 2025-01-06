@@ -1,4 +1,4 @@
-use core::fmt;
+use core::{fmt, slice::SlicePattern};
 use tracing::{trace, warn};
 use super::dma::DmaControl;
 
@@ -240,6 +240,10 @@ impl SystemMemory {
             0xe => Ok(&mut self.cart_ram),
             _ => Err(MemoryError::MapNotFound(address))
         }
+    }
+
+    pub fn get_oam(&self) -> &[u32] {
+        self.oam.as_slice()
     }
 }
 

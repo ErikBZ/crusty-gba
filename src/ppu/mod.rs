@@ -2,6 +2,7 @@ mod disp_control;
 mod bg_control;
 mod window_control;
 mod color_effect;
+mod oam_attribute;
 
 use bg_control::{bg_control0, bg_control1, bg_control2, bg_control3, BgControl};
 use tracing::{warn, trace, info, debug, error};
@@ -44,7 +45,7 @@ impl Default for PPU {
             h_count: 0,
             v_count: 0,
             frame: 0,
-            next_frame: vec![20; 240 * 160 * 4]
+            next_frame: vec![255; 240 * 160 * 4]
         }
     }
 }
@@ -126,6 +127,17 @@ impl PPU {
             }
         };
 
+        info!("Display Control: {:?}, BGs enabled: {}", disp_control, bgs.len());
+        // Do stuff with BGs here:
+        //
+
+        // OBJ stuff
+        let obj_buffer: Option<Vec<u8>> = if disp_control.display_obj {
+            Some(Vec::new())
+        } else {
+            None
+        };
+
         self.next_frame.clone()
     }
 } 
@@ -158,6 +170,13 @@ fn get_bgs(disp_control: &DisplayControl, ram: &mut SystemMemory) -> Result<Vec<
         }
     }
     Ok(bgs)
+}
+
+// Where do we start reading, and how many do we read?
+fn get_obj_buffer(ram: &mut SystemMemory, display_control: &DisplayControl) -> Vec<u8> {
+    let oam = ram.get_oam();
+
+    todo!()
 }
 
 struct Mosaic {
