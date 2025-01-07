@@ -1,4 +1,4 @@
-use core::{fmt, slice::SlicePattern};
+use core::fmt;
 use tracing::{trace, warn};
 use super::dma::DmaControl;
 
