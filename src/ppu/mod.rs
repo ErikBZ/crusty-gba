@@ -179,8 +179,8 @@ fn get_obj_buffer(ram: &mut SystemMemory, display_control: &DisplayControl) -> V
     let oam = ram.get_oam();
     let mut objs: Vec<OamAttribute> = Vec::new();
 
-    for chunk in oam.chunks(4) {
-        if is_oam_entry_enabled(&chunk[0..2]) {
+    for chunk in oam.chunks(2) {
+        if is_oam_entry_enabled(chunk) {
             objs.push(OamAttribute::from(chunk));
         }
     }

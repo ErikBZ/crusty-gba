@@ -49,11 +49,11 @@ impl From<&[u32]> for Transformation {
     fn from(value: &[u32]) -> Self {
         let rot = value[0] & ROT_SCALE_FLAG == ROT_SCALE_FLAG;
         if rot {
-            let rot_scale_param = (value[1] >> 9) & 0x1f;
+            let rot_scale_param = (value[0] >> 24) & 0x1f;
             Transformation::RotScale {idx: rot_scale_param as usize}
         } else {
-            let horizontal = (value[1] >> 12) == 0x1;
-            let veritical = (value[1] >> 13) == 0x1;
+            let horizontal = (value[0] >> 27) == 0x1;
+            let veritical = (value[0] >> 28) == 0x1;
             Transformation::Flip { horizontal, veritical }
         }
     }
@@ -71,10 +71,10 @@ impl From<&[u32]> for OamAttribute {
             colors: value[0].bit_is_high(13),
             obj_shape: (value[0] >> 14) & 0b11,
             transformation: Transformation::from(value),
-            obj_size: (value[1] >> 14) & 0b11,
-            character_name: value[2] & 0x3ff,
-            priority: (value[2] >> 10) & 0b11,
-            palette: ((value[2] >> 12) & 0b111) as usize,
+            obj_size: (value[0] >> 29) & 0b11,
+            character_name: value[1] & 0x3ff,
+            priority: (value[1] >> 10) & 0b11,
+            palette: ((value[1] >> 12) & 0b111) as usize,
         }
     }
 }

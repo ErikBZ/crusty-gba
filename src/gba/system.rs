@@ -89,13 +89,14 @@ impl fmt::Debug for SystemMemory {
 impl Default for SystemMemory {
     fn default() -> Self {
         Self {
-            system_rom: vec![0; 16 * KILOBYTE],
-            ewram: vec![0; 256 * KILOBYTE],
-            iwram: vec![0; 0x1000000],
-            io_ram: vec![0; 1 * KILOBYTE],
-            pal_ram: vec![0; 1 * KILOBYTE],
+            // Should be divded by 4 since u32 are already 4 bytes
+            system_rom: vec![0; (16 * KILOBYTE) / 4],
+            ewram: vec![0; (256 * KILOBYTE) / 4],
+            iwram: vec![0; (0x1000000) / 4],
+            io_ram: vec![0; (1 * KILOBYTE) / 4],
+            pal_ram: vec![0; (1 * KILOBYTE) / 4],
             vram: vec![0; 96 * KILOBYTE],
-            oam: vec![0; 1 * KILOBYTE],
+            oam: vec![0; 1 * (KILOBYTE / 4)],
             pak_rom: vec![0; 16 * 1],
             cart_ram: vec![0; 16 * 1],
         }
