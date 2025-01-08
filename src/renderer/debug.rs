@@ -47,6 +47,7 @@ pub fn run_debug(mut cpu: CPU, mut memory: SystemMemory, mut ppu: PPU, reload_ha
                     cpu.tick(&mut memory);
                     if ppu.tick(cpu.cycles(), &mut memory) {
                         println!("{}", cpu);
+                        let _ = ppu.get_next_frame(&mut memory);
                     }
                 }
                 println!("{}", cpu);
@@ -55,15 +56,19 @@ pub fn run_debug(mut cpu: CPU, mut memory: SystemMemory, mut ppu: PPU, reload_ha
                 let mut n = 0;
                 while !break_points.contains(&cpu.instruction_address()) && l > n {
                     cpu.tick(&mut memory);
-                    ppu.tick(cpu.cycles(), &mut memory);
+                    if ppu.tick(cpu.cycles(), &mut memory) {
+                        let _ = ppu.get_next_frame(&mut memory);
+                        println!("{}", cpu);
+                    };
 
-                    println!("{}", cpu);
                     n += 1;
                 }
             },
             DebuggerCommand::Next => {
                 cpu.tick(&mut memory);
-                ppu.tick(cpu.cycles(), &mut memory);
+                if ppu.tick(cpu.cycles(), &mut memory) {
+                    let _ = ppu.get_next_frame(&mut memory);
+                }
 
                 println!("{}", cpu);
             },

@@ -243,8 +243,16 @@ impl SystemMemory {
         }
     }
 
+    pub fn get_vram(&self) -> &[u32] {
+        self.vram.as_slice()
+    }
+
     pub fn get_oam(&self) -> &[u32] {
         self.oam.as_slice()
+    }
+
+    pub fn get_palette_ram_slice(&self) -> &[u32] {
+        &self.pal_ram.as_slice()
     }
 }
 

@@ -5,7 +5,7 @@ mod color_effect;
 mod oam_attribute;
 
 use bg_control::{bg_control0, bg_control1, bg_control2, bg_control3, BgControl};
-use oam_attribute::{is_oam_entry_enabled, OamAttribute};
+use oam_attribute::{RotationScaleParameter, OamAttribute, RotationScaleParameterBuilder};
 use tracing::{warn, trace, info, debug, error};
 use crate::{gba::system::MemoryError, utils::Bitable, SystemMemory};
 use disp_control::{display_control, DisplayControl};
@@ -19,6 +19,8 @@ const V_COUNT_ADDR: usize = 0x4000006;
 const V_BLANK_FLAG: u32 = 0b00000001;
 const H_BLANK_FLAG: u32 = 0b00000010;
 const V_COUNTER_FLAG: u32 = 0b00000100;
+
+const BASE_OAM: u32 = 0x6010000;
 
 fn set_bit_high(ram: &mut SystemMemory, addr: usize, flag: u32) -> Result<(), MemoryError> {
     let data = ram.read_halfword(addr)?;
@@ -133,11 +135,24 @@ impl PPU {
         //
 
         // OBJ stuff
-        let obj_buffer: Vec<OamAttribute> = if disp_control.display_obj {
-            get_obj_buffer(ram, &disp_control)
+        let (objects, obj_paramters)  = if disp_control.display_obj {
+            get_objs_and_params(ram, &disp_control)
         } else {
-            Vec::new()
+            (Vec::new(), Vec::new())
         };
+
+        // Get tiles for the objects
+        let oam_mem_start = if disp_control.bg_mode > 2 {
+            BASE_OAM + 0x4000
+        } else {
+            BASE_OAM
+        };
+        let vram = ram.get_vram();
+
+        let mut start_buff_idx: usize = 0;
+        for obj in objects {
+            let palette = obj.get_palette(ram);
+        }
 
         self.next_frame.clone()
     }
@@ -175,18 +190,22 @@ fn get_bgs(disp_control: &DisplayControl, ram: &mut SystemMemory) -> Result<Vec<
 
 // Where do we start reading, and how many do we read?
 // We can't really return a buffer since it can be behind a background
-fn get_obj_buffer(ram: &mut SystemMemory, display_control: &DisplayControl) -> Vec<OamAttribute> {
+fn get_objs_and_params(ram: &mut SystemMemory, display_control: &DisplayControl) -> (Vec<OamAttribute>, Vec<RotationScaleParameter>) {
     let oam = ram.get_oam();
     let mut objs: Vec<OamAttribute> = Vec::new();
+    let mut param_builder = RotationScaleParameterBuilder::new();
 
     for chunk in oam.chunks(2) {
-        if is_oam_entry_enabled(chunk) {
+        if chunk[0] != 0 && (chunk[1] & 0xffff) != 0 {
             objs.push(OamAttribute::from(chunk));
         }
+        param_builder.add_parameter(chunk[1]);
     }
+    let params = param_builder.build();
 
-    info!("Number of OBJs to draw: {}", objs.len());
-    objs
+    println!("{:?}", objs[0]);
+    info!("Number of OBJs to draw: {}. Number of Parameters: {}", objs.len(), params.len());
+    (objs, params)
 }
 
 struct Mosaic {
