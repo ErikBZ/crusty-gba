@@ -5,7 +5,7 @@ mod color_effect;
 mod oam_attribute;
 
 use bg_control::{bg_control0, bg_control1, bg_control2, bg_control3, BgControl};
-use oam_attribute::{RotationScaleParameter, OamAttribute, RotationScaleParameterBuilder};
+use oam_attribute::{get_palettes, OamAttribute, RotationScaleParameter, RotationScaleParameterBuilder};
 use tracing::{warn, trace, info, debug, error};
 use crate::{gba::system::MemoryError, utils::Bitable, SystemMemory};
 use disp_control::{display_control, DisplayControl};
@@ -21,6 +21,8 @@ const H_BLANK_FLAG: u32 = 0b00000010;
 const V_COUNTER_FLAG: u32 = 0b00000100;
 
 const BASE_OAM: u32 = 0x6010000;
+const HEIGHT: usize = 160;
+const WIDTH: usize = 240;
 
 fn set_bit_high(ram: &mut SystemMemory, addr: usize, flag: u32) -> Result<(), MemoryError> {
     let data = ram.read_halfword(addr)?;
@@ -48,7 +50,7 @@ impl Default for PPU {
             h_count: 0,
             v_count: 0,
             frame: 0,
-            next_frame: vec![255; 240 * 160 * 4]
+            next_frame: vec![255; HEIGHT * WIDTH * 4]
         }
     }
 }
@@ -150,13 +152,26 @@ impl PPU {
         let vram = ram.get_vram();
 
         let mut start_buff_idx: usize = 0;
+        let palettes = get_palettes(ram);
+        let delta_x = 16;
+        let mut curr_start_x = 0;
+        let curr_start_y = 20;
+        let bytes_in_row = WIDTH * 4;
+
+        let mut i = 0;
         for obj in objects {
-            let palette = obj.get_palette(ram);
+            let palette = palettes.get_palette(obj.palette_idx);
+            i += 1;
         }
 
         self.next_frame.clone()
     }
 } 
+
+fn euclid_to_buffer_idx(x: usize, y: usize) -> usize {
+    let bytes_in_row = WIDTH * 4;
+    (x * 4) + (y * bytes_in_row)
+}
 
 fn get_bgs(disp_control: &DisplayControl, ram: &mut SystemMemory) -> Result<Vec<BgControl>, MemoryError> {
     let mut bgs: Vec<BgControl> = Vec::new();
