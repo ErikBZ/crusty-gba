@@ -125,48 +125,78 @@ impl PPU {
 
     pub fn get_next_frame(&mut self, ram: &mut SystemMemory) -> Vec<u8> {
         let disp_control = display_control(ram).expect("Something went wrong grabbing the display control");
-        let bgs: Vec<BgControl> = match get_bgs(&disp_control, ram) {
+        let _: Vec<BgControl> = match get_bgs(&disp_control, ram) {
             Ok(b) => b,
             Err(e) => {
                 panic!("Err occured: {}", e)
             }
         };
 
-        info!("Display Control: {:?}, BGs enabled: {}", disp_control, bgs.len());
+        //info!("Display Control: {:?}, BGs enabled: {}", disp_control, bgs.len());
         // Do stuff with BGs here:
         //
 
         // OBJ stuff
-        let (objects, obj_paramters)  = if disp_control.display_obj {
+        let (objects, _)  = if disp_control.display_obj {
             get_objs_and_params(ram, &disp_control)
         } else {
             (Vec::new(), Vec::new())
         };
 
-        // Get tiles for the objects
-        let oam_mem_start = if disp_control.bg_mode > 2 {
-            BASE_OAM + 0x4000
-        } else {
-            BASE_OAM
-        };
-        let vram = ram.get_vram();
-
-        let mut start_buff_idx: usize = 0;
+        // TODO: Objs start later in VRAM when bg_mode is bitmap modes
         let palettes = get_palettes(ram);
-        let delta_x = 16;
-        let mut curr_start_x = 0;
-        let curr_start_y = 20;
-        let bytes_in_row = WIDTH * 4;
 
-        let mut i = 0;
         for obj in objects {
             let palette = palettes.get_palette(obj.palette_idx);
-            i += 1;
+            let tile_base = BASE_OAM + (obj.character_name * 32);
+
+            // becuase each byte is 2 pixels
+            //info!("Attemping to draw following OBJ: {:?}", obj);
+            //info!("Using the following palette: {:?}", palette);
+            for x in 0..(obj.obj_shape.h) { 
+                for y in 0..(obj.obj_shape.w) {
+                    // can probably progressively add stuff instead
+                    let (r, g, b) = if obj.is_256_color {
+                        let c_idx = get_color_id_256_colors_2d(x, y, tile_base, ram);
+                        if c_idx == 0 {
+                            continue;
+                        }
+                        palettes.get_256_color(c_idx)
+                    }  else {
+                        let c_idx = get_color_id_16_palette_2d(x, y, tile_base, ram);
+                        palette[c_idx]
+                    };
+
+                    let buffer_idx = euclid_to_buffer_idx((x + obj.x_coord) as usize, (y + obj.y_coord) as usize);
+                    if buffer_idx + 2 <= self.next_frame.len() {
+                        self.next_frame[buffer_idx] = r;
+                        self.next_frame[buffer_idx + 1] = g;
+                        self.next_frame[buffer_idx + 2] = b;
+                    }
+                }
+            }
         }
 
         self.next_frame.clone()
     }
 } 
+
+fn get_color_id_16_palette_2d(x: u32, y: u32, tile_base: u32, ram: &mut SystemMemory) -> usize {
+    // Translating 
+    let idx = tile_base + ((x % 8) >> 1) + ((x >> 3) * 0x40) + (0x4 * (y % 8)) + (0x400 * (y >> 3));
+    let pixel_byte = ram.read_byte(idx as usize).expect("Error reading byte while writing to pixel buffer");
+    if x & 1 == 0 {
+        (pixel_byte & 0xf) as usize
+    } else {
+        ((pixel_byte >> 4) & 0xf) as usize
+    }
+}
+
+fn get_color_id_256_colors_2d(x: u32, y: u32, tile_base: u32, ram: &mut SystemMemory) -> usize {
+    let idx = tile_base + x % 8 + ((x >> 3) * 0x40) + (0x8 * (y % 8)) + (0x400 * (y >> 3));
+    let pixel_byte = ram.read_byte(idx as usize).expect("Error reading byte while writing to pixel buffer");
+    pixel_byte as usize
+}
 
 fn euclid_to_buffer_idx(x: usize, y: usize) -> usize {
     let bytes_in_row = WIDTH * 4;
@@ -218,8 +248,6 @@ fn get_objs_and_params(ram: &mut SystemMemory, display_control: &DisplayControl)
     }
     let params = param_builder.build();
 
-    println!("{:?}", objs[0]);
-    info!("Number of OBJs to draw: {}. Number of Parameters: {}", objs.len(), params.len());
     (objs, params)
 }
 

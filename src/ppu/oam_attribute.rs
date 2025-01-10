@@ -23,7 +23,7 @@ pub struct OamAttribute {
     pub object_flag: ObjectFlag,
     pub obj_mode: u32,
     pub obj_mosaic: bool,
-    pub colors: bool,
+    pub is_256_color: bool,
     pub obj_shape: Shape,
     pub character_name: u32,
     pub priority: u32,
@@ -97,7 +97,7 @@ impl From<&[u32]> for OamAttribute {
             obj_shape: shape,
             obj_mode: (value[0] >> 10) & 0b11,
             obj_mosaic: value[0].bit_is_high(12),
-            colors: value[0].bit_is_high(13),
+            is_256_color: value[0].bit_is_high(13),
             transformation: Transformation::from(value),
             character_name: value[1] & 0x3ff,
             priority: (value[1] >> 10) & 0b11,
@@ -160,6 +160,10 @@ pub struct Palette {
 impl Colors {
     pub fn get_palette(&self, palette_id: usize) -> &Vec<(u8, u8, u8)> {
         &self.palettes[palette_id].colors
+    }
+
+    pub fn get_256_color(&self, idx: usize) -> (u8, u8, u8) {
+        self.colors[idx]
     }
 
     pub fn num_of_palettes(&self) -> usize {
