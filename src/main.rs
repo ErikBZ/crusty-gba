@@ -55,7 +55,7 @@ fn main() -> Result<(), Error> {
     event!(Level::INFO, "Copied the stuff over");
 
     match args.render {
-        cli::Renderer::Terminal => run_debug(cpu, memory, ppu, reload_handle),
+        cli::Renderer::Debug => run_debug(cpu, memory, ppu, reload_handle),
         cli::Renderer::Gui => {
             let _ = run_gui(cpu, memory, reload_handle);
             ()

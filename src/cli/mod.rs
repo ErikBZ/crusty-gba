@@ -21,7 +21,7 @@ pub struct Args {
 #[derive(Debug, clap::ValueEnum, Clone, Default)]
 pub enum Renderer {
     #[default]
-    Terminal,
+    Debug,
     Gui,
     Ratatui,
 }
