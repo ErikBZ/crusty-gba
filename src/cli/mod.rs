@@ -23,6 +23,7 @@ pub enum Renderer {
     #[default]
     Terminal,
     Gui,
+    Ratatui,
 }
 
 #[derive(Debug, clap::ValueEnum, Clone, Default)]

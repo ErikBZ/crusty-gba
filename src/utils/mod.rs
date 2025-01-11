@@ -16,6 +16,10 @@ pub trait Bitable {
     fn halfword_at(&self, x: u32) -> u32;
 }
 
+pub trait BittableColor {
+    fn to_8bit_color(&self) -> ((u8, u8, u8), (u8, u8, u8));
+}
+
 impl Bitable for u64 {
     fn bit_is_high(&self, x: u32) -> bool {
         // in release this should be false
@@ -71,4 +75,22 @@ fn guard_shift(val: u32, x: u32) -> u32 {
         panic!()
     }
     val >> x
+}
+
+impl BittableColor for u32 {
+    // TODO: This is gross, find better way
+    fn to_8bit_color(&self) -> ((u8, u8, u8), (u8, u8, u8)) {
+        (
+            (
+                (self.byte_at(0) * 4) as u8,
+                (self.byte_at(5) * 4) as u8,
+                (self.byte_at(10) * 4) as u8,
+            ),
+            (
+                (self.byte_at(16) * 4) as u8,
+                (self.byte_at(21) * 4) as u8,
+                (self.byte_at(26) * 4) as u8,
+            )
+        )
+    }
 }

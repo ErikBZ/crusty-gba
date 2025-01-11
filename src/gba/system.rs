@@ -89,13 +89,14 @@ impl fmt::Debug for SystemMemory {
 impl Default for SystemMemory {
     fn default() -> Self {
         Self {
-            system_rom: vec![0; 16 * KILOBYTE],
-            ewram: vec![0; 256 * KILOBYTE],
-            iwram: vec![0; 0x1000000],
-            io_ram: vec![0; 1 * KILOBYTE],
-            pal_ram: vec![0; 1 * KILOBYTE],
+            // Should be divded by 4 since u32 are already 4 bytes
+            system_rom: vec![0; (16 * KILOBYTE) / 4],
+            ewram: vec![0; (256 * KILOBYTE) / 4],
+            iwram: vec![0; (0x1000000) / 4],
+            io_ram: vec![0; (1 * KILOBYTE) / 4],
+            pal_ram: vec![0; (1 * KILOBYTE) / 4],
             vram: vec![0; 96 * KILOBYTE],
-            oam: vec![0; 1 * KILOBYTE],
+            oam: vec![0; 1 * (KILOBYTE / 4)],
             pak_rom: vec![0; 16 * 1],
             cart_ram: vec![0; 16 * 1],
         }
@@ -168,6 +169,7 @@ impl SystemMemory {
         }
     }
 
+    // TODO: Makes this only borrow
     pub fn read_word(&mut self, address: usize) -> Result<u32, MemoryError> {
         let res = self.read_from_mem(address)?;
         Ok(res)
@@ -239,6 +241,18 @@ impl SystemMemory {
             0xe => Ok(&mut self.cart_ram),
             _ => Err(MemoryError::MapNotFound(address))
         }
+    }
+
+    pub fn get_vram(&self) -> &[u32] {
+        self.vram.as_slice()
+    }
+
+    pub fn get_oam(&self) -> &[u32] {
+        self.oam.as_slice()
+    }
+
+    pub fn get_palette_ram_slice(&self) -> &[u32] {
+        &self.pal_ram.as_slice()
     }
 }
 
