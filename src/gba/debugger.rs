@@ -136,7 +136,7 @@ mod test {
     #[test]
     fn test_parse_continue() {
         let cmd = DebuggerCommand::parse("continue");
-        assert_eq!(cmd, Ok(DebuggerCommand::Continue));
+        assert_eq!(cmd, Ok(DebuggerCommand::Continue(ContinueSubcommand::Endless)));
     }
 
     #[test]
