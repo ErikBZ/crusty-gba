@@ -47,7 +47,7 @@ fn main() -> Result<(), Error> {
 
     let bios: Vec<u32> = read_file_into_u32(&mut bios_rom);
     let game_pak: Vec<u32> = read_file_into_u32(&mut game_rom);
-    let cpu = CPU::default();
+    let cpu = CPU::new(0x68, 0x3007f00, 2);
     let ppu = PPU::default();
     let mut memory = SystemMemory::new();
     memory.copy_bios(bios);

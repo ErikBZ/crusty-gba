@@ -35,6 +35,7 @@ impl From<u32> for CpuMode {
     }
 }
 
+#[derive(PartialEq)]
 pub struct CPU {
     registers: [u32; 16],
     // NOTE: General use banked regs, r8-r12
@@ -53,19 +54,7 @@ pub struct CPU {
 
 impl Default for CPU {
     fn default() -> Self {
-        Self {
-            registers: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0x03007f00, 0, 0x68],
-            fiq_banked_gen_regs: [0, 0, 0, 0, 0, 0x03007f00, 0],
-            svc_banked_regs: [0x03007f00, 0],
-            abt_banked_regs: [0x03007f00, 0],
-            irq_banked_regs: [0x03007f00, 0],
-            und_banked_regs: [0x03007f00, 0],
-            psr: [0x1f,0,0,0,0,0],
-            cpsr: 0x1f,
-            decode: 0x0,
-            inst_addr: 0x0,
-            cycles: 2,
-        }
+        CPU::new(0, 0, 0)
     }
 }
 
@@ -93,14 +82,37 @@ impl fmt::Display for CPU {
 // To speed up debugging we'll be printing just the `registers` field
 impl fmt::Debug for CPU {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        for i in 0..16 {
-            write!(f, "r{}: {:#08x}, ", i, self.get_register(i))?;
-        }
+        write!(f, "GEN: {:?},", self.registers)?;
+        write!(f, "FIQ: {:?},", self.fiq_banked_gen_regs)?;
+        write!(f, "SVC: {:?},", self.svc_banked_regs)?;
+        write!(f, "ABT: {:?},", self.abt_banked_regs)?;
+        write!(f, "IRQ: {:?},", self.irq_banked_regs)?;
+        write!(f, "Und: {:?},", self.und_banked_regs)?;
+        write!(f, "psr: {:?},", self.psr)?;
+        write!(f, "decode: {:?},", self.decode)?;
+        write!(f, "addr: {:?},", self.inst_addr)?;
+        write!(f, "cycles: {:?},", self.cycles)?;
         write!(f, "cpsr: {:08x}", self.cpsr)
     }
 }
 
 impl CPU {
+    pub fn new(initial_pc: u32, initial_sp: u32, init_cycles: u32) -> Self {
+        Self {
+            registers: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, initial_sp, 0, initial_pc],
+            fiq_banked_gen_regs: [0, 0, 0, 0, 0, initial_sp, 0],
+            svc_banked_regs: [initial_sp, 0],
+            abt_banked_regs: [initial_sp, 0],
+            irq_banked_regs: [initial_sp, 0],
+            und_banked_regs: [initial_sp, 0],
+            psr: [0x1f,0,0,0,0,0],
+            cpsr: 0x1f,
+            decode: 0x0,
+            inst_addr: 0x0,
+            cycles: init_cycles,
+        }
+    }
+
     // Program Counter
     pub fn pc(&self) -> usize {
         self.registers[PC] as usize
@@ -251,6 +263,10 @@ impl CPU {
             2
         };
 
+        self.run_instruction(ram, inst, i_addr);
+    }
+
+    fn run_instruction(&mut self, ram: &mut SystemMemory, inst: u32, i_addr: usize) {
         let op = if !self.is_thumb_mode() {
             let cond = Conditional::from(inst);
             if !cond.should_run(self.cpsr) {
@@ -271,5 +287,48 @@ impl CPU {
         while self.cycles - old_cycles < num_of_cycles {
             self.tick(ram);
         }
+    }
+}
+
+mod test {
+    use super::CPU;
+    use crate::SystemMemory;
+
+    #[test]
+    fn run_add_instruction() {
+        let mut ram = SystemMemory::default();
+        let mut cpu = CPU {
+            registers: [0, 0, 0, 0, 12, 0, 23, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+            ..CPU::default()
+        };
+
+        cpu.run_instruction(&mut ram, 0xe0844006, 0x0);
+
+        let rhs = CPU {
+            registers: [0, 0, 0, 0, 35, 0, 23, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+            cycles: 1,
+            ..CPU::default()
+        };
+        assert_eq!(cpu, rhs);
+    }
+
+    #[test]
+    fn run_add_thumb_instruction() {
+        let mut ram = SystemMemory::default();
+        let mut cpu = CPU {
+            registers: [0, 8, 0, 0, 12, 0, 23, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+            ..CPU::default()
+        };
+        cpu.update_thumb(true);
+
+        cpu.run_instruction(&mut ram, 0x1909, 0x0);
+
+        let mut rhs = CPU {
+            registers: [0, 20, 0, 0, 12, 0, 23, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+            cycles: 1,
+            ..CPU::default()
+        };
+        rhs.update_thumb(true);
+        assert_eq!(cpu, rhs);
     }
 }
