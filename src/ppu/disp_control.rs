@@ -1,4 +1,6 @@
 use crate::{gba::system::{MemoryError, SystemMemory}, utils::{bit_is_one_at, Bitable}};
+use crate::gba::Memory;
+
 const DISP_CONTROL: usize = 0x4000000;
 const DISP_STAT: usize = 0x4000004;
 

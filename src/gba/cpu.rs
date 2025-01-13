@@ -3,6 +3,7 @@ use super::arm::decode_as_arm;
 use super::thumb::decode_as_thumb;
 use super::{is_signed, Conditional, CPSR_C, CPSR_N, CPSR_T, CPSR_V, CPSR_Z};
 use super::system::SystemMemory;
+use super::Memory;
 use tracing::{debug, trace};
 
 pub const PC: usize = 15;

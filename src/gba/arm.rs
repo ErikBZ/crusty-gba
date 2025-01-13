@@ -2,6 +2,7 @@ use crate::utils::{bit_is_one_at, Bitable};
 use crate::utils::shifter::ShiftWithCarry;
 use super::system::{read_cycles_per_32, read_cycles_per_8_16};
 use super::{Operation, SystemMemory, get_v_from_sub, get_v_from_add, bit_map_to_array};
+use crate::gba::Memory;
 use super::{CPSR_C, CPSR_T};
 use super::cpu::{CPU,PC, LR};
 use tracing::warn;

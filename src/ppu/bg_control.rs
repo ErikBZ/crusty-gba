@@ -1,4 +1,6 @@
 use crate::{gba::system::{MemoryError, SystemMemory}, utils::Bitable};
+use crate::gba::Memory;
+
 const BG_CONTROL0: usize = 0x4000008;
 const BG_CONTROL1: usize = 0x400000a;
 const BG_CONTROL2: usize = 0x400000c;
