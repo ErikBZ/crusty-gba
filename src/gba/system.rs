@@ -1,6 +1,6 @@
 use core::fmt;
 use tracing::{trace, warn};
-use super::{dma::DmaControl, Memory};
+use super::dma::DmaControl;
 
 
 const KILOBYTE: usize = 1024;
@@ -103,52 +103,6 @@ impl Default for SystemMemory {
     }
 }
 
-impl Memory for SystemMemory {
-    fn write_word(&mut self, address: usize, block: u32) -> Result<(), MemoryError> {
-        self.write_with_mask(address, block, WORD)?;
-        Ok(())
-    }
-
-    fn write_halfword(&mut self, address: usize, block: u32) -> Result<(), MemoryError> {
-        self.write_with_mask(address, block, HALFWORD)?;
-        Ok(())
-    }
-
-    fn write_byte(&mut self, address: usize, block: u32) -> Result<(), MemoryError> {
-        self.write_with_mask(address, block, BYTE)?;
-        Ok(())
-    }
-
-    // TODO: Makes this only borrow
-    fn read_word(&mut self, address: usize) -> Result<u32, MemoryError> {
-        let res = self.read_from_mem(address)?;
-        Ok(res)
-    }
-
-    fn read_halfword(&mut self, address: usize) -> Result<u32, MemoryError> {
-        let res = self.read_from_mem(address)?;
-        let shift = address & 0b10;
-        // TODO: check that address is halfword aligned, error otherwise?
-        Ok(res >> (shift * 8) & 0xffff)
-    }
-
-    fn read_halfword_sign_ex(&mut self, address: usize) -> Result<u32, MemoryError> {
-        let res = self.read_halfword(address)? as i32;
-        Ok(((res << 16) >> 16) as u32)
-    }
-
-    fn read_byte(&mut self, address: usize) -> Result<u32, MemoryError> {
-        let res = self.read_from_mem(address)?;
-        let shift = address & 0b11;
-        Ok(res >> (shift * 8) & 0xff)
-    }
-
-    fn read_byte_sign_ex(&mut self, address: usize) -> Result<u32, MemoryError> {
-        let res = self.read_byte(address)? as i32;
-        Ok(((res << 24) >> 24) as u32)
-    }
-}
-
 impl SystemMemory {
     pub fn new() -> Self {
         let mut x = Self::default();
@@ -163,7 +117,10 @@ impl SystemMemory {
     pub fn copy_game_pak(&mut self, game_pak: Vec<u32>) {
         self.pak_rom = game_pak;
     }
+}
 
+
+impl SystemMemory {
     fn get_readonly_mask(&self, addr: usize) -> Option<u32> {
         match addr {
             0x4000004 => Some(0xff0043),
@@ -171,6 +128,21 @@ impl SystemMemory {
             0x4000084 => Some(0x0000000b),
             _ => None,
         }
+    }
+
+    pub fn write_word(&mut self, address: usize, block: u32) -> Result<(), MemoryError> {
+        self.write_with_mask(address, block, WORD)?;
+        Ok(())
+    }
+
+    pub fn write_halfword(&mut self, address: usize, block: u32) -> Result<(), MemoryError> {
+        self.write_with_mask(address, block, HALFWORD)?;
+        Ok(())
+    }
+
+    pub fn write_byte(&mut self, address: usize, block: u32) -> Result<(), MemoryError> {
+        self.write_with_mask(address, block, BYTE)?;
+        Ok(())
     }
 
     fn write_with_mask(&mut self, address: usize, block: u32, mask: u32) -> Result<(), MemoryError> {
@@ -195,6 +167,35 @@ impl SystemMemory {
             ram[i] = new_data;
             Ok(())
         }
+    }
+
+    // TODO: Makes this only borrow
+    pub fn read_word(&mut self, address: usize) -> Result<u32, MemoryError> {
+        let res = self.read_from_mem(address)?;
+        Ok(res)
+    }
+
+    pub fn read_halfword(&mut self, address: usize) -> Result<u32, MemoryError> {
+        let res = self.read_from_mem(address)?;
+        let shift = address & 0b10;
+        // TODO: check that address is halfword aligned, error otherwise?
+        Ok(res >> (shift * 8) & 0xffff)
+    }
+
+    pub fn read_halfword_sign_ex(&mut self, address: usize) -> Result<u32, MemoryError> {
+        let res = self.read_halfword(address)? as i32;
+        Ok(((res << 16) >> 16) as u32)
+    }
+
+    pub fn read_byte(&mut self, address: usize) -> Result<u32, MemoryError> {
+        let res = self.read_from_mem(address)?;
+        let shift = address & 0b11;
+        Ok(res >> (shift * 8) & 0xff)
+    }
+
+    pub fn read_byte_sign_ex(&mut self, address: usize) -> Result<u32, MemoryError> {
+        let res = self.read_byte(address)? as i32;
+        Ok(((res << 24) >> 24) as u32)
     }
 
     pub fn read_from_mem(&mut self, address: usize) -> Result<u32, MemoryError> {

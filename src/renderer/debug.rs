@@ -1,5 +1,4 @@
 use std::collections::HashSet;
-use crate::gba::Memory;
 use crate::gba::cpu::CPU;
 use crate::ppu::PPU;
 use crate::gba::debugger::{DebuggerCommand, ContinueSubcommand};

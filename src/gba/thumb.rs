@@ -1,9 +1,10 @@
+use std::fs::read;
+
 use super::cpu::{LR, PC, SP};
 use super::system::{read_cycles_per_32, read_cycles_per_8_16};
 use super::{add_nums, bit_map_to_array, count_cycles, get_abs_int_value, get_v_from_add, get_v_from_sub, is_signed, subtract_nums, Conditional, Operation, CPSR_C, CPSR_T};
 use crate::utils::shifter::ShiftWithCarry;
 use crate::{SystemMemory, CPU};
-use crate::gba::Memory;
 use tracing::warn;
 
 pub fn decode_as_thumb(value: u32) -> Box<dyn Operation> {

@@ -7,7 +7,7 @@ mod oam_attribute;
 use bg_control::{bg_control0, bg_control1, bg_control2, bg_control3, BgControl};
 use oam_attribute::{get_palettes, OamAttribute, RotationScaleParameter, RotationScaleParameterBuilder};
 use tracing::{warn, trace, info, debug, error};
-use crate::{gba::system::MemoryError, utils::Bitable, SystemMemory, gba::Memory};
+use crate::{gba::system::MemoryError, utils::Bitable, SystemMemory};
 use disp_control::{display_control, DisplayControl};
 // Base off of https://github.com/tuzz/game-loop 
 

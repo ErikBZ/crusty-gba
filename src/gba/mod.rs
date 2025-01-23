@@ -12,7 +12,6 @@ pub const CPSR_V: u32 = 0x10000000;
 pub const CPSR_T: u32 = 0x20;
 
 use crate::SystemMemory;
-use crate::gba::system::MemoryError;
 
 // Operations can be ARM or Thumb instructions
 pub trait Operation: std::fmt::Debug {
@@ -183,16 +182,5 @@ fn count_cycles(mult_operand: u32) -> u32 {
     } else {
         5
     }
-}
-
-pub trait Memory {
-    fn write_word(&mut self, address: usize, block: u32) -> Result<(), MemoryError>;
-    fn write_halfword(&mut self, address: usize, block: u32) -> Result<(), MemoryError>;
-    fn write_byte(&mut self, address: usize, block: u32) -> Result<(), MemoryError>;
-    fn read_word(&mut self, address: usize) -> Result<u32, MemoryError>;
-    fn read_halfword(&mut self, address: usize) -> Result<u32, MemoryError>;
-    fn read_halfword_sign_ex(&mut self, address: usize) -> Result<u32, MemoryError>;
-    fn read_byte(&mut self, address: usize) -> Result<u32, MemoryError>;
-    fn read_byte_sign_ex(&mut self, address: usize) -> Result<u32, MemoryError>;
 }
 
