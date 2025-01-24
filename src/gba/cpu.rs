@@ -291,12 +291,12 @@ impl CPU {
 }
 
 mod test {
-    use super::CPU;
+    use super::{CPU, SP};
     use crate::SystemMemory;
 
     #[test]
     fn run_add_instruction() {
-        let mut ram = SystemMemory::default();
+        let mut ram = SystemMemory::test();
         let mut cpu = CPU {
             registers: [0, 0, 0, 0, 12, 0, 23, 0, 0, 0, 0, 0, 0, 0, 0, 0],
             ..CPU::default()
@@ -314,7 +314,7 @@ mod test {
 
     #[test]
     fn run_add_thumb_instruction() {
-        let mut ram = SystemMemory::default();
+        let mut ram = SystemMemory::test();
         let mut cpu = CPU {
             registers: [0, 8, 0, 0, 12, 0, 23, 0, 0, 0, 0, 0, 0, 0, 0, 0],
             ..CPU::default()
@@ -326,6 +326,137 @@ mod test {
         let mut rhs = CPU {
             registers: [0, 20, 0, 0, 12, 0, 23, 0, 0, 0, 0, 0, 0, 0, 0, 0],
             cycles: 1,
+            ..CPU::default()
+        };
+        rhs.update_thumb(true);
+        assert_eq!(cpu, rhs);
+    }
+
+    #[test]
+    fn run_ldm_stm_instructions() {
+        let mut ram = SystemMemory::test();
+        let mut cpu = CPU {
+            registers: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 0x100, 14, 15],
+            ..CPU::default()
+        };
+
+        // r4,r5,r6,r7,r8,r9,r10,r11,lr
+        cpu.run_instruction(&mut ram, 0xe92d4ff0, 0x0);
+
+        assert_eq!(14, ram.read_word(0x0fc).unwrap());
+        assert_eq!(11, ram.read_word(0x0f8).unwrap());
+        assert_eq!(10, ram.read_word(0x0f4).unwrap());
+        assert_eq!(9, ram.read_word(0x0f0).unwrap());
+        assert_eq!(8, ram.read_word(0x0ec).unwrap());
+        assert_eq!(7, ram.read_word(0x0e8).unwrap());
+        assert_eq!(6, ram.read_word(0x0e4).unwrap());
+        assert_eq!(5, ram.read_word(0x0e0).unwrap());
+        assert_eq!(4, ram.read_word(0x0dc).unwrap());
+        assert_eq!(10, cpu.cycles());
+
+        cpu.registers = [255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 0xdc, 255, 255];
+        cpu.run_instruction(&mut ram, 0xe8bd4ff0, 0x0);
+
+        let rhs = CPU {
+            registers: [255, 255, 255, 255, 4, 5, 6, 7, 8, 9, 10, 11, 255, 256, 14, 255],
+            cycles: 21,
+            ..CPU::default()
+        };
+        assert_eq!(cpu, rhs);
+    }
+
+    #[test]
+    fn run_push_pop_instructions() {
+        let mut ram = SystemMemory::test();
+        let mut cpu = CPU {
+            registers: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 0x18, 15, 16],
+            ..CPU::default()
+        };
+        cpu.update_thumb(true);
+
+        //r4, r5, r7, lr
+        cpu.run_instruction(&mut ram, 0xb5b0, 0x0);
+
+        assert_eq!(15, ram.read_word(0x14).unwrap());
+        assert_eq!(8, ram.read_word(0x10).unwrap());
+        assert_eq!(6, ram.read_word(0x0c).unwrap());
+        assert_eq!(5, ram.read_word(0x08).unwrap());
+        assert_eq!(5, cpu.cycles());
+
+        cpu.registers = [0; 16];
+        cpu.registers[SP] = 0x08;
+        cpu.run_instruction(&mut ram, 0xbcb0, 0x0);
+
+        let mut rhs = CPU {
+            registers: [0, 0, 0, 0, 5, 6, 0, 8, 0, 0, 0, 0, 0, 0x14, 0, 0],
+            cycles: 10,
+            ..CPU::default()
+        };
+        rhs.update_thumb(true);
+        assert_eq!(cpu, rhs);
+    }
+
+    #[test]
+    fn run_ldm_stm_instructions_pak_ram() {
+        let mut ram = SystemMemory::test_pak_ram();
+        let mut cpu = CPU {
+            registers: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 0x8000100, 14, 15],
+            ..CPU::default()
+        };
+
+        //store: r4,r5,r6,r7,r8,r9,r10,r11,lr
+        cpu.run_instruction(&mut ram, 0xe92d4ff0, 0x0);
+
+        assert_eq!(0, ram.read_word(0x8000100).unwrap());
+        assert_eq!(14, ram.read_word(0x80000fc).unwrap());
+        assert_eq!(11, ram.read_word(0x80000f8).unwrap());
+        assert_eq!(10, ram.read_word(0x80000f4).unwrap());
+        assert_eq!(9, ram.read_word(0x80000f0).unwrap());
+        assert_eq!(8, ram.read_word(0x80000ec).unwrap());
+        assert_eq!(7, ram.read_word(0x80000e8).unwrap());
+        assert_eq!(6, ram.read_word(0x80000e4).unwrap());
+        assert_eq!(5, ram.read_word(0x80000e0).unwrap());
+        assert_eq!(4, ram.read_word(0x80000dc).unwrap());
+        assert_eq!(73, cpu.cycles());
+
+        cpu.registers = [255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 0x80000dc, 255, 255];
+        //load: r4,r5,r6,r7,r8,r9,r10,r11,lr
+        cpu.run_instruction(&mut ram, 0xe8bd4ff0, 0x0);
+
+        let rhs = CPU {
+            registers: [255, 255, 255, 255, 4, 5, 6, 7, 8, 9, 10, 11, 255, 0x8000100, 14, 255],
+            cycles: 147,
+            ..CPU::default()
+        };
+        assert_eq!(cpu, rhs);
+    }
+
+    #[test]
+    fn run_push_pop_instructions_pak_ram() {
+        let mut ram = SystemMemory::test_pak_ram();
+        let mut cpu = CPU {
+            registers: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 0x8000018, 15, 16],
+            ..CPU::default()
+        };
+        cpu.update_thumb(true);
+
+        //push: r4, r5, r7, lr
+        cpu.run_instruction(&mut ram, 0xb5b0, 0x0);
+
+        assert_eq!(15, ram.read_word(0x8000014).unwrap());
+        assert_eq!(8, ram.read_word(0x8000010).unwrap());
+        assert_eq!(6, ram.read_word(0x800000c).unwrap());
+        assert_eq!(5, ram.read_word(0x8000008).unwrap());
+        assert_eq!(33, cpu.cycles());
+
+        cpu.registers = [0; 16];
+        cpu.registers[SP] = 0x08;
+        //pop: r4, r5, r7
+        cpu.run_instruction(&mut ram, 0xbcb0, 0x0);
+
+        let mut rhs = CPU {
+            registers: [0, 0, 0, 0, 5, 6, 0, 8, 0, 0, 0, 0, 0, 0x8000014, 0, 0],
+            cycles: 59,
             ..CPU::default()
         };
         rhs.update_thumb(true);

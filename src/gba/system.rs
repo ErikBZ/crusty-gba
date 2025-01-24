@@ -110,6 +110,26 @@ impl SystemMemory {
         x
     }
 
+    pub fn test() -> Self {
+        Self {
+            system_rom: vec![0; KILOBYTE / 4],
+            ewram: vec![0; 0],
+            iwram: vec![0; 0],
+            io_ram: vec![0; 0],
+            pal_ram: vec![0; 0],
+            vram: vec![0; 0],
+            oam: vec![0; 0],
+            pak_rom: vec![0; 0],
+            cart_ram: vec![0; 0],
+        }
+    }
+
+    pub fn test_pak_ram() -> Self {
+        let mut x = Self::test();
+        x.pak_rom = vec![0; KILOBYTE / 4];
+        x
+    }
+
     pub fn copy_bios(&mut self, bios: Vec<u32>) {
         self.system_rom = bios;
     }
