@@ -316,16 +316,17 @@ mod test {
     fn run_add_thumb_instruction() {
         let mut ram = SystemMemory::test();
         let mut cpu = CPU {
-            registers: [0, 8, 0, 0, 12, 0, 23, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+            registers: [2, 8, 0, 0, 12, 3, 23, 0, 0, 0, 0, 0, 0, 0, 0, 0],
             ..CPU::default()
         };
         cpu.update_thumb(true);
 
         cpu.run_instruction(&mut ram, 0x1909, 0x0);
+        cpu.run_instruction(&mut ram, 0x4368, 0x0);
 
         let mut rhs = CPU {
-            registers: [0, 20, 0, 0, 12, 0, 23, 0, 0, 0, 0, 0, 0, 0, 0, 0],
-            cycles: 1,
+            registers: [6, 20, 0, 0, 12, 3, 23, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+            cycles: 3,
             ..CPU::default()
         };
         rhs.update_thumb(true);
@@ -450,7 +451,7 @@ mod test {
         assert_eq!(33, cpu.cycles());
 
         cpu.registers = [0; 16];
-        cpu.registers[SP] = 0x08;
+        cpu.registers[SP] = 0x8000008;
         //pop: r4, r5, r7
         cpu.run_instruction(&mut ram, 0xbcb0, 0x0);
 
