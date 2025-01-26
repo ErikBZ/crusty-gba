@@ -1,11 +1,10 @@
-use std::fs::read;
-
 use super::cpu::{LR, PC, SP};
 use super::system::{read_cycles_per_32, read_cycles_per_8_16};
 use super::{add_nums, bit_map_to_array, count_cycles, get_abs_int_value, get_v_from_add, get_v_from_sub, is_signed, subtract_nums, Conditional, Operation, CPSR_C, CPSR_T};
 use crate::utils::shifter::ShiftWithCarry;
 use crate::{SystemMemory, CPU};
 use tracing::warn;
+use super::utils::calc_cycles_for_stm_ldm;
 
 pub fn decode_as_thumb(value: u32) -> Box<dyn Operation> {
     if value & 0xf800 == 0x1800 {
@@ -888,18 +887,9 @@ impl Operation for PushPopRegOp {
 
         // NOTE: This only read from the SP so it's always a cycle per entry of 1
         let n = registers.len() as u32;
-        if self.l {
-            if registers.contains(&(PC as u32)) {
-                // NOTE (n+1)S + 2N + 1I when PC is in register_list 
-                cpu.add_cycles(n + 4)
-            } else {
-                // NOTE nS + 1N + 1I
-                cpu.add_cycles(n + 2)
-            }
-        } else {
-            // NOTE: (n-1)S + 2N
-            cpu.add_cycles(n + 1)
-        }
+        let cycles_per_entires = read_cycles_per_32(cpu.get_register(SP) as usize);
+        let cycles = calc_cycles_for_stm_ldm(cycles_per_entires, n, self.l, false);
+        cpu.add_cycles(cycles);
     }
 }
 
