@@ -888,7 +888,7 @@ impl Operation for PushPopRegOp {
         // NOTE: This only read from the SP so it's always a cycle per entry of 1
         let n = registers.len() as u32;
         let cycles_per_entires = read_cycles_per_32(cpu.get_register(SP) as usize);
-        let cycles = calc_cycles_for_stm_ldm(cycles_per_entires, n, self.l, false);
+        let cycles = calc_cycles_for_stm_ldm(cycles_per_entires, n, self.l, registers.contains(&(PC as u32)));
         cpu.add_cycles(cycles);
     }
 }

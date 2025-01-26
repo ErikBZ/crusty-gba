@@ -291,7 +291,7 @@ impl CPU {
 }
 
 mod test {
-    use super::{CPU, SP};
+    use super::{CPU, SP, PC};
     use crate::SystemMemory;
 
     #[test]
@@ -462,5 +462,27 @@ mod test {
         };
         rhs.update_thumb(true);
         assert_eq!(cpu, rhs);
+    }
+
+    #[test]
+    fn run_pop_sp_with_pc() {
+        let mut ram = SystemMemory::test();
+        let mut cpu = CPU {
+            registers: [0; 16],
+            ..CPU::default()
+        };
+        cpu.registers[SP] = 0x10;
+        cpu.update_thumb(true);
+        let _ = ram.write_word(0x10, 2);
+        let _ = ram.write_word(0x14, 3);
+        let _ = ram.write_word(0x18, 4);
+
+        //r4, r5, pc
+        cpu.run_instruction(&mut ram, 0xbd30, 0x0);
+
+        assert_eq!(cpu.registers[4], 2);
+        assert_eq!(cpu.registers[5], 3);
+        assert_eq!(cpu.registers[PC], 6);
+        assert_eq!(cpu.cycles, 7);
     }
 }
