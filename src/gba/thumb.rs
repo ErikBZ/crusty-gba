@@ -694,7 +694,7 @@ impl Operation for LoadStoreHalfWordOp {
             }
         }
 
-        let cycles = read_cycles_per_32(addr);
+        let cycles = read_cycles_per_8_16(addr);
 
         cpu.add_cycles(
             cycles_for_str_ldr(self.l, self.rd == PC, cycles)
@@ -939,18 +939,9 @@ impl Operation for MultipleLoadStoreOp {
 
         let registers = bit_map_to_array(self.rlist.into());
         let n = registers.len() as u32;
-        if self.l {
-            if registers.contains(&(PC as u32)) {
-                // NOTE (n+1)S + 2N + 1I when PC is in register_list 
-                cpu.add_cycles(n + 4)
-            } else {
-                // NOTE nS + 1N + 1I
-                cpu.add_cycles(n + 2)
-            }
-        } else {
-            // NOTE: (n-1)S + 2N
-            cpu.add_cycles(n + 1)
-        }
+        let cycles_per_entires = read_cycles_per_32(cpu.get_register(SP) as usize);
+        let cycles = calc_cycles_for_stm_ldm(cycles_per_entires, n, self.l, registers.contains(&(PC as u32)));
+        cpu.add_cycles(cycles);
     }
 }
 

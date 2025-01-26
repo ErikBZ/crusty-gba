@@ -485,4 +485,22 @@ mod test {
         assert_eq!(cpu.registers[PC], 6);
         assert_eq!(cpu.cycles, 7);
     }
+
+    #[test]
+    fn check_cycles_thumb_ldrh() {
+        let mut ram = SystemMemory::test_pak_ram();
+        let mut cpu = CPU {
+            registers: [0; 16],
+            ..CPU::default()
+        };
+        cpu.registers[1] = 0x8000000;
+        cpu.update_thumb(true);
+        let _ = ram.write_word(0x8000000, 0xaaaaffff);
+
+        //r4, r5, pc
+        cpu.run_instruction(&mut ram, 0x8808, 0x0);
+
+        assert_eq!(cpu.registers[0], 0xffff);
+        assert_eq!(cpu.cycles, 7);
+    }
 }
