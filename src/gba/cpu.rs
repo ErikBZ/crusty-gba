@@ -503,4 +503,58 @@ mod test {
         assert_eq!(cpu.registers[0], 0xffff);
         assert_eq!(cpu.cycles, 7);
     }
+
+    #[test]
+    fn run_mov_with_reg_shift_instruction() {
+        let mut ram = SystemMemory::test();
+        let mut cpu = CPU {
+            registers: [0, 0, 0, 0, 12, 0, 1, 0, 0, 8, 0, 0, 0, 0, 0, 0],
+            ..CPU::default()
+        };
+
+        cpu.run_instruction(&mut ram, 0xe1a06916, 0x0);
+
+        let rhs = CPU {
+            registers: [0, 0, 0, 0, 12, 0, 256, 0, 0, 8, 0, 0, 0, 0, 0, 0],
+            cycles: 2,
+            ..CPU::default()
+        };
+        assert_eq!(cpu, rhs);
+    }
+
+    #[test]
+    fn run_mov_with_reg_shift_0_instruction() {
+        let mut ram = SystemMemory::test();
+        let mut cpu = CPU {
+            registers: [0, 0, 0, 0, 12, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+            ..CPU::default()
+        };
+
+        cpu.run_instruction(&mut ram, 0xe1a06916, 0x0);
+
+        let rhs = CPU {
+            registers: [0, 0, 0, 0, 12, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+            cycles: 2,
+            ..CPU::default()
+        };
+        assert_eq!(cpu, rhs);
+    }
+
+    #[test]
+    fn run_mov_with_reg_imm_instruction() {
+        let mut ram = SystemMemory::test();
+        let mut cpu = CPU {
+            registers: [0, 0, 2, 0, 12, 0, 1, 0, 0, 8, 0, 0, 0, 0, 0, 0],
+            ..CPU::default()
+        };
+
+        cpu.run_instruction(&mut ram, 0xe1a0a0a2, 0x0);
+
+        let rhs = CPU {
+            registers: [0, 0, 2, 0, 12, 0, 1, 0, 0, 8, 1, 0, 0, 0, 0, 0],
+            cycles: 1,
+            ..CPU::default()
+        };
+        assert_eq!(cpu, rhs);
+    }
 }

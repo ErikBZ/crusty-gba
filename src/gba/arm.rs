@@ -277,11 +277,7 @@ impl DataProcessingOp {
             // TODO: Only add another cycle if we shift by register
             let (s, s_type, cycle) = if bit_is_one_at(shift, 0) {
                 let val = cpu.get_register((shift >> 4 & 0xf) as usize);
-                if val == 0 {
-                    (val, ShiftType::LSL, 0)
-                } else {
-                    (val, ShiftType::from((shift >> 1) & 3), 1)
-                }
+                (val, ShiftType::from((shift >> 1) & 3), 1)
             } else {
                 ((shift >> 3) & 0x1f, ShiftType::from((shift >> 1) & 3), 0)
             };
