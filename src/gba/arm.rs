@@ -239,6 +239,7 @@ impl From<u32> for ShiftType {
     }
 }
 
+#[derive(Debug)]
 enum Operand {
     Imm(u32),
     Shift(u32)
@@ -275,11 +276,18 @@ impl DataProcessingOp {
 
             // TODO: This is hard to read
             // TODO: Only add another cycle if we shift by register
+            // TODO: Shifting by register is always shifted by the number
+            // provided. Imm values are the ones that encode special actions
             let (s, s_type, cycle) = if bit_is_one_at(shift, 0) {
                 let val = cpu.get_register((shift >> 4 & 0xf) as usize);
                 (val, ShiftType::from((shift >> 1) & 3), 1)
             } else {
-                ((shift >> 3) & 0x1f, ShiftType::from((shift >> 1) & 3), 0)
+                let mut val = (shift >> 3) & 0x1f;
+                if val == 0 {
+                    val = 32
+                };
+
+                (val, ShiftType::from((shift >> 1) & 3), 0)
             };
 
             let rm = (self.operand & 0xf) as usize;
@@ -289,28 +297,20 @@ impl DataProcessingOp {
             // NOTE: LSR 0, ASR 0, and ROR 0 encode special things
             let (res, c_out) = match s_type {
                 ShiftType::LSL => {
-                    if s == 0 {
+                    if s == 0 || s == 32 {
                         (rm_value, c_in)
                     } else {
                         rm_value.shl_with_carry(s)
                     }
                 },
                 ShiftType::LSR => {
-                    if s == 0 {
-                        rm_value.shr_with_carry(32)
-                    } else {
-                        rm_value.shr_with_carry(s)
-                    }
+                    rm_value.shr_with_carry(s)
                 },
                 ShiftType::ASR => {
-                    if s == 0 {
-                        rm_value.asr_with_carry(32)
-                    } else {
-                        rm_value.asr_with_carry(s)
-                    }
+                    rm_value.asr_with_carry(s)
                 },
                 ShiftType::ROR => {
-                    if s == 0 {
+                    if s == 32 {
                         rm_value.rrx_with_carry(c_in)
                     } else {
                         rm_value.ror_with_carry(s)
@@ -432,7 +432,6 @@ pub struct SingleDataSwapOp {
 
 impl Operation for SingleDataSwapOp {
     // TODO: Propogate Error for ABORT signals
-    // TODO: Track Cycles
     fn run(&self, cpu: &mut CPU, mem: &mut SystemMemory) {
         let address = cpu.get_register(self.rn as usize) as usize;
         match mem.read_from_mem(address) {
@@ -441,19 +440,22 @@ impl Operation for SingleDataSwapOp {
         }
 
         let data = cpu.get_register(self.rm as usize);
-        if self.b {
+        let cycles = if self.b {
             match mem.write_byte(address, data) {
                 Ok(_) => (),
                 Err(e) => warn!("{}", e),
-            }
+            };
+            read_cycles_per_8_16(address)
         } else {
             match mem.write_word(address, data) {
                 Ok(_) => (),
                 Err(e) => warn!("{}", e),
-            }
-        }
+            };
+            read_cycles_per_32(address)
+        };
+
         // TODO: 1S + 2N + 1I
-        cpu.add_cycles(4);
+        cpu.add_cycles(cycles + 3);
     }
 }
 
@@ -598,7 +600,10 @@ impl Operation for HalfwordRegOffset {
             }
         }
 
+        let cycles_per_entry = read_cycles_per_8_16(address as usize);
+
         if self.l {
+            cpu.add_cycles(cycles_per_entry + 3);
             let res = match mem.read_from_mem(address as usize) {
                 Ok(n) => n,
                 Err(e) => {
@@ -635,6 +640,7 @@ impl Operation for HalfwordRegOffset {
 
             cpu.set_register(self.rd as usize, value);
         } else {
+            cpu.add_cycles(cycles_per_entry + 1);
             match mem.write_halfword(address as usize, cpu.get_register(self.rd as usize)) {
                 Ok(_) => (),
                 Err(e) => warn!("{}", e),
@@ -698,10 +704,14 @@ impl Operation for SingleDataTfx {
             }
         }
 
+        let mut cycles = 0;
+
         if self.l {
             let data_block = if self.b {
+                cycles += read_cycles_per_8_16(tfx_add as usize);
                 mem.read_byte(tfx_add as usize)
             } else {
+                cycles += read_cycles_per_32(tfx_add as usize);
                 mem.read_word(tfx_add as usize)
             };
 
@@ -715,19 +725,22 @@ impl Operation for SingleDataTfx {
             cpu.set_register(self.rd as usize, res);
             if self.rd as usize == PC {
                 // NOTE: 2S + 2N + 1I
-                cpu.add_cycles(5);
+                cpu.add_cycles(cycles + 4);
             } else {
                 // NOTE: 1S + 1N + 1I
-                cpu.add_cycles(3);
+                cpu.add_cycles(cycles + 2);
             }
         } else {
             // NOTE: 2N
-            cpu.add_cycles(2);
             let res = if self.b {
+                cycles += read_cycles_per_8_16(tfx_add as usize);
                 mem.write_byte(tfx_add as usize, cpu.get_register(self.rd as usize))
             } else {
+                cycles += read_cycles_per_32(tfx_add as usize);
                 mem.write_word(tfx_add as usize, cpu.get_register(self.rd as usize))
             };
+
+            cpu.add_cycles(cycles + 1);
 
             match res {
                 Ok(_) => (),
@@ -1078,6 +1091,8 @@ impl Operation for HalfwordDataOp {
             }
         }
 
+        let cycles_per_entry = read_cycles_per_8_16(address as usize);
+
         if self.l {
             let res = match mem.read_from_mem(address as usize) {
                 Ok(n) => n,
@@ -1117,10 +1132,10 @@ impl Operation for HalfwordDataOp {
             cpu.set_register(self.rd as usize, value);
             if self.rd as usize == PC {
                 // NOTE: 2I + 2N 1I
-                cpu.add_cycles(5);
+                cpu.add_cycles(cycles_per_entry + 4);
             } else {
                 // NOTE: 1I + 1N 1I
-                cpu.add_cycles(3);
+                cpu.add_cycles(cycles_per_entry + 2);
             }
         } else {
             if self.s || !self.h{
@@ -1134,7 +1149,7 @@ impl Operation for HalfwordDataOp {
                 }
             }
             // NOTE: 2N
-            cpu.add_cycles(2);
+            cpu.add_cycles(cycles_per_entry + 1);
         }
 
         if !self.p {

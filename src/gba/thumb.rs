@@ -913,13 +913,14 @@ impl From<u32> for MultipleLoadStoreOp {
 impl Operation for MultipleLoadStoreOp {
     fn run(&self, cpu: &mut CPU, mem: &mut SystemMemory) {
         // TODO: use bit_map_to_array function here?
+        let mut address = cpu.get_register(self.rb) as usize;
         for i in 0..8 {
             if (self.rlist >> i & 1) == 0 {
                 continue;
             }
 
             if self.l {
-                let value = match mem.read_word(cpu.get_register(self.rb) as usize) {
+                let value = match mem.read_word(address) {
                     Ok(n) => n,
                     Err(e) => {
                         warn!("{}", e);
@@ -927,19 +928,20 @@ impl Operation for MultipleLoadStoreOp {
                     }
                 };
                 cpu.set_register(i, value);
-                cpu.set_register(self.rb, cpu.get_register(self.rb) + 4);
             } else {
-                match mem.write_word(cpu.get_register(self.rb) as usize, cpu.get_register(i)) {
+                match mem.write_word(address, cpu.get_register(i)) {
                     Ok(_) => (),
                     Err(e) => warn!("{}", e),
                 };
-                cpu.set_register(self.rb, cpu.get_register(self.rb) + 4);
             }
+
+            address += 4;
         }
 
+        cpu.set_register(self.rb, address as u32);
         let registers = bit_map_to_array(self.rlist.into());
         let n = registers.len() as u32;
-        let cycles_per_entires = read_cycles_per_32(cpu.get_register(SP) as usize);
+        let cycles_per_entires = read_cycles_per_32(address);
         let cycles = calc_cycles_for_stm_ldm(cycles_per_entires, n, self.l, registers.contains(&(PC as u32)));
         cpu.add_cycles(cycles);
     }

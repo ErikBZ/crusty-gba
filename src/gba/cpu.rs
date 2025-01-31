@@ -123,7 +123,7 @@ impl CPU {
     }
 
     pub fn add_cycles(&mut self, cycles: u32) {
-        trace!("Current cycle count {}. Adding {} to cycle count", self.cycles, cycles);
+        debug!("Current cycle count {}. Adding {} to cycle count", self.cycles, cycles);
         self.cycles = self.cycles.wrapping_add(cycles);
     }
 
@@ -270,6 +270,7 @@ impl CPU {
         let op = if !self.is_thumb_mode() {
             let cond = Conditional::from(inst);
             if !cond.should_run(self.cpsr) {
+                debug!("Skipping: {:#08x}: {:#08x}", i_addr, inst);
                 self.add_cycles(1);
                 return;
             }
@@ -553,6 +554,24 @@ mod test {
         let rhs = CPU {
             registers: [0, 0, 2, 0, 12, 0, 1, 0, 0, 8, 1, 0, 0, 0, 0, 0],
             cycles: 1,
+            ..CPU::default()
+        };
+        assert_eq!(cpu, rhs);
+    }
+
+    #[test]
+    fn run_check_mov_cpsr_with_shift_instruction() {
+        let mut ram = SystemMemory::test();
+        let mut cpu = CPU {
+            registers: [0, 0, 2, 0, 0, 0, 1, 0, 0, 8, 0, 3, 0, 0, 0, 0],
+            ..CPU::default()
+        };
+
+        cpu.run_instruction(&mut ram, 0xe1b0c43b, 0x0);
+
+        let rhs = CPU {
+            registers: [0, 0, 2, 0, 0, 0, 1, 0, 0, 8, 0, 3, 3, 0, 0, 0],
+            cycles: 2,
             ..CPU::default()
         };
         assert_eq!(cpu, rhs);
