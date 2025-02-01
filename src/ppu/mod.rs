@@ -24,14 +24,16 @@ const BASE_OAM: u32 = 0x6010000;
 const HEIGHT: usize = 160;
 const WIDTH: usize = 240;
 
-fn set_bit_high(ram: &mut SystemMemory, addr: usize, flag: u32) -> Result<(), MemoryError> {
-    let data = ram.read_halfword(addr)?;
-    ram.write_halfword(addr, data | flag)
+fn set_bit_high(ram: &mut SystemMemory, addr: usize, flag: u32) {
+    let io_ram = ram.get_io_ram();
+    let idx = (addr >> 2) & 0xffff;
+    io_ram[idx] = io_ram[idx] | flag;
 }
 
-fn set_bit_low(ram: &mut SystemMemory, addr: usize, flag: u32) -> Result<(), MemoryError> {
-    let data = ram.read_halfword(addr)?;
-    ram.write_halfword(addr, data & !flag)
+fn set_bit_low(ram: &mut SystemMemory, addr: usize, flag: u32) {
+    let io_ram = ram.get_io_ram();
+    let idx = (addr >> 2) & 0xffff;
+    io_ram[idx] = io_ram[idx] & !flag;
 }
 
 pub struct PPU {
@@ -88,11 +90,13 @@ impl PPU {
         if self.h_count < 240 && next_h_count >= 240 {
             self.h_count = next_h_count;
             debug!("Setting H_BLANK_FLAG hi");
-            set_bit_high(ram, DISP_STAT_ADDR, H_BLANK_FLAG).map(|_| false)
+            set_bit_high(ram, DISP_STAT_ADDR, H_BLANK_FLAG);
+            Ok(false)
         } else if self.h_count < 308 && next_h_count >= 308 {
             self.h_count = next_h_count - 308;
             debug!("Setting H_BLANK_FLAG low");
-            set_bit_low(ram, DISP_STAT_ADDR, H_BLANK_FLAG).map(|_| true)
+            set_bit_low(ram, DISP_STAT_ADDR, H_BLANK_FLAG);
+            Ok(true)
         } else {
             self.h_count = next_h_count;
             Ok(false)
@@ -105,10 +109,12 @@ impl PPU {
         // TODO, well this propogate the error in set_bit_x?
         if self.v_count == 160 {
             debug!("Setting V_BLANK_FLAG hi");
-            set_bit_high(ram, DISP_STAT_ADDR, V_BLANK_FLAG)?;
+            println!("V BLANK IS HIGH NOW");
+            set_bit_high(ram, DISP_STAT_ADDR, V_BLANK_FLAG);
         } else if self.v_count == 226 {
             debug!("Setting V_BLANK_FLAG low");
-            set_bit_low(ram, DISP_STAT_ADDR, V_BLANK_FLAG)?;
+            println!("V BLANK IS LOW NOW");
+            set_bit_low(ram, DISP_STAT_ADDR, V_BLANK_FLAG);
         } else if self.v_count == 228 {
             self.frame += 1;
             info!("Frame done {}", self.frame);

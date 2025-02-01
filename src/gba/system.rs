@@ -263,6 +263,10 @@ impl SystemMemory {
         }
     }
 
+    pub fn get_io_ram(&mut self) -> &mut [u32] {
+        self.io_ram.as_mut_slice()
+    }
+
     pub fn get_vram(&self) -> &[u32] {
         self.vram.as_slice()
     }
