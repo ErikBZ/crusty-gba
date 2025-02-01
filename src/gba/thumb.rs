@@ -316,7 +316,7 @@ impl Operation for ALUOp {
 
         let cycles = match self.op {
             7 => 2,
-            13 => count_cycles(rs_value as u32),
+            13 => count_cycles(rd_value as u32),
             _ => 1,
         };
 
