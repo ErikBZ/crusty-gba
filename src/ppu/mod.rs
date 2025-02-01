@@ -85,12 +85,12 @@ impl PPU {
         let next_h_count = self.h_count + d_cycle;
         trace!("setting h_blank to {}", next_h_count);
 
-        if self.h_count < 960 && next_h_count >= 960 {
+        if self.h_count < 240 && next_h_count >= 240 {
             self.h_count = next_h_count;
             debug!("Setting H_BLANK_FLAG hi");
             set_bit_high(ram, DISP_STAT_ADDR, H_BLANK_FLAG).map(|_| false)
-        } else if self.h_count < 1232 && next_h_count >= 1232 {
-            self.h_count = next_h_count - 1232;
+        } else if self.h_count < 308 && next_h_count >= 308 {
+            self.h_count = next_h_count - 308;
             debug!("Setting H_BLANK_FLAG low");
             set_bit_low(ram, DISP_STAT_ADDR, H_BLANK_FLAG).map(|_| true)
         } else {
