@@ -449,9 +449,10 @@ impl Operation for PcRelativeLoadOp {
         };
 
         cpu.set_register(self.rd, block_from_mem);
+        let cycles_per_entries = read_cycles_per_32(addr);
         cpu.add_cycles(
             // TOOD: will this ever be anything other than 1?
-            cycles_for_str_ldr(true, self.rd == PC, 1)
+            cycles_for_str_ldr(true, self.rd == PC, cycles_per_entries)
         )
     }
 }
