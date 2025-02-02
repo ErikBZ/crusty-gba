@@ -282,7 +282,7 @@ impl Operation for ALUOp {
             7 => cpu.get_register(self.rd).rotate_right(cpu.get_register(self.rs)) as u64,
             8 => rd_value & rs_value,
             9 => {
-                let res = !cpu.get_register(self.rd) as u64;
+                let res = !cpu.get_register(self.rs) as u64;
                 res + 1
             },
             10 => {
@@ -310,7 +310,7 @@ impl Operation for ALUOp {
         let res = (res & 0xffffffff) as u32;
 
         match self.op {
-            9 | 10 | 11 => {},
+            8 | 10 | 11 => {},
             _ => cpu.set_register(self.rd, res),
         }
 
@@ -506,9 +506,9 @@ impl Operation for LoadStoreRegOffsetOp {
         } else {
             // TODO: Rewrite with let x if, and match on the result x
             let res = if self.b {
-                mem.write_word(addr, cpu.get_register(self.rd))
-            } else {
                 mem.write_byte(addr, cpu.get_register(self.rd))
+            } else {
+                mem.write_word(addr, cpu.get_register(self.rd))
             };
 
             match res {

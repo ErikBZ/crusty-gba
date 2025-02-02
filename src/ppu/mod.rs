@@ -109,11 +109,9 @@ impl PPU {
         // TODO, well this propogate the error in set_bit_x?
         if self.v_count == 160 {
             debug!("Setting V_BLANK_FLAG hi");
-            println!("V BLANK IS HIGH NOW");
             set_bit_high(ram, DISP_STAT_ADDR, V_BLANK_FLAG);
         } else if self.v_count == 226 {
             debug!("Setting V_BLANK_FLAG low");
-            println!("V BLANK IS LOW NOW");
             set_bit_low(ram, DISP_STAT_ADDR, V_BLANK_FLAG);
         } else if self.v_count == 228 {
             self.frame += 1;
