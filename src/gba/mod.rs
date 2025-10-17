@@ -3,6 +3,7 @@ pub mod debugger;
 pub mod arm;
 pub mod thumb;
 pub mod system;
+mod mapped_io;
 mod utils;
 mod dma;
 

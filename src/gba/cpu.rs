@@ -217,6 +217,7 @@ impl CPU {
             0
         };
 
+        // NOTE: Why am I doing this, it changes nothing?
         self.cpsr &= 0x0fffffff;
         // self.cpsr |= CPSR_C & (res >> 2);
         self.cpsr |= zero;

@@ -14,8 +14,6 @@ pub enum DebuggerCommand {
     Quit,
 }
 
-
-
 #[derive(Debug, PartialEq, Clone)]
 pub enum CommandParseError {
     NoCommandGiven,
@@ -34,6 +32,7 @@ impl fmt::Display for CommandParseError {
 }
 
 impl DebuggerCommand {
+    // TODO: Add reset
     pub fn parse(command: &str) -> Result<DebuggerCommand, CommandParseError> {
         let mut cmd_iter = command.split_whitespace();
         let cmd = match cmd_iter.next() {
@@ -57,7 +56,7 @@ impl DebuggerCommand {
             }
             "c" | "continue" => {
                 let lines: Result<u32, _> = match cmd_iter.next() {
-                    Some(s) => u32::from_str_radix(s, 10),
+                    Some(s) => s.parse::<u32>(),
                     None => return Ok(DebuggerCommand::Continue(ContinueSubcommand::Endless))
                 };
                 
