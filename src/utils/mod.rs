@@ -1,4 +1,5 @@
 pub mod shifter;
+pub mod io_registers;
 
 // Returns true if the bit at x is 1
 pub fn bit_is_one_at(num: u32, x: u32) -> bool {
