@@ -1,6 +1,7 @@
 /target
 *.gba
 *.hex
+*.bin
 
 .vscode
 *.sav
