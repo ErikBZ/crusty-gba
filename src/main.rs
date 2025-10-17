@@ -58,11 +58,9 @@ fn main() -> Result<(), Error> {
         cli::Renderer::Debug => run_debug(cpu, memory, ppu, reload_handle),
         cli::Renderer::Gui => {
             let _ = run_gui(cpu, memory, reload_handle);
-            ()
         },
         cli::Renderer::Ratatui => {
             let _ = run_ratatui();
-            ()
         },
     };
 
