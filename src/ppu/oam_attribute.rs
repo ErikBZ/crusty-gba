@@ -1,5 +1,3 @@
-use tracing::info;
-
 use crate::{gba::system::SystemMemory, utils::{Bitable, BittableColor}};
 
 const ROT_SCALE_FLAG: u32 = 0x100;

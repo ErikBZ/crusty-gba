@@ -1,6 +1,5 @@
 use crate::{gba::system::{MemoryError, SystemMemory}, utils::{bit_is_one_at, Bitable}};
-const DISP_CONTROL: usize = 0x4000000;
-const DISP_STAT: usize = 0x4000004;
+use crate::utils::io_registers::{DISP_CONTROL, DISP_STAT};
 
 pub fn display_control(ram: &mut SystemMemory) -> Result<DisplayControl, MemoryError> {
     let data = ram.read_word(DISP_CONTROL)?;

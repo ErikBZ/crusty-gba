@@ -9,12 +9,8 @@ use oam_attribute::{get_palettes, OamAttribute, RotationScaleParameter, Rotation
 use tracing::{warn, trace, info, debug, error};
 use crate::{gba::system::MemoryError, utils::Bitable, SystemMemory};
 use disp_control::{display_control, DisplayControl};
+use crate::utils::io_registers::{DISP_STAT, V_COUNT};
 // Base off of https://github.com/tuzz/game-loop 
-
-// Values for controlling how the PPU draws pixels to the display
-const DISP_CONTROL: usize = 0x4000000;
-const DISP_STAT_ADDR: usize = 0x4000004;
-const V_COUNT_ADDR: usize = 0x4000006;
 
 const V_BLANK_FLAG: u32 = 0b00000001;
 const H_BLANK_FLAG: u32 = 0b00000010;
@@ -90,12 +86,12 @@ impl PPU {
         if self.h_count < 240 && next_h_count >= 240 {
             self.h_count = next_h_count;
             debug!("Setting H_BLANK_FLAG hi");
-            set_bit_high(ram, DISP_STAT_ADDR, H_BLANK_FLAG);
+            set_bit_high(ram, DISP_STAT, H_BLANK_FLAG);
             Ok(false)
         } else if self.h_count < 308 && next_h_count >= 308 {
             self.h_count = next_h_count - 308;
             debug!("Setting H_BLANK_FLAG low");
-            set_bit_low(ram, DISP_STAT_ADDR, H_BLANK_FLAG);
+            set_bit_low(ram, DISP_STAT, H_BLANK_FLAG);
             Ok(true)
         } else {
             self.h_count = next_h_count;
@@ -109,10 +105,10 @@ impl PPU {
         // TODO, well this propogate the error in set_bit_x?
         if self.v_count == 160 {
             debug!("Setting V_BLANK_FLAG hi");
-            set_bit_high(ram, DISP_STAT_ADDR, V_BLANK_FLAG);
+            set_bit_high(ram, DISP_STAT, V_BLANK_FLAG);
         } else if self.v_count == 226 {
             debug!("Setting V_BLANK_FLAG low");
-            set_bit_low(ram, DISP_STAT_ADDR, V_BLANK_FLAG);
+            set_bit_low(ram, DISP_STAT, V_BLANK_FLAG);
         } else if self.v_count == 228 {
             self.frame += 1;
             info!("Frame done {}", self.frame);
@@ -121,9 +117,9 @@ impl PPU {
 
         debug!("Setting VCOUNT to {}", self.v_count);
         if self.v_count == 0 {
-            ram.write_byte(V_COUNT_ADDR, self.v_count).map(|_| true)
+            ram.write_byte(V_COUNT, self.v_count).map(|_| true)
         } else {
-            ram.write_byte(V_COUNT_ADDR, self.v_count).map(|_| false)
+            ram.write_byte(V_COUNT, self.v_count).map(|_| false)
         }
     }
 

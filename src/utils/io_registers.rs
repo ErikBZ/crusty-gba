@@ -1,10 +1,10 @@
-pub const DISP_CNT: usize = 0x4000000;
+pub const DISP_CONTROL: usize = 0x4000000;
 pub const DISP_STAT: usize = 0x4000004;
 pub const V_COUNT: usize = 0x4000006;
-pub const BG0_CNT: usize = 0x4000008;
-pub const BG1_CNT: usize = 0x400000a;
-pub const BG2_CNT: usize = 0x400000c;
-pub const BG3_CNT: usize = 0x400000e;
+pub const BG_CONTROL0: usize = 0x4000008;
+pub const BG_CONTROL1: usize = 0x400000a;
+pub const BG_CONTROL2: usize = 0x400000c;
+pub const BG_CONTROL3: usize = 0x400000e;
 pub const BG0_X_OFFSET: usize = 0x4000010;
 pub const BG0_Y_OFFSET: usize = 0x4000012;
 pub const BG1_X_OFFSET: usize = 0x4000014;
