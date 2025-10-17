@@ -1,17 +1,21 @@
-use crate::{gba::system::SystemMemory, utils::Bitable};
+use crate::{gba::system::{SystemMemory, MemoryError}, utils::Bitable};
+use crate::utils::io_registers::{INTERRUPT_ENABLE, INTERRUPT_REQUEST, INTERRUPT_MASTER_ENABLE};
 
 pub struct InterruptMasterEnable (bool);
 
-fn interrupt_enable(ram: &SystemMemory) -> InterruptEnableOrRequest {
-    todo!()
+pub fn interrupt_enable(ram: &mut SystemMemory) -> Result<InterruptEnableOrRequest, MemoryError> {
+    let data = ram.read_halfword(INTERRUPT_ENABLE)?;
+    Ok(InterruptEnableOrRequest::from(data))
 }
 
-fn interrupt_request(ram: &SystemMemory) -> InterruptEnableOrRequest {
-    todo!()
+pub fn interrupt_request(ram: &mut SystemMemory) -> Result<InterruptEnableOrRequest,MemoryError> {
+    let data = ram.read_halfword(INTERRUPT_REQUEST)?;
+    Ok(InterruptEnableOrRequest::from(data))
 }
 
-fn interrupt_master_enable(ram: &SystemMemory) -> InterruptMasterEnable {
-    todo!()
+pub fn interrupt_master_enable(ram: &mut SystemMemory) -> Result<InterruptMasterEnable,MemoryError> {
+    let data = ram.read_halfword(INTERRUPT_MASTER_ENABLE)?;
+    Ok(InterruptMasterEnable::from(data))
 }
 
 impl From<u32> for InterruptMasterEnable {
