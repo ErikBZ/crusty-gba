@@ -9,7 +9,7 @@ pub struct Args {
     pub render: Renderer,
     // Path to Game Boy Advance Bios
     #[arg(short, long)]
-    pub bios: String,
+    pub bios: Option<String>,
     // Path to Game Boy Advance Rom
     #[arg(short, long)]
     pub game: String,

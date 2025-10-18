@@ -8,7 +8,8 @@ use std::fs::File;
 use std::io::prelude::*;
 use clap::Parser;
 use cli::Args;
-use gba::cpu::CPU;
+use gba::cpu::{CPU, CpuBuilder};
+use crate::gba::cpu;
 use crate::ppu::PPU;
 use gba::system::SystemMemory;
 use tracing::{error, event, Level};
@@ -28,30 +29,25 @@ fn main() -> Result<(), Error> {
     let (filter, reload_handle) = reload::Layer::new(filter);
     tracing_subscriber::registry().with(filter).with(fmt::Layer::default()).init();
 
-    // TODO: Just put test.gba in the root dir
-    let mut bios_rom = match File::open(args.bios) {
-        Ok(f) => f,
-        Err(e) => {
-            error!("Unable to to open bios file: {:?}", e);
-            return Ok(());
-        }
-    };
-
-    let mut game_rom = match File::open(args.game) {
-        Ok(f) => f,
-        Err(e) => {
-            error!("Unable to to open gba file: {:?}", e);
-            return Ok(());
-        }
-    };
-
-    let bios: Vec<u32> = read_file_into_u32(&mut bios_rom);
-    let game_pak: Vec<u32> = read_file_into_u32(&mut game_rom);
-    let cpu = CPU::new(0x68, 0x3007f00, 2);
-    let ppu = PPU::default();
+    let mut cpu_builder = CpuBuilder::new();
     let mut memory = SystemMemory::new();
-    memory.copy_bios(bios);
-    memory.copy_game_pak(game_pak);
+    if let Some(bios_rom) = args.bios {
+        let mut bios_rom_f = File::open(bios_rom).expect("Unable to open bios file");
+        memory.copy_bios(read_file_into_u32(&mut bios_rom_f));
+        cpu_builder = cpu_builder.cycles(2)
+                    .stack_pointer(0x3007f00)
+                    .pc(0x68);
+    } else {
+        cpu_builder = cpu_builder.cycles(0)
+                    .stack_pointer(0x8000000)
+                    .pc(0x68);
+    }
+
+    let mut game_rom = File::open(args.game).expect("Unable to open GBA file");
+    memory.copy_game_pak(read_file_into_u32(&mut game_rom));
+
+    let cpu = cpu_builder.build();
+    let ppu = PPU::default();
     event!(Level::INFO, "Copied the stuff over");
 
     match args.render {

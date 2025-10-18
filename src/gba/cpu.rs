@@ -9,6 +9,16 @@ pub const PC: usize = 15;
 pub const LR: usize = 14;
 pub const SP: usize = 13;
 
+// NOTE: To be used when we reset the game+bios
+const BIOS_INITIAL_STACK_POINTER: u32 = 0;
+const BIOS_INITIAL_PROGRAM_COUNTER: u32 = 0;
+const BIOS_INITIAL_CYCLES: u32 = 0;
+// NOTE: To be used when we reset the game
+const GBA_INITIAL_STACK_POINTER: u32 = 0;
+const GBA_INITIAL_PROGRAM_COUNTER: u32 = 0;
+const GBA_INITIAL_CYCLES: u32 = 0;
+
+// NOTE: I'm always re-initing this. Maybe it should just be a field in Cpu
 #[derive(Debug, PartialEq, Eq)]
 pub enum CpuMode {
     System,
@@ -35,6 +45,41 @@ impl From<u32> for CpuMode {
     }
 }
 
+pub struct CpuBuilder {
+    stack_pointer: u32,
+    pc: u32,
+    cycles: u32,
+}
+
+impl CpuBuilder {
+    pub fn new() -> Self {
+        Self {
+            stack_pointer: 0,
+            pc: 0,
+            cycles: 0,
+        }
+    }
+
+    pub fn stack_pointer(mut self, sp: u32) -> CpuBuilder {
+        self.stack_pointer = sp;
+        self
+    }
+
+    pub fn pc(mut self, pc: u32) -> CpuBuilder {
+        self.pc = pc;
+        self
+    }
+
+    pub fn cycles(mut self, cycles: u32) -> CpuBuilder {
+        self.cycles = cycles;
+        self
+    }
+
+    pub fn build(self) -> CPU {
+        CPU::new(self.pc, self.stack_pointer, self.cycles)
+    }
+}
+
 #[derive(PartialEq)]
 pub struct CPU {
     registers: [u32; 16],
@@ -48,6 +93,7 @@ pub struct CPU {
     pub cpsr: u32,
     psr: [u32; 6],
     pub decode: u32,
+    // NOTE: Make this instruction_addr
     pub inst_addr: usize,
     cycles: u32,
 }
@@ -111,6 +157,41 @@ impl CPU {
             inst_addr: 0x0,
             cycles: init_cycles,
         }
+    }
+
+    fn reset(&mut self) {
+        for ref mut x in self.registers {
+            *x = 0;
+        }
+
+        for ref mut x in self.fiq_banked_gen_regs {
+            *x = 0;
+        }
+
+        for i in 0..2 {
+            self.svc_banked_regs[i] = 0;
+            self.abt_banked_regs[i] = 0;
+            self.irq_banked_regs[i] = 0;
+            self.und_banked_regs[i] = 0;
+        }
+
+
+        for ref mut x in self.psr {
+            *x = 0;
+        }
+
+        self.cpsr = 0x1f;
+        self.decode = 0;
+        self.inst_addr = 0;
+        self.cycles = 0;
+    }
+
+    pub fn reset_cpu(&mut self) {
+        todo!()
+    }
+
+    pub fn reset_cpu_with_bios(&mut self) {
+        todo!()
     }
 
     // Program Counter
