@@ -123,7 +123,7 @@ impl PPU {
         }
     }
 
-    pub fn get_next_frame(&mut self, ram: &mut SystemMemory) -> Vec<u8> {
+    pub fn get_next_frame(&mut self, ram: &SystemMemory) -> Vec<u8> {
         let disp_control = display_control(ram).expect("Something went wrong grabbing the display control");
         let _: Vec<BgControl> = match get_bgs(&disp_control, ram) {
             Ok(b) => b,
@@ -181,7 +181,7 @@ impl PPU {
     }
 } 
 
-fn get_color_id_16_palette_2d(x: u32, y: u32, tile_base: u32, ram: &mut SystemMemory) -> usize {
+fn get_color_id_16_palette_2d(x: u32, y: u32, tile_base: u32, ram: &SystemMemory) -> usize {
     // Translating 
     let idx = tile_base + ((x % 8) >> 1) + ((x >> 3) * 0x40) + (0x4 * (y % 8)) + (0x400 * (y >> 3));
     let pixel_byte = ram.read_byte(idx as usize).expect("Error reading byte while writing to pixel buffer");
@@ -192,7 +192,7 @@ fn get_color_id_16_palette_2d(x: u32, y: u32, tile_base: u32, ram: &mut SystemMe
     }
 }
 
-fn get_color_id_256_colors_2d(x: u32, y: u32, tile_base: u32, ram: &mut SystemMemory) -> usize {
+fn get_color_id_256_colors_2d(x: u32, y: u32, tile_base: u32, ram: &SystemMemory) -> usize {
     let idx = tile_base + x % 8 + ((x >> 3) * 0x40) + (0x8 * (y % 8)) + (0x400 * (y >> 3));
     let pixel_byte = ram.read_byte(idx as usize).expect("Error reading byte while writing to pixel buffer");
     pixel_byte as usize
@@ -203,7 +203,7 @@ fn euclid_to_buffer_idx(x: usize, y: usize) -> usize {
     (x * 4) + (y * bytes_in_row)
 }
 
-fn get_bgs(disp_control: &DisplayControl, ram: &mut SystemMemory) -> Result<Vec<BgControl>, MemoryError> {
+fn get_bgs(disp_control: &DisplayControl, ram: &SystemMemory) -> Result<Vec<BgControl>, MemoryError> {
     let mut bgs: Vec<BgControl> = Vec::new();
 
     match disp_control.bg_mode {
@@ -222,7 +222,7 @@ fn get_bgs(disp_control: &DisplayControl, ram: &mut SystemMemory) -> Result<Vec<
             if disp_control.display_bg2 { bgs.push(bg_control2(ram)?); }
             if disp_control.display_bg3 { bgs.push(bg_control3(ram)?); }
         }
-        3 | 4| 5 => {
+        3..=5 => {
             if disp_control.display_bg2 { bgs.push(bg_control2(ram)?); }
         }
         _ => {
@@ -235,7 +235,7 @@ fn get_bgs(disp_control: &DisplayControl, ram: &mut SystemMemory) -> Result<Vec<
 
 // Where do we start reading, and how many do we read?
 // We can't really return a buffer since it can be behind a background
-fn get_objs_and_params(ram: &mut SystemMemory, display_control: &DisplayControl) -> (Vec<OamAttribute>, Vec<RotationScaleParameter>) {
+fn get_objs_and_params(ram: &SystemMemory, display_control: &DisplayControl) -> (Vec<OamAttribute>, Vec<RotationScaleParameter>) {
     let oam = ram.get_oam();
     let mut objs: Vec<OamAttribute> = Vec::new();
     let mut param_builder = RotationScaleParameterBuilder::new();

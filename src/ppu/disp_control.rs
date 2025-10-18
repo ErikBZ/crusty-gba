@@ -1,12 +1,12 @@
 use crate::{gba::system::{MemoryError, SystemMemory}, utils::{bit_is_one_at, Bitable}};
 use crate::utils::io_registers::{DISP_CONTROL, DISP_STAT};
 
-pub fn display_control(ram: &mut SystemMemory) -> Result<DisplayControl, MemoryError> {
+pub fn display_control(ram: &SystemMemory) -> Result<DisplayControl, MemoryError> {
     let data = ram.read_word(DISP_CONTROL)?;
     Ok(DisplayControl::from(data))
 }
 
-pub fn display_stat(ram: &mut SystemMemory) -> Result<DisplayStat, MemoryError> {
+pub fn display_stat(ram: &SystemMemory) -> Result<DisplayStat, MemoryError> {
     let data = ram.read_word(DISP_STAT)?;
     Ok(DisplayStat::from(data))
 }

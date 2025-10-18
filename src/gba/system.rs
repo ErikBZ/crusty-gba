@@ -180,7 +180,7 @@ impl SystemMemory {
         let new_data = (old_data & !(mask << shift)) | ((write_only_block & mask) << shift);
         trace!("addr: {:x}, old value: {:x}, new_value: {:x}", address, old_data, new_data);
 
-        let ram: &mut Vec<u32> = self.memory_map(address)?;
+        let ram: &mut Vec<u32> = self.memory_map_mut(address)?;
         if i > ram.len() {
             Err(MemoryError::OutOfBounds(address, i))
         } else {
@@ -190,35 +190,35 @@ impl SystemMemory {
     }
 
     // TODO: Makes this only borrow
-    pub fn read_word(&mut self, address: usize) -> Result<u32, MemoryError> {
+    pub fn read_word(&self, address: usize) -> Result<u32, MemoryError> {
         let res = self.read_from_mem(address)?;
         Ok(res)
     }
 
-    pub fn read_halfword(&mut self, address: usize) -> Result<u32, MemoryError> {
+    pub fn read_halfword(&self, address: usize) -> Result<u32, MemoryError> {
         let res = self.read_from_mem(address)?;
         let shift = address & 0b10;
         // TODO: check that address is halfword aligned, error otherwise?
         Ok(res >> (shift * 8) & 0xffff)
     }
 
-    pub fn read_halfword_sign_ex(&mut self, address: usize) -> Result<u32, MemoryError> {
+    pub fn read_halfword_sign_ex(&self, address: usize) -> Result<u32, MemoryError> {
         let res = self.read_halfword(address)? as i32;
         Ok(((res << 16) >> 16) as u32)
     }
 
-    pub fn read_byte(&mut self, address: usize) -> Result<u32, MemoryError> {
+    pub fn read_byte(&self, address: usize) -> Result<u32, MemoryError> {
         let res = self.read_from_mem(address)?;
         let shift = address & 0b11;
         Ok(res >> (shift * 8) & 0xff)
     }
 
-    pub fn read_byte_sign_ex(&mut self, address: usize) -> Result<u32, MemoryError> {
+    pub fn read_byte_sign_ex(&self, address: usize) -> Result<u32, MemoryError> {
         let res = self.read_byte(address)? as i32;
         Ok(((res << 24) >> 24) as u32)
     }
 
-    pub fn read_from_mem(&mut self, address: usize) -> Result<u32, MemoryError> {
+    pub fn read_from_mem(&self, address: usize) -> Result<u32, MemoryError> {
         let ram: &Vec<u32> = self.memory_map(address)?;
         let mem_address = (address & 0xffffff) >> 2;
 
@@ -246,8 +246,25 @@ impl SystemMemory {
         todo!()
     }
     
+    //TODO: Make another that isn't mut?
     // deal with lifetimes later
-    fn memory_map(&mut self, address: usize) -> Result<&mut Vec<u32>, MemoryError> {
+    fn memory_map(&self, address: usize) -> Result<&Vec<u32>, MemoryError> {
+        let mem_type = address >> 24 & 0xf;
+        match mem_type {
+            0x0 => Ok(&self.system_rom),
+            0x2 => Ok(&self.ewram),
+            0x3 => Ok(&self.iwram),
+            0x4 => Ok(&self.io_ram),
+            0x5 => Ok(&self.pal_ram),
+            0x6 => Ok(&self.vram),
+            0x7 => Ok(&self.oam),
+            0x8..=0xd => Ok(&self.pak_rom),
+            0xe => Ok(&self.cart_ram),
+            _ => Err(MemoryError::MapNotFound(address))
+        }
+    }
+
+    fn memory_map_mut(&mut self, address: usize) -> Result<&mut Vec<u32>, MemoryError> {
         let mem_type = address >> 24 & 0xf;
         match mem_type {
             0x0 => Ok(&mut self.system_rom),
@@ -257,7 +274,7 @@ impl SystemMemory {
             0x5 => Ok(&mut self.pal_ram),
             0x6 => Ok(&mut self.vram),
             0x7 => Ok(&mut self.oam),
-            0x8 | 0x9 | 0xa | 0xb | 0xc | 0xd => Ok(&mut self.pak_rom),
+            0x8..=0xd => Ok(&mut self.pak_rom),
             0xe => Ok(&mut self.cart_ram),
             _ => Err(MemoryError::MapNotFound(address))
         }

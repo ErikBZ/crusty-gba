@@ -3,17 +3,17 @@ use crate::utils::io_registers::{INTERRUPT_ENABLE, INTERRUPT_REQUEST, INTERRUPT_
 
 pub struct InterruptMasterEnable (bool);
 
-pub fn interrupt_enable(ram: &mut SystemMemory) -> Result<InterruptEnableOrRequest, MemoryError> {
+pub fn interrupt_enable(ram: &SystemMemory) -> Result<InterruptEnableOrRequest, MemoryError> {
     let data = ram.read_halfword(INTERRUPT_ENABLE)?;
     Ok(InterruptEnableOrRequest::from(data))
 }
 
-pub fn interrupt_request(ram: &mut SystemMemory) -> Result<InterruptEnableOrRequest,MemoryError> {
+pub fn interrupt_request(ram: &SystemMemory) -> Result<InterruptEnableOrRequest,MemoryError> {
     let data = ram.read_halfword(INTERRUPT_REQUEST)?;
     Ok(InterruptEnableOrRequest::from(data))
 }
 
-pub fn interrupt_master_enable(ram: &mut SystemMemory) -> Result<InterruptMasterEnable,MemoryError> {
+pub fn interrupt_master_enable(ram: &SystemMemory) -> Result<InterruptMasterEnable,MemoryError> {
     let data = ram.read_halfword(INTERRUPT_MASTER_ENABLE)?;
     Ok(InterruptMasterEnable::from(data))
 }
