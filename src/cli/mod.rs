@@ -15,7 +15,7 @@ pub struct Args {
     pub game: String,
     // TODO: Add Logging Level
     #[arg(short, long)]
-    pub log_level: Option<Level>
+    pub log_level: Option<LogLevel>
 }
 
 #[derive(Debug, clap::ValueEnum, Clone, Default)]
@@ -37,9 +37,9 @@ pub enum LogLevel {
     Off,
 }
 
-impl Into<LevelFilter> for LogLevel {
-    fn into(self) -> LevelFilter {
-        match self {
+impl From<LogLevel> for LevelFilter {
+    fn from(value: LogLevel) -> Self {
+        match value {
             LogLevel::Trace => LevelFilter::TRACE,
             LogLevel::Debug => LevelFilter::DEBUG,
             LogLevel::Info => LevelFilter::INFO,
