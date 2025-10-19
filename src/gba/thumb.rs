@@ -380,6 +380,7 @@ impl Operation for HiRegOp {
                 };
 
                 // Pipeline flush
+                // NOTE: This is a required read, so maybe panic/log or something?
                 cpu.decode = match next_inst {
                     Ok(n) => n,
                     Err(e) => {

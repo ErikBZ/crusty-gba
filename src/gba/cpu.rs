@@ -3,20 +3,21 @@ use super::arm::decode_as_arm;
 use super::thumb::decode_as_thumb;
 use super::{is_signed, Conditional, CPSR_C, CPSR_N, CPSR_T, CPSR_V, CPSR_Z};
 use super::system::SystemMemory;
-use tracing::{debug, trace};
+use tracing::{debug, trace, error};
 
 pub const PC: usize = 15;
 pub const LR: usize = 14;
 pub const SP: usize = 13;
 
 // NOTE: To be used when we reset the game+bios
-const BIOS_INITIAL_STACK_POINTER: u32 = 0;
-const BIOS_INITIAL_PROGRAM_COUNTER: u32 = 0;
-const BIOS_INITIAL_CYCLES: u32 = 0;
+const BIOS_INITIAL_STACK_POINTER: u32 = 0x3007F00;
+const BIOS_INITIAL_PROGRAM_COUNTER: u32 = 0x68;
+const BIOS_INITIAL_CYCLES: u32 = 2;
 // NOTE: To be used when we reset the game
-const GBA_INITIAL_STACK_POINTER: u32 = 0;
-const GBA_INITIAL_PROGRAM_COUNTER: u32 = 0;
-const GBA_INITIAL_CYCLES: u32 = 0;
+const GBA_INITIAL_STACK_POINTER: u32 = 0x3007F00;
+const GBA_INITIAL_PROGRAM_COUNTER: u32 = 0x8000000;
+const GBA_SVC_STACK_POINTER: u32 = 0x3007FE0;
+const GBA_IRQ_STACK_POINTER: u32 = 0x3007FA0;
 
 // NOTE: I'm always re-initing this. Maybe it should just be a field in Cpu
 #[derive(Debug, PartialEq, Eq)]
@@ -42,41 +43,6 @@ impl From<u32> for CpuMode {
             0b11111 => CpuMode::System,
             _ => unreachable!(),
         }
-    }
-}
-
-pub struct CpuBuilder {
-    stack_pointer: u32,
-    pc: u32,
-    cycles: u32,
-}
-
-impl CpuBuilder {
-    pub fn new() -> Self {
-        Self {
-            stack_pointer: 0,
-            pc: 0,
-            cycles: 0,
-        }
-    }
-
-    pub fn stack_pointer(mut self, sp: u32) -> CpuBuilder {
-        self.stack_pointer = sp;
-        self
-    }
-
-    pub fn pc(mut self, pc: u32) -> CpuBuilder {
-        self.pc = pc;
-        self
-    }
-
-    pub fn cycles(mut self, cycles: u32) -> CpuBuilder {
-        self.cycles = cycles;
-        self
-    }
-
-    pub fn build(self) -> CPU {
-        CPU::new(self.pc, self.stack_pointer, self.cycles)
     }
 }
 
@@ -128,16 +94,16 @@ impl fmt::Display for CPU {
 // To speed up debugging we'll be printing just the `registers` field
 impl fmt::Debug for CPU {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "GEN: {:?},", self.registers)?;
-        write!(f, "FIQ: {:?},", self.fiq_banked_gen_regs)?;
-        write!(f, "SVC: {:?},", self.svc_banked_regs)?;
-        write!(f, "ABT: {:?},", self.abt_banked_regs)?;
-        write!(f, "IRQ: {:?},", self.irq_banked_regs)?;
-        write!(f, "Und: {:?},", self.und_banked_regs)?;
-        write!(f, "psr: {:?},", self.psr)?;
-        write!(f, "decode: {:?},", self.decode)?;
-        write!(f, "addr: {:?},", self.inst_addr)?;
-        write!(f, "cycles: {:?},", self.cycles)?;
+        write!(f, "GEN: {:X?},", self.registers)?;
+        write!(f, "FIQ: {:X?},", self.fiq_banked_gen_regs)?;
+        write!(f, "SVC: {:X?},", self.svc_banked_regs)?;
+        write!(f, "ABT: {:X?},", self.abt_banked_regs)?;
+        write!(f, "IRQ: {:X?},", self.irq_banked_regs)?;
+        write!(f, "Und: {:X?},", self.und_banked_regs)?;
+        write!(f, "psr: {:X?},", self.psr)?;
+        write!(f, "decode: {:X?},", self.decode)?;
+        write!(f, "addr: {:X?},", self.inst_addr)?;
+        write!(f, "cycles: {:X?},", self.cycles)?;
         write!(f, "cpsr: {:08x}", self.cpsr)
     }
 }
@@ -187,11 +153,18 @@ impl CPU {
     }
 
     pub fn reset_cpu(&mut self) {
-        todo!()
+        self.reset();
+        self.registers[PC] = GBA_INITIAL_PROGRAM_COUNTER;
+        self.registers[SP] = GBA_INITIAL_STACK_POINTER;
+        self.svc_banked_regs[0] = GBA_SVC_STACK_POINTER;
+        self.irq_banked_regs[0] = GBA_IRQ_STACK_POINTER;
     }
 
     pub fn reset_cpu_with_bios(&mut self) {
-        todo!()
+        self.reset();
+        self.registers[PC] = BIOS_INITIAL_PROGRAM_COUNTER;
+        self.registers[SP] = BIOS_INITIAL_STACK_POINTER;
+        self.cycles = BIOS_INITIAL_CYCLES;
     }
 
     // Program Counter
@@ -332,8 +305,9 @@ impl CPU {
         self.decode = match next_inst {
             Ok(i) => i,
             Err(e) => {
-                println!("{}", e);
-                0
+                error!("{}", e);
+                println!("{:?}", self);
+                panic!()
             }
         };
 
