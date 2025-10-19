@@ -334,7 +334,19 @@ impl CPU {
         } else {
             decode_as_thumb(inst)
         };
-        debug!("{:#08x}: {:#08x} - {:?}", i_addr, inst, op);
+
+        let op = match op {
+            Ok(op) => op,
+            Err(e) => {
+                error!("{}", e);
+                println!("Dumping CPU stats: ");
+                println!("{}", self);
+                println!("{:X?}", self);
+                panic!()
+            }
+        };
+
+        debug!("{:#08x}: {:#08x} - {:X?}", i_addr, inst, op);
 
         op.run(self, ram);
     }

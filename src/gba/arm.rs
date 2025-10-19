@@ -6,39 +6,40 @@ use super::{CPSR_C, CPSR_T};
 use super::cpu::{CPU,PC, LR};
 use tracing::warn;
 use super::utils::calc_cycles_for_stm_ldm;
+use super::error::InstructionDecodeError;
 
 // TODO: currently all regs are u8 or u32 types, maybe they should be usizes
-pub fn decode_as_arm(inst: u32) -> Box<dyn Operation> {
+pub fn decode_as_arm(inst: u32) -> Result<Box<dyn Operation>, InstructionDecodeError> {
     if is_multiply(inst) {
-       Box::new(MultiplyOp::from(inst))
+       Ok(Box::new(MultiplyOp::from(inst)))
     } else if is_multiply_long(inst) {
-       Box::new(MultiplyLongOp::from(inst))
+       Ok(Box::new(MultiplyLongOp::from(inst)))
     } else if is_single_data_swap(inst) {
-       Box::new(SingleDataSwapOp::from(inst))
+       Ok(Box::new(SingleDataSwapOp::from(inst)))
     } else if is_branch_and_exchange(inst) {
-       Box::new(BranchExchangeOp::from(inst))
+       Ok(Box::new(BranchExchangeOp::from(inst)))
     } else if is_branch(inst) {
-       Box::new(BranchOp::from(inst))
+       Ok(Box::new(BranchOp::from(inst)))
     } else if is_software_interrupt(inst) {
-        Box::new(SoftwareInterruptOp)
+        Ok(Box::new(SoftwareInterruptOp))
     } else if is_single_data_tfx(inst) {
-       Box::new(SingleDataTfx::from(inst))
+       Ok(Box::new(SingleDataTfx::from(inst)))
     } else if is_block_data_tfx(inst) {
-       Box::new(BlockDataTransfer::from(inst))
+       Ok(Box::new(BlockDataTransfer::from(inst)))
     } else if is_coprocessor_data_op(inst) {
-       Box::new(CoprocessDataOp::from(inst))
+       Ok(Box::new(CoprocessDataOp::from(inst)))
     } else if is_coprocessor_data_tfx(inst) {
-       Box::new(CoprocessDataTfx::from(inst))
+       Ok(Box::new(CoprocessDataTfx::from(inst)))
     } else if is_coprocessor_reg_tfx(inst) {
-       Box::new(CoprocessRegTfx::from(inst))
+       Ok(Box::new(CoprocessRegTfx::from(inst)))
     } else if is_psr_transfer(inst) {
-       Box::new(PsrTransferOp::from(inst))
+       Ok(Box::new(PsrTransferOp::from(inst)))
     } else if is_halfword_data_tfx_imm(inst) || is_halfword_data_tfx_reg(inst) {
-       Box::new(HalfwordDataOp::from(inst))
+       Ok(Box::new(HalfwordDataOp::from(inst)))
     } else if is_data_processing(inst) {
-       Box::new(DataProcessingOp::from(inst))
+       Ok(Box::new(DataProcessingOp::from(inst)))
     } else {
-       Box::new(UndefinedInstruction)
+       Ok(Box::new(UndefinedInstruction))
     }
 }
 

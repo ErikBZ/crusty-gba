@@ -6,6 +6,7 @@ pub mod system;
 mod mapped_io;
 mod utils;
 mod dma;
+mod error;
 
 pub const CPSR_N: u32 = 0x80000000;
 pub const CPSR_Z: u32 = 0x40000000;

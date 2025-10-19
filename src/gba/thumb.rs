@@ -3,66 +3,71 @@ use super::system::{read_cycles_per_32, read_cycles_per_8_16};
 use super::{add_nums, bit_map_to_array, count_cycles, get_abs_int_value, get_v_from_add, get_v_from_sub, is_signed, subtract_nums, Conditional, Operation, CPSR_C, CPSR_T};
 use crate::utils::shifter::ShiftWithCarry;
 use crate::{SystemMemory, CPU};
-use tracing::warn;
+use tracing::{warn, error};
 use super::utils::calc_cycles_for_stm_ldm;
+use super::error::InstructionDecodeError;
 
-pub fn decode_as_thumb(value: u32) -> Box<dyn Operation> {
+// TODO: There's some 'unreachable' blocks in Operation.
+// They should be replaced with TryFrom's, so that there are no unreachable!
+// blocks in the run function of the Operations
+
+pub fn decode_as_thumb(value: u32) -> Result<Box<dyn Operation>, InstructionDecodeError> {
     if value & 0xf800 == 0x1800 {
         // AddSubtractOp
-        Box::new(AddSubtractOp::from(value))
+        Ok(Box::new(AddSubtractOp::from(value)))
     } else if value & 0xe000 == 0x0 {
         // MoveShiftedRegisterOp
-        Box::new(MoveShiftedRegisterOp::from(value))
+        Ok(Box::new(MoveShiftedRegisterOp::from(value)))
     } else if value & 0xe000 == 0x2000 {
         // MathImmOp
-        Box::new(MathImmOp::from(value))
+        Ok(Box::new(MathImmOp::from(value)))
     } else if value & 0xfc00 == 0x4000 {
         // ALUOp
-        Box::new(ALUOp::from(value))
+        Ok(Box::new(ALUOp::from(value)))
     } else if value & 0xfc00 == 0x4400 {
         // HiRegOp
-        Box::new(HiRegOp::from(value))
+        Ok(Box::new(HiRegOp::from(value)))
     } else if value & 0xf800 == 0x4800 {
         // PcRelativeLoadOp
-        Box::new(PcRelativeLoadOp::from(value))
+        Ok(Box::new(PcRelativeLoadOp::from(value)))
     } else if value & 0xf200 == 0x5000 {
         // LoadStoreRegOffsetOp
-        Box::new(LoadStoreRegOffsetOp::from(value))
+        Ok(Box::new(LoadStoreRegOffsetOp::from(value)))
     } else if value & 0xf200 == 0x5200 {
         // LoadStoreSignExOp
-        Box::new(LoadStoreSignExOp::from(value))
+        Ok(Box::new(LoadStoreSignExOp::from(value)))
     } else if value & 0xe000 == 0x6000 {
         // LoadStoreImmOffsetOp
-        Box::new(LoadStoreImmOffsetOp::from(value))
+        Ok(Box::new(LoadStoreImmOffsetOp::from(value)))
     } else if value & 0xf000 == 0x8000 {
         // LoadStoreHalfWordOp
-        Box::new(LoadStoreHalfWordOp::from(value))
+        Ok(Box::new(LoadStoreHalfWordOp::from(value)))
     } else if value & 0xf000 == 0x9000 {
         // SpRelativeLoadOp
-        Box::new(SpRelativeLoadOp::from(value))
+        Ok(Box::new(SpRelativeLoadOp::from(value)))
     } else if value & 0xf000 == 0xa000 {
         // LoadAddressOp
-        Box::new(LoadAddressOp::from(value))
+        Ok(Box::new(LoadAddressOp::from(value)))
     } else if value & 0xff00 == 0xb000 {
         // AddOffsetSPOp
-        Box::new(AddOffsetSPOp::from(value))
+        Ok(Box::new(AddOffsetSPOp::from(value)))
     } else if value & 0xf600 == 0xb400 {
         // PushPopRegOp
-        Box::new(PushPopRegOp::from(value))
+        Ok(Box::new(PushPopRegOp::from(value)))
     } else if value & 0xf000 == 0xc000 {
         // MultipleLoadStoreOp
-        Box::new(MultipleLoadStoreOp::from(value))
+        Ok(Box::new(MultipleLoadStoreOp::from(value)))
     } else if value & 0xf000 == 0xd000 {
         // ConditionalBranchOp
-        Box::new(ConditionalBranchOp::from(value))
+        ConditionalBranchOp::try_from(value).map(|v| Box::new(v) as Box<dyn Operation>)
     } else if value & 0xf800 == 0xe000 {
         // UnconditionalBranchOp
-        Box::new(UnconditionalBranchOp::from(value))
+        Ok(Box::new(UnconditionalBranchOp::from(value)))
     } else if value & 0xf000 == 0xf000 {
         // LongBranchWithLinkOp
-        Box::new(LongBranchWithLinkOp::from(value))
+        Ok(Box::new(LongBranchWithLinkOp::from(value)))
     } else {
-        Box::new(SoftwareInterruptOp::from(value))
+        Ok(Box::new(SoftwareInterruptOp::from(value)))
     }
 }
 
@@ -955,9 +960,10 @@ struct ConditionalBranchOp {
     offset: u32,
 }
 
-impl From<u32> for ConditionalBranchOp {
-    fn from(value: u32) -> Self {
-        ConditionalBranchOp {
+impl TryFrom<u32> for ConditionalBranchOp {
+    type Error = InstructionDecodeError;
+    fn try_from(value: u32) -> Result<Self, Self::Error> {
+        Ok(ConditionalBranchOp {
             offset: (value & 0xff) as u32,
             cond: match value >> 8 & 0xf {
                 0  => Conditional::EQ,
@@ -974,9 +980,14 @@ impl From<u32> for ConditionalBranchOp {
                 11 => Conditional::LT,
                 12 => Conditional::GT,
                 13 => Conditional::LE,
-                _ => unreachable!()
+                _ => {
+                    return Err(InstructionDecodeError::ConditionalNotValid {
+                        cond: value >> 8 & 0xf,
+                        value
+                    })
+                }
             },
-        }
+        })
     }
 }
 
