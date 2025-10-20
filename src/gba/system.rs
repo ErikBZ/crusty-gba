@@ -1,5 +1,7 @@
 use core::fmt;
-use tracing::{trace, warn};
+use tracing::{trace, warn, info};
+use crate::gba::get_v_from_add;
+
 use super::dma::DmaControl;
 
 
@@ -152,6 +154,9 @@ impl SystemMemory {
 
     pub fn write_word(&mut self, address: usize, block: u32) -> Result<(), MemoryError> {
         self.write_with_mask(address, block, WORD)?;
+        if address == 0x4000006 {
+            info!("{:X}", block);
+        }
         Ok(())
     }
 
@@ -192,6 +197,10 @@ impl SystemMemory {
     // TODO: Makes this only borrow
     pub fn read_word(&self, address: usize) -> Result<u32, MemoryError> {
         let res = self.read_from_mem(address)?;
+        if address == 0x4000006 {
+            info!("{:X}", res);
+        }
+
         Ok(res)
     }
 

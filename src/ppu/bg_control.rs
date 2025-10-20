@@ -21,6 +21,7 @@ pub fn bg_control3(ram: &SystemMemory) -> Result<BgControl, MemoryError> {
     Ok(BgControl::from(data))
 }
 
+#[derive(Debug)]
 pub(super) struct BgControl {
     pub bg_priority: u32,
     pub character_base_block: usize,

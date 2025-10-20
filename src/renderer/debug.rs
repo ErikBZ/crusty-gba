@@ -8,7 +8,7 @@ use tracing_subscriber::{reload::Handle, Registry};
 use tracing_subscriber::filter::LevelFilter;
 
 pub fn run_debug(mut cpu: CPU, mut memory: SystemMemory, mut ppu: PPU, reload_handle: Handle<LevelFilter, Registry>) {
-    event!(Level::INFO, "Runing Debug session");
+    event!(Level::INFO, "Running Debug session");
     use std::io;
     let mut break_points: HashSet<usize> = HashSet::new();
 

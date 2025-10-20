@@ -57,6 +57,9 @@ pub fn decode_as_thumb(value: u32) -> Result<Box<dyn Operation>, InstructionDeco
     } else if value & 0xf000 == 0xc000 {
         // MultipleLoadStoreOp
         Ok(Box::new(MultipleLoadStoreOp::from(value)))
+    } else if value & 0xff00 == 0xdf00 {
+        // ConditionalBranchOp
+        Ok(Box::new(SoftwareInterruptOp::from(value)))
     } else if value & 0xf000 == 0xd000 {
         // ConditionalBranchOp
         ConditionalBranchOp::try_from(value).map(|v| Box::new(v) as Box<dyn Operation>)
@@ -67,7 +70,7 @@ pub fn decode_as_thumb(value: u32) -> Result<Box<dyn Operation>, InstructionDeco
         // LongBranchWithLinkOp
         Ok(Box::new(LongBranchWithLinkOp::from(value)))
     } else {
-        Ok(Box::new(SoftwareInterruptOp::from(value)))
+        Err(InstructionDecodeError::NoMatchingOperation(value))
     }
 }
 
@@ -1043,7 +1046,7 @@ impl Operation for SoftwareInterruptOp {
         println!("CPU PC: {:x}", cpu.pc());
         // Move address of next instruction into LR, Copy CPSR to SPSR
         // Load SWI Vector Address into PC, swith to ARM mode, enter SVC
-        todo!()
+        // todo!()
     }
 }
 

@@ -125,14 +125,14 @@ impl PPU {
 
     pub fn get_next_frame(&mut self, ram: &SystemMemory) -> Vec<u8> {
         let disp_control = display_control(ram).expect("Something went wrong grabbing the display control");
-        let _: Vec<BgControl> = match get_bgs(&disp_control, ram) {
+        let bgs: Vec<BgControl> = match get_bgs(&disp_control, ram) {
             Ok(b) => b,
             Err(e) => {
                 panic!("Err occured: {}", e)
             }
         };
 
-        //info!("Display Control: {:?}, BGs enabled: {}", disp_control, bgs.len());
+        error!("Display Control: {:?}, BGs enabled: {:?}", disp_control, bgs);
         // Do stuff with BGs here:
         //
 

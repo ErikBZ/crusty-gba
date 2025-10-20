@@ -83,10 +83,10 @@ impl fmt::Display for CPU {
         let cond = Conditional::from(self.decode);
         if self.is_thumb_mode() {
             let op = decode_as_thumb(self.decode);
-            write!(f, "{:#04x} {:?} {:?}", self.decode, cond, op)
+            writeln!(f, "{:#04x} {:?} {:?}", self.decode, cond, op)
         } else {
             let op = decode_as_arm(self.decode);
-            write!(f, "{:#08x} {:?} {:?}", self.decode, cond, op)
+            writeln!(f, "{:#08x} {:?} {:?}", self.decode, cond, op)
         }
     }
 }
@@ -94,16 +94,16 @@ impl fmt::Display for CPU {
 // To speed up debugging we'll be printing just the `registers` field
 impl fmt::Debug for CPU {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "GEN: {:X?},", self.registers)?;
-        write!(f, "FIQ: {:X?},", self.fiq_banked_gen_regs)?;
-        write!(f, "SVC: {:X?},", self.svc_banked_regs)?;
-        write!(f, "ABT: {:X?},", self.abt_banked_regs)?;
-        write!(f, "IRQ: {:X?},", self.irq_banked_regs)?;
-        write!(f, "Und: {:X?},", self.und_banked_regs)?;
-        write!(f, "psr: {:X?},", self.psr)?;
-        write!(f, "decode: {:X?},", self.decode)?;
-        write!(f, "addr: {:X?},", self.inst_addr)?;
-        write!(f, "cycles: {:X?},", self.cycles)?;
+        write!(f, "gen: {:X?}, ", self.registers)?;
+        write!(f, "fiq: {:X?}, ", self.fiq_banked_gen_regs)?;
+        write!(f, "svc: {:X?}, ", self.svc_banked_regs)?;
+        write!(f, "abt: {:X?}, ", self.abt_banked_regs)?;
+        write!(f, "irq: {:X?}, ", self.irq_banked_regs)?;
+        write!(f, "und: {:X?}, ", self.und_banked_regs)?;
+        write!(f, "psr: {:X?}, ", self.psr)?;
+        write!(f, "decode: {:X?}, ", self.decode)?;
+        write!(f, "addr: {:X?}, ", self.inst_addr)?;
+        write!(f, "cycles: {:X?}, ", self.cycles)?;
         write!(f, "cpsr: {:08x}", self.cpsr)
     }
 }
@@ -177,7 +177,7 @@ impl CPU {
     }
 
     pub fn add_cycles(&mut self, cycles: u32) {
-        debug!("Current cycle count {}. Adding {} to cycle count", self.cycles, cycles);
+        trace!("Current cycle count {}. Adding {} to cycle count", self.cycles, cycles);
         self.cycles = self.cycles.wrapping_add(cycles);
     }
 
