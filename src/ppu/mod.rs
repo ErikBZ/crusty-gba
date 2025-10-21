@@ -5,7 +5,14 @@ mod color_effect;
 mod oam_attribute;
 
 use bg_control::{bg_control0, bg_control1, bg_control2, bg_control3, BgControl};
-use oam_attribute::{get_palettes, OamAttribute, RotationScaleParameter, RotationScaleParameterBuilder};
+use oam_attribute::{
+    get_obj_palettes,
+    get_bg_palettes,
+    OamAttribute,
+    RotationScaleParameter,
+    RotationScaleParameterBuilder,
+    Colors
+};
 use tracing::{warn, trace, info, debug, error};
 use crate::{gba::system::MemoryError, utils::Bitable, SystemMemory};
 use disp_control::{display_control, DisplayControl};
@@ -20,6 +27,12 @@ const BASE_OAM: u32 = 0x6010000;
 const HEIGHT: usize = 160;
 const WIDTH: usize = 240;
 
+// Used for modes 3-5
+const FRAME_BUFFER_0_START: u32 = 0x6000000;
+const BITMAP_OBJ_DATA_OFFSET: u32 = 0x14000;
+// Used for modes 4-5
+const FRAME_BUFFER_1_OFFSET: u32 = 0xA000;
+
 fn set_bit_high(ram: &mut SystemMemory, addr: usize, flag: u32) {
     let io_ram = ram.get_io_ram();
     let idx = (addr >> 2) & 0xffff;
@@ -32,6 +45,7 @@ fn set_bit_low(ram: &mut SystemMemory, addr: usize, flag: u32) {
     io_ram[idx] = io_ram[idx] & !flag;
 }
 
+#[derive(Debug)]
 pub struct PPU {
     old_cycle: u32,
     h_count: u32,
@@ -134,7 +148,15 @@ impl PPU {
 
         error!("Display Control: {:?}, BGs enabled: {:?}", disp_control, bgs);
         // Do stuff with BGs here:
-        //
+        match disp_control.bg_mode {
+            4 => {
+
+            },
+            _ => {
+                error!("{:?}", self);
+                todo!();
+            },
+        }
 
         // OBJ stuff
         let (objects, _)  = if disp_control.display_obj {
@@ -144,10 +166,11 @@ impl PPU {
         };
 
         // TODO: Objs start later in VRAM when bg_mode is bitmap modes
-        let palettes = get_palettes(ram);
+        let obj_palettes = get_obj_palettes(ram);
+        let bg_palettes = get_bg_palettes(ram);
 
         for obj in objects {
-            let palette = palettes.get_palette(obj.palette_idx);
+            let palette = obj_palettes.get_palette(obj.palette_idx);
             let tile_base = BASE_OAM + (obj.character_name * 32);
 
             // becuase each byte is 2 pixels
@@ -161,7 +184,7 @@ impl PPU {
                         if c_idx == 0 {
                             continue;
                         }
-                        palettes.get_256_color(c_idx)
+                        obj_palettes.get_256_color(c_idx)
                     }  else {
                         let c_idx = get_color_id_16_palette_2d(x, y, tile_base, ram);
                         palette[c_idx]
@@ -180,6 +203,24 @@ impl PPU {
         self.next_frame.clone()
     }
 } 
+
+// BG Mode 4,5 (Bitmap based Modes)
+//   06000000-06009FFF  40 KBytes Frame 0 buffer (only 37.5K used in Mode 4)
+//   0600A000-06013FFF  40 KBytes Frame 1 buffer (only 37.5K used in Mode 4)
+//   06014000-06017FFF  16 KBytes OBJ Tiles
+fn display_mode_4(ram: &SystemMemory, disp_control: &DisplayControl, palette: Colors) {
+    let vram = ram.get_vram();
+
+    let pixels = if disp_control.display_frame_select {
+        todo!()
+    } else {
+        todo!()
+    };
+}
+
+fn get_bitmap_frame_mode_4(vram: &[u32], palette: Colors, start_idx: usize) {
+    let pixels: Vec<(u8, u8, u8)> = Vec::with_capacity(WIDTH * HEIGHT);
+}
 
 fn get_color_id_16_palette_2d(x: u32, y: u32, tile_base: u32, ram: &SystemMemory) -> usize {
     // Translating 
@@ -223,6 +264,8 @@ fn get_bgs(disp_control: &DisplayControl, ram: &SystemMemory) -> Result<Vec<BgCo
             if disp_control.display_bg3 { bgs.push(bg_control3(ram)?); }
         }
         3..=5 => {
+            // NOTE: If I'm reading the docs right, Layer 2 is used,
+            // but bg_control2 is not required
             if disp_control.display_bg2 { bgs.push(bg_control2(ram)?); }
         }
         _ => {

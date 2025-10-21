@@ -8,9 +8,14 @@ pub fn is_oam_entry_enabled(value: &[u32]) -> bool {
     (value[0] >> 8 & 0b11) != 0b10
 }
 
-pub fn get_palettes(ram: &SystemMemory) -> Colors {
+pub fn get_obj_palettes(ram: &SystemMemory) -> Colors {
     let palette_ram = ram.get_palette_ram_slice();
-    Colors::from(palette_ram)
+    Colors::from(&palette_ram[BASE_OBJ_PALETTE..BASE_OBJ_PALETTE + (512 / 4)])
+}
+
+pub fn get_bg_palettes(ram: &SystemMemory) -> Colors {
+    let palette_ram = ram.get_palette_ram_slice();
+    Colors::from(&palette_ram[0 .. 512 / 4])
 }
 
 #[derive(Debug)]
@@ -148,7 +153,6 @@ impl RotationScaleParameterBuilder {
 // a color as if it's a 256/1 through a mapping function
 pub struct Colors {
     palettes: Vec<Palette>,
-    colors: Vec<(u8,u8,u8)>,
 }
 
 pub struct Palette {
@@ -161,7 +165,7 @@ impl Colors {
     }
 
     pub fn get_256_color(&self, idx: usize) -> (u8, u8, u8) {
-        self.colors[idx]
+        self.palettes[idx / 16].colors[idx % 16]
     }
 
     pub fn num_of_palettes(&self) -> usize {
@@ -192,7 +196,6 @@ impl From<&[u32]> for Colors {
 
         Self {
             palettes,
-            colors
         }
     }
 }
