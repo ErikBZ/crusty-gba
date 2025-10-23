@@ -146,18 +146,7 @@ impl PPU {
             }
         };
 
-        error!("Display Control: {:?}, BGs enabled: {:?}", disp_control, bgs);
-        // Do stuff with BGs here:
-        match disp_control.bg_mode {
-            4 => {
-
-            },
-            _ => {
-                error!("{:?}", self);
-                todo!();
-            },
-        }
-
+        info!("Display Control: {:?}, BGs enabled: {:?}", disp_control, bgs);
         // OBJ stuff
         let (objects, _)  = if disp_control.display_obj {
             get_objs_and_params(ram, &disp_control)
@@ -169,35 +158,52 @@ impl PPU {
         let obj_palettes = get_obj_palettes(ram);
         let bg_palettes = get_bg_palettes(ram);
 
-        for obj in objects {
-            let palette = obj_palettes.get_palette(obj.palette_idx);
-            let tile_base = BASE_OAM + (obj.character_name * 32);
+        // Do stuff with BGs here:
+        match disp_control.bg_mode {
+            2 => {
+                for obj in objects {
+                    let palette = obj_palettes.get_palette(obj.palette_idx);
+                    let tile_base = BASE_OAM + (obj.character_name * 32);
 
-            // becuase each byte is 2 pixels
-            //info!("Attemping to draw following OBJ: {:?}", obj);
-            //info!("Using the following palette: {:?}", palette);
-            for x in 0..(obj.obj_shape.h) { 
-                for y in 0..(obj.obj_shape.w) {
-                    // can probably progressively add stuff instead
-                    let (r, g, b) = if obj.is_256_color {
-                        let c_idx = get_color_id_256_colors_2d(x, y, tile_base, ram);
-                        if c_idx == 0 {
-                            continue;
+                    // becuase each byte is 2 pixels
+                    //info!("Attemping to draw following OBJ: {:?}", obj);
+                    //info!("Using the following palette: {:?}", palette);
+                    for x in 0..(obj.obj_shape.h) { 
+                        for y in 0..(obj.obj_shape.w) {
+                            // can probably progressively add stuff instead
+                            let (r, g, b) = if obj.is_256_color {
+                                let c_idx = get_color_id_256_colors_2d(x, y, tile_base, ram);
+                                if c_idx == 0 {
+                                    continue;
+                                }
+                                obj_palettes.get_256_color(c_idx)
+                            }  else {
+                                let c_idx = get_color_id_16_palette_2d(x, y, tile_base, ram);
+                                palette[c_idx]
+                            };
+
+                            let buffer_idx = euclid_to_buffer_idx((x + obj.x_coord) as usize, (y + obj.y_coord) as usize);
+                            if buffer_idx + 2 <= self.next_frame.len() {
+                                self.next_frame[buffer_idx] = r;
+                                self.next_frame[buffer_idx + 1] = g;
+                                self.next_frame[buffer_idx + 2] = b;
+                            }
                         }
-                        obj_palettes.get_256_color(c_idx)
-                    }  else {
-                        let c_idx = get_color_id_16_palette_2d(x, y, tile_base, ram);
-                        palette[c_idx]
-                    };
-
-                    let buffer_idx = euclid_to_buffer_idx((x + obj.x_coord) as usize, (y + obj.y_coord) as usize);
-                    if buffer_idx + 2 <= self.next_frame.len() {
-                        self.next_frame[buffer_idx] = r;
-                        self.next_frame[buffer_idx + 1] = g;
-                        self.next_frame[buffer_idx + 2] = b;
                     }
                 }
-            }
+            },
+            4 => {
+                display_mode_4(
+                    ram,
+                    &disp_control, 
+                    bg_palettes,
+                    &mut self.next_frame
+                )
+            },
+            _ => {
+                error!("{:?}", self);
+                todo!();
+            },
         }
 
         self.next_frame.clone()
@@ -208,18 +214,29 @@ impl PPU {
 //   06000000-06009FFF  40 KBytes Frame 0 buffer (only 37.5K used in Mode 4)
 //   0600A000-06013FFF  40 KBytes Frame 1 buffer (only 37.5K used in Mode 4)
 //   06014000-06017FFF  16 KBytes OBJ Tiles
-fn display_mode_4(ram: &SystemMemory, disp_control: &DisplayControl, palette: Colors) {
-    let vram = ram.get_vram();
-
-    let pixels = if disp_control.display_frame_select {
-        todo!()
+fn display_mode_4(ram: &SystemMemory, disp_control: &DisplayControl, palette: Colors, pixels: &mut Vec<u8>) {
+    let start_idx = if !disp_control.display_frame_select {
+        0
     } else {
-        todo!()
+        0xa000
     };
-}
 
-fn get_bitmap_frame_mode_4(vram: &[u32], palette: Colors, start_idx: usize) {
-    let pixels: Vec<(u8, u8, u8)> = Vec::with_capacity(WIDTH * HEIGHT);
+    for i in 0..(WIDTH * HEIGHT) {
+        let byte_idx = start_idx + 0x6000000 + i;
+        let data = match ram.read_byte(byte_idx) {
+            Ok(x) => x,
+            Err(e) => {
+                error!("Unable to read byte from: {byte_idx} because: {e}");
+                panic!()
+            }
+        };
+
+        let (r, g, b) = palette.get_256_color(data as usize);
+        let buffer_idx = i * 4;
+        pixels[buffer_idx] = r;
+        pixels[buffer_idx + 1] = g;
+        pixels[buffer_idx + 2] = b;
+    }
 }
 
 fn get_color_id_16_palette_2d(x: u32, y: u32, tile_base: u32, ram: &SystemMemory) -> usize {

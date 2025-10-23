@@ -1,3 +1,4 @@
+#![allow(unused)]
 pub const DISP_CONTROL: usize = 0x4000000;
 pub const DISP_STAT: usize = 0x4000004;
 pub const V_COUNT: usize = 0x4000006;

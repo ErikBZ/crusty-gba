@@ -176,11 +176,10 @@ impl Colors {
 impl From<&[u32]> for Colors {
     // TODO: This will need some heavy refactors
     fn from(value: &[u32]) -> Self {
-        let obj_palette = &value[BASE_OBJ_PALETTE..BASE_OBJ_PALETTE + (512 / 4)];
         let mut palettes: Vec<Palette> = Vec::new();
         let mut colors: Vec<(u8, u8, u8)> = Vec::new();
 
-        for x in obj_palette.chunks(8) {
+        for x in value.chunks(8) {
             let mut pal_colors = Vec::new();
 
             for i in x {
