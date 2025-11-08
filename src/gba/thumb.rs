@@ -253,6 +253,7 @@ struct  ALUOp {
 
 impl From<u32> for ALUOp {
     fn from(value: u32) -> Self {
+        warn!("{:x}", value);
         ALUOp {
             op: (value >> 6 & 0xf) as u8,
             rs: get_triplet_as_usize(value, 3),
@@ -267,6 +268,7 @@ impl Operation for ALUOp {
         let rs_value = cpu.get_register(self.rs) as u64;
         let carry = ((cpu.cpsr & CPSR_C) >> 29) as u64;
         let mut v_status = false;
+        warn!("{:?}", self);
 
         // TODO: Maybe make self.op enum?
         let res = match self.op {
@@ -304,7 +306,7 @@ impl Operation for ALUOp {
                 v_status = get_v_from_add(rd_value, rs_value, res);
                 res
             },
-            12 => rd_value | rs_value,
+            12 => rd_value | rs_value | (carry << 32),
             // TODO: This is gonna cause issues
             13 => {
                 rd_value.wrapping_mul(rs_value)

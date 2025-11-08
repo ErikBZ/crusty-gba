@@ -664,4 +664,25 @@ mod test {
         };
         assert_eq!(cpu, rhs);
     }
+
+    #[test]
+    fn run_thumb_or_main_gba() {
+        let mut ram = SystemMemory::test();
+        let mut cpu = CPU {
+            registers: [0x26e725e, 0x3f538ba9, 0x11, 0x1fa9, 0x26e7fff, 0, 0xffffff55, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+            cpsr: 0x6000003f,
+            ..CPU::default()
+        };
+        cpu.update_thumb(true);
+
+        cpu.run_instruction(&mut ram, 0x431c, 0x0);
+
+        let rhs = CPU {
+            registers: [0x26e725e, 0x3f538ba9, 0x11, 0x1fa9, 0x26e7fff, 0, 0xffffff55, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+            cycles: 1,
+            cpsr: 0x2000003f,
+            ..CPU::default()
+        };
+        assert_eq!(cpu, rhs);
+    }
 }

@@ -297,6 +297,10 @@ impl SystemMemory {
         self.vram.as_slice()
     }
 
+    pub fn get_wram(&self) -> &[u32] {
+        self.vram.as_slice()
+    }
+
     pub fn get_oam(&self) -> &[u32] {
         self.oam.as_slice()
     }
