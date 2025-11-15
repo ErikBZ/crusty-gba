@@ -334,13 +334,13 @@ pub struct MultiplyOp {
     rm: u8,
 }
 
-impl Operation for MultiplyOp{
+impl Operation for MultiplyOp {
     fn run(&self, cpu: &mut CPU, _mem: &mut SystemMemory) {
         let rn_value = cpu.get_register(self.rn as usize);
         let rs_value = cpu.get_register(self.rs as usize);
         let rm_value = cpu.get_register(self.rm as usize);
 
-        let mut res = rm_value * rs_value;
+        let mut res = rm_value.wrapping_mul(rs_value);
         if self.a {
             res += rn_value;
         }

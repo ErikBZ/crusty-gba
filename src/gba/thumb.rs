@@ -253,7 +253,6 @@ struct  ALUOp {
 
 impl From<u32> for ALUOp {
     fn from(value: u32) -> Self {
-        warn!("{:x}", value);
         ALUOp {
             op: (value >> 6 & 0xf) as u8,
             rs: get_triplet_as_usize(value, 3),
@@ -263,21 +262,49 @@ impl From<u32> for ALUOp {
 }
 
 impl Operation for ALUOp {
+    // TODO: Too much casting into u64 and u32, gotta find a better solution
     fn run(&self, cpu: &mut CPU, _mem: &mut SystemMemory) {
         let rd_value = cpu.get_register(self.rd) as u64;
         let rs_value = cpu.get_register(self.rs) as u64;
         let carry = ((cpu.cpsr & CPSR_C) >> 29) as u64;
         let mut v_status = false;
-        warn!("{:?}", self);
+        warn!("{:?}", cpu);
 
         // TODO: Maybe make self.op enum?
         let res = match self.op {
             // TODO: Implement Shift check for carry
             0 => rd_value & rs_value,
             1 => rd_value ^ rs_value,
-            2 => rd_value >> rs_value,
-            3 => rd_value << rs_value,
-            4 => ((cpu.get_register(self.rd) as i32) >> rs_value) as u64,
+            2 => {
+                let rd_val = cpu.get_register(self.rd);
+                let rs_val = cpu.get_register(self.rs);
+                let (val, is_carry) = rd_val.shl_with_carry(rs_val);
+                if is_carry {
+                    (val as u64) | 1 << 32
+                } else {
+                    val as u64
+                }
+            },
+            3 => {
+                let rd_val = cpu.get_register(self.rd);
+                let rs_val = cpu.get_register(self.rs);
+                let (val, is_carry) = rd_val.shr_with_carry(rs_val);
+                if is_carry {
+                    (val as u64) | 1 << 32
+                } else {
+                    val as u64
+                }
+            }
+            4 => {
+                let rd_val = cpu.get_register(self.rd);
+                let rs_val = cpu.get_register(self.rs);
+                let (val, is_carry) = rd_val.asr_with_carry(rs_val);
+                if is_carry {
+                    (val as u64) | 1 << 32
+                } else {
+                    val as u64
+                }
+            },
             5 => {
                 let res = rd_value + rs_value + carry;
                 v_status = get_v_from_add(rd_value, rs_value, res);

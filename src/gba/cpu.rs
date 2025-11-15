@@ -685,4 +685,69 @@ mod test {
         };
         assert_eq!(cpu, rhs);
     }
+
+    #[test]
+    fn run_main_gba_asr() {
+        let mut ram = SystemMemory::test();
+        let mut cpu = CPU {
+            registers: [0x26e725e, 0x3f538ba9, 0x11, 0x3f538ba9, 0x26e7fff, 0, 0xffffff55, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+            cpsr: 0x6000003f,
+            ..CPU::default()
+        };
+        cpu.update_thumb(true);
+
+        cpu.run_instruction(&mut ram, 0x4113, 0x0);
+
+        let rhs = CPU {
+            registers: [0x26e725e, 0x3f538ba9, 0x11, 0x1fa9, 0x26e7fff, 0, 0xffffff55, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+            cycles: 1,
+            cpsr: 0x2000003f,
+            ..CPU::default()
+        };
+        assert_eq!(cpu, rhs);
+    }
+
+    #[test]
+    fn run_main_gba_muls() {
+        let mut ram = SystemMemory::test();
+        let mut cpu = CPU {
+            registers: [0x9eba0185, 0x6086d63f, 0x7a0000a4, 0x6086d63f, 0x9eba0185, 0, 0x6086d63f, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+            cpsr: 0x8000001f,
+            ..CPU::default()
+        };
+
+        cpu.run_instruction(&mut ram, 0xe0140190, 0x0);
+
+        // TODO: We always set carry to false cause it doens't mattter
+        // maybe i should actually calc it
+        let rhs = CPU {
+            registers: [0x9eba0185, 0x6086d63f, 0x7a0000a4, 0x38a98dbb, 0x9eba0185, 0, 0x6086d63f, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+            // TODO: mgba has these cycles at 12
+            cycles: 12,
+            cpsr: 0x0000001f,
+            ..CPU::default()
+        };
+        assert_eq!(cpu, rhs);
+    }
+
+    #[test]
+    fn run_thumb_eor_instruction() {
+        let mut ram = SystemMemory::test();
+        let mut cpu = CPU {
+            registers: [0, 0, 0, 0x92ea642e, 0xea566259, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+            cpsr: 0xb000003f,
+            ..CPU::default()
+        };
+        cpu.update_thumb(true);
+
+        cpu.run_instruction(&mut ram, 0x405c, 0x0);
+
+        let rhs = CPU {
+            registers: [0, 0, 0, 0x92ea642e, 0x78bc0677, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+            cycles: 3,
+            cpsr: 0x3000003f,
+            ..CPU::default()
+        };
+        assert_eq!(cpu, rhs);
+    }
 }

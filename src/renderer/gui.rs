@@ -99,7 +99,6 @@ pub fn run_gui(mut cpu: CPU, mut memory: SystemMemory, reload_handle: Handle<Lev
                     }
                 }
 
-                println!("{:?}", bytes);
                 file.write_all(&bytes).expect("Couldn't write to output");
                 return;
             }
