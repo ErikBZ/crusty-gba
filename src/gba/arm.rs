@@ -82,7 +82,7 @@ pub struct DataProcessingOp {
 }
 
 #[derive(Debug, PartialEq)]
-enum DataProcessingType{
+enum DataProcessingType {
     AND,
     EOR,
     SUB,
@@ -183,6 +183,7 @@ impl Operation for DataProcessingOp {
                 v_status = get_v_from_add(rn_value, operand2, res);
                 res
             },
+            // TODO: Ccheck v_staus here:
             DataProcessingType::SBC => {
                 // Note: 2s complementing
                 let rhs = !op2 as u64;
@@ -211,6 +212,12 @@ impl Operation for DataProcessingOp {
         if !(self.opcode == DataProcessingType::CMP || self.opcode == DataProcessingType::TST ||
             self.opcode == DataProcessingType::TEQ || self.opcode == DataProcessingType::CMN) {
             cpu.set_register(self.rd as usize, res);
+        }
+
+        if matches!(self.opcode,
+            DataProcessingType::AND | DataProcessingType::EOR | DataProcessingType::TST | DataProcessingType::TEQ |
+            DataProcessingType::ORR | DataProcessingType::MOV | DataProcessingType::BIC | DataProcessingType::MVN) {
+            v_status = cpu.v_status();
         }
 
         if self.s {

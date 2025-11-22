@@ -1,6 +1,7 @@
 use super::cpu::{LR, PC, SP};
 use super::system::{read_cycles_per_32, read_cycles_per_8_16};
 use super::{add_nums, bit_map_to_array, count_cycles, get_abs_int_value, get_v_from_add, get_v_from_sub, is_signed, subtract_nums, Conditional, Operation, CPSR_C, CPSR_T};
+use crate::gba::CPSR_V;
 use crate::utils::shifter::ShiftWithCarry;
 use crate::{SystemMemory, CPU};
 use tracing::{warn, error};
@@ -245,8 +246,58 @@ impl Operation for MathImmOp {
 }
 
 #[derive(Debug, PartialEq)]
+enum AluOpCode {
+    And,
+    Eor,
+    Lsl,
+    Lsr,
+    Asr,
+    Adc,
+    Sbc,
+    Ror,
+    Tst,
+    Neg,
+    Cmp,
+    Cmn,
+    Orr,
+    Mul,
+    Bic,
+    Mvn
+}
+
+impl From<u32> for AluOpCode {
+    fn from(value: u32) -> Self {
+        match value {
+            0 => Self::And,
+            1 => Self::Eor,
+            2 => Self::Lsl,
+            3 => Self::Lsr,
+            4 => Self::Asr,
+            5 => Self::Adc,
+            6 => Self::Sbc,
+            7 => Self::Ror,
+            8 => Self::Tst,
+            9 => Self::Neg,
+            10 => Self::Cmp,
+            11 => Self::Cmn,
+            12 => Self::Orr,
+            13 => Self::Mul,
+            14 => Self::Bic,
+            15 => Self::Mvn,
+            _ => unreachable!()
+        }
+    }
+}
+
+impl AluOpCode {
+    fn is_logical(&self) -> bool {
+        !matches!(self, Self::Mul | Self::Adc | Self::Sbc | Self::Neg | Self::Cmp | Self::Cmn)
+    }
+}
+
+#[derive(Debug, PartialEq)]
 struct  ALUOp {
-    op: u8,
+    op: AluOpCode,
     rs: usize,
     rd: usize,
 }
@@ -254,7 +305,7 @@ struct  ALUOp {
 impl From<u32> for ALUOp {
     fn from(value: u32) -> Self {
         ALUOp {
-            op: (value >> 6 & 0xf) as u8,
+            op: AluOpCode::from(value >> 6 & 0xf),
             rs: get_triplet_as_usize(value, 3),
             rd: get_triplet_as_usize(value, 0),
         }
@@ -263,6 +314,7 @@ impl From<u32> for ALUOp {
 
 impl Operation for ALUOp {
     // TODO: Too much casting into u64 and u32, gotta find a better solution
+    // TODO: Refactor this for cleaner solution to V_STATUS and C_STATUS
     fn run(&self, cpu: &mut CPU, _mem: &mut SystemMemory) {
         let rd_value = cpu.get_register(self.rd) as u64;
         let rs_value = cpu.get_register(self.rs) as u64;
@@ -270,12 +322,11 @@ impl Operation for ALUOp {
         let mut v_status = false;
         warn!("{:?}", cpu);
 
-        // TODO: Maybe make self.op enum?
         let res = match self.op {
             // TODO: Implement Shift check for carry
-            0 => rd_value & rs_value,
-            1 => rd_value ^ rs_value,
-            2 => {
+            AluOpCode::And => rd_value & rs_value,
+            AluOpCode::Eor => rd_value ^ rs_value,
+            AluOpCode::Lsl => {
                 let rd_val = cpu.get_register(self.rd);
                 let rs_val = cpu.get_register(self.rs);
                 let (val, is_carry) = rd_val.shl_with_carry(rs_val);
@@ -285,7 +336,7 @@ impl Operation for ALUOp {
                     val as u64
                 }
             },
-            3 => {
+            AluOpCode::Lsr => {
                 let rd_val = cpu.get_register(self.rd);
                 let rs_val = cpu.get_register(self.rs);
                 let (val, is_carry) = rd_val.shr_with_carry(rs_val);
@@ -295,7 +346,7 @@ impl Operation for ALUOp {
                     val as u64
                 }
             }
-            4 => {
+            AluOpCode::Asr => {
                 let rd_val = cpu.get_register(self.rd);
                 let rs_val = cpu.get_register(self.rs);
                 let (val, is_carry) = rd_val.asr_with_carry(rs_val);
@@ -305,57 +356,74 @@ impl Operation for ALUOp {
                     val as u64
                 }
             },
-            5 => {
+            AluOpCode::Adc => {
                 let res = rd_value + rs_value + carry;
                 v_status = get_v_from_add(rd_value, rs_value, res);
                 res
             },
-            6 => {
+            AluOpCode::Sbc => {
                 let rhs = !cpu.get_register(self.rs) as u64;
                 let res = rd_value + rhs + carry;
                 v_status = get_v_from_sub(rd_value, rs_value, res);
                 res
             },
-            7 => cpu.get_register(self.rd).rotate_right(cpu.get_register(self.rs)) as u64,
-            8 => rd_value & rs_value,
-            9 => {
+            AluOpCode::Ror => {
+                let rd_val = cpu.get_register(self.rd);
+                let rs_val = cpu.get_register(self.rs);
+                let (res, c) = rd_val.ror_with_carry(rs_val);
+                let res = res as u64;
+                if c {
+                    res & 1 << 32
+                } else {
+                    res
+                }
+            },
+            AluOpCode::Tst => rd_value & rs_value,
+            AluOpCode::Neg => {
                 let res = !cpu.get_register(self.rs) as u64;
                 res + 1
             },
-            10 => {
+            AluOpCode::Cmp => {
                 let rhs = !cpu.get_register(self.rs) as u64;
                 let res = rd_value + rhs + 1;
                 v_status = get_v_from_sub(rd_value, rs_value, res);
                 res
             },
-            11 => {
+            AluOpCode::Cmn => {
                 let res = rd_value + rs_value;
                 v_status = get_v_from_add(rd_value, rs_value, res);
                 res
             },
-            12 => rd_value | rs_value | (carry << 32),
+            AluOpCode::Orr => rd_value | rs_value | (carry << 32),
             // TODO: This is gonna cause issues
-            13 => {
+            AluOpCode::Mul => {
                 rd_value.wrapping_mul(rs_value)
             },
-            14 => rd_value & !rs_value,
-            15 => !rs_value,
-            _ => unreachable!(),
+            AluOpCode::Bic => rd_value & !rs_value,
+            AluOpCode::Mvn => !rs_value,
         };
 
-        let c_status = (res >> 32) & 1 == 1;
+        let mut c_status = (res >> 32) & 1 == 1;
         let res = (res & 0xffffffff) as u32;
 
+        if matches!(self.op, AluOpCode::Eor) {
+            c_status = cpu.c_status();
+        }
+
         match self.op {
-            8 | 10 | 11 => {},
+            AluOpCode::Cmp | AluOpCode::Cmn | AluOpCode::Tst => {},
             _ => cpu.set_register(self.rd, res),
         }
 
         let cycles = match self.op {
-            7 => 2,
-            13 => count_cycles(rd_value as u32),
+            AluOpCode::Ror => 2,
+            AluOpCode::Mul => count_cycles(rd_value as u32),
             _ => 1,
         };
+
+        if self.op.is_logical() {
+            v_status = cpu.v_status();
+        }
 
         cpu.update_cpsr(res, v_status, c_status);
         cpu.add_cycles(cycles);

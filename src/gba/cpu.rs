@@ -76,9 +76,23 @@ impl fmt::Display for CPU {
             write!(f, "r{}\t{:#08x}\t", i, self.get_register(i))?;
             write!(f, "r{}\t{:#08x}\t", i + 1, self.get_register(i + 1))?;
             write!(f, "r{}\t{:#08x}\t", i + 2, self.get_register(i + 2))?;
-            write!(f, "r{}\t{:#08x}\n", i + 3, self.get_register(i + 3))?;
+            writeln!(f, "r{}\t{:#08x}", i + 3, self.get_register(i + 3))?;
         }
-        write!(f, "cpsr: {:#8x}, cycles: {}, instruction address: {:#08x}\n", self.cpsr, self.cycles, self.instruction_address())?;
+        write!(f, "cpsr: {:#8x}, cycles: {}, instruction address: {:#08x} ", self.cpsr, self.cycles, self.instruction_address())?;
+        write!(f, "status: ")?;
+        if self.n_status() {
+            write!(f, "n ")?;
+        }
+        if self.z_status() {
+            write!(f, "z ")?;
+        }
+        if self.c_status() {
+            write!(f, "c ")?;
+        }
+        if self.v_status() {
+            write!(f, "v ")?;
+        }
+        writeln!(f)?;
 
         let cond = Conditional::from(self.decode);
         if self.is_thumb_mode() {
@@ -271,13 +285,29 @@ impl CPU {
             0
         };
 
-        // NOTE: Why am I doing this, it changes nothing?
+        // 0 out the Status Bits
         self.cpsr &= 0x0fffffff;
         // self.cpsr |= CPSR_C & (res >> 2);
         self.cpsr |= zero;
         self.cpsr |= neg;
         self.cpsr |= over;
         self.cpsr |= carry;
+    }
+
+    pub fn v_status(&self) -> bool {
+        (self.get_psr() & CPSR_V) == CPSR_V
+    }
+
+    pub fn n_status(&self) -> bool {
+        (self.get_psr() & CPSR_N) == CPSR_N
+    }
+
+    pub fn c_status(&self) -> bool {
+        (self.get_psr() & CPSR_C) == CPSR_C
+    }
+
+    pub fn z_status(&self) -> bool {
+        (self.get_psr() & CPSR_Z) == CPSR_Z
     }
 
     pub fn update_thumb(&mut self, is_thumb: bool) {
@@ -734,7 +764,7 @@ mod test {
     fn run_thumb_eor_instruction() {
         let mut ram = SystemMemory::test();
         let mut cpu = CPU {
-            registers: [0, 0, 0, 0x92ea642e, 0xea566259, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+            registers: [0, 0, 0x16, 0x92ea642e, 0xea566259, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
             cpsr: 0xb000003f,
             ..CPU::default()
         };
@@ -743,7 +773,28 @@ mod test {
         cpu.run_instruction(&mut ram, 0x405c, 0x0);
 
         let rhs = CPU {
-            registers: [0, 0, 0, 0x92ea642e, 0x78bc0677, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+            registers: [0, 0, 0x16, 0x92ea642e, 0x78bc0677, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+            cycles: 3,
+            cpsr: 0x3000003f,
+            ..CPU::default()
+        };
+        assert_eq!(cpu, rhs);
+    }
+
+    #[test]
+    fn run_thumb_ror_instruction() {
+        let mut ram = SystemMemory::test();
+        let mut cpu = CPU {
+            registers: [0, 0, 0x16, 0x92ea642e, 0xea566259, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+            cpsr: 0xb000003f,
+            ..CPU::default()
+        };
+        cpu.update_thumb(true);
+
+        cpu.run_instruction(&mut ram, 0x41d3, 0x0);
+
+        let rhs = CPU {
+            registers: [0, 0, 0x16, 0x92ea642e, 0x78bc0677, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
             cycles: 3,
             cpsr: 0x3000003f,
             ..CPU::default()
