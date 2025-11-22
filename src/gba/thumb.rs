@@ -320,7 +320,6 @@ impl Operation for ALUOp {
         let rs_value = cpu.get_register(self.rs) as u64;
         let carry = ((cpu.cpsr & CPSR_C) >> 29) as u64;
         let mut v_status = false;
-        warn!("{:?}", cpu);
 
         let res = match self.op {
             // TODO: Implement Shift check for carry
@@ -373,7 +372,7 @@ impl Operation for ALUOp {
                 let (res, c) = rd_val.ror_with_carry(rs_val);
                 let res = res as u64;
                 if c {
-                    res & 1 << 32
+                    res | 1 << 32
                 } else {
                     res
                 }

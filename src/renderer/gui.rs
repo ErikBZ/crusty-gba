@@ -86,20 +86,6 @@ pub fn run_gui(mut cpu: CPU, mut memory: SystemMemory, reload_handle: Handle<Lev
             // Close events
             if input.key_pressed(KeyCode::Escape) || input.close_requested() {
                 elwt.exit();
-                let path = Path::new("wram_dump.bin");
-                let mut file = File::create(path).expect("Couldn't write to file");
-                let mut bytes: Vec<u8> = vec![];
-                let items = memory.get_wram();
-
-                for i in 0..64 {
-                    for sh in 0..4 {
-                        print!("{:x}, ", items[i]);
-                        let b = items[i] >> (sh * 8);
-                        bytes.push((b & 0xff) as u8);
-                    }
-                }
-
-                file.write_all(&bytes).expect("Couldn't write to output");
                 return;
             }
             if input.key_pressed(KeyCode::Space) {

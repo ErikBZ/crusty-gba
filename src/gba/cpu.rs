@@ -785,7 +785,7 @@ mod test {
     fn run_thumb_ror_instruction() {
         let mut ram = SystemMemory::test();
         let mut cpu = CPU {
-            registers: [0, 0, 0x16, 0x92ea642e, 0xea566259, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+            registers: [0, 0, 0x16, 0xba4ba99, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
             cpsr: 0xb000003f,
             ..CPU::default()
         };
@@ -794,9 +794,9 @@ mod test {
         cpu.run_instruction(&mut ram, 0x41d3, 0x0);
 
         let rhs = CPU {
-            registers: [0, 0, 0x16, 0x92ea642e, 0x78bc0677, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
-            cycles: 3,
-            cpsr: 0x3000003f,
+            registers: [0, 0, 0x16, 0x92ea642e, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+            cycles: 2,
+            cpsr: 0xb000003f,
             ..CPU::default()
         };
         assert_eq!(cpu, rhs);
