@@ -323,8 +323,8 @@ impl Operation for ALUOp {
 
         let res = match self.op {
             // TODO: Implement Shift check for carry
-            AluOpCode::And => rd_value & rs_value,
-            AluOpCode::Eor => rd_value ^ rs_value,
+            AluOpCode::And => rd_value & rs_value | (carry << 32),
+            AluOpCode::Eor => rd_value ^ rs_value | (carry << 32),
             AluOpCode::Lsl => {
                 let rd_val = cpu.get_register(self.rd);
                 let rs_val = cpu.get_register(self.rs);
@@ -377,7 +377,9 @@ impl Operation for ALUOp {
                     res
                 }
             },
-            AluOpCode::Tst => rd_value & rs_value,
+            AluOpCode::Tst => {
+                rd_value & rs_value | (carry << 32)
+            }
             AluOpCode::Neg => {
                 let res = !cpu.get_register(self.rs) as u64;
                 res + 1
@@ -399,6 +401,7 @@ impl Operation for ALUOp {
                 rd_value.wrapping_mul(rs_value)
             },
             AluOpCode::Bic => rd_value & !rs_value,
+            // TODO: This is u64 so it always "carries". Fix it
             AluOpCode::Mvn => !rs_value,
         };
 

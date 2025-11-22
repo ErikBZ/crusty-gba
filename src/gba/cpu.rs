@@ -801,4 +801,25 @@ mod test {
         };
         assert_eq!(cpu, rhs);
     }
+
+    #[test]
+    fn run_thumb_mvn_instruction() {
+        let mut ram = SystemMemory::test();
+        let mut cpu = CPU {
+            registers: [0, 0, 0, 0x37f8361d, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+            cpsr: 0x1000003f,
+            ..CPU::default()
+        };
+        cpu.update_thumb(true);
+
+        cpu.run_instruction(&mut ram, 0x43dc, 0x0);
+
+        let rhs = CPU {
+            registers: [0, 0, 0, 0x37f8361d, 0xc807c9e2, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+            cycles: 3,
+            cpsr: 0x9000003f,
+            ..CPU::default()
+        };
+        assert_eq!(cpu, rhs);
+    }
 }
