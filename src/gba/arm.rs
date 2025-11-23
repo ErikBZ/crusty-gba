@@ -154,10 +154,11 @@ impl Operation for DataProcessingOp {
 
         let res = match self.opcode {
             DataProcessingType::AND | DataProcessingType::TST => {
+
                 rn_value & operand2
             },
             DataProcessingType::EOR | DataProcessingType::TEQ => {
-                rn_value ^ operand2
+                (rn_value ^ operand2) & 0xffffffff
             },
             DataProcessingType::SUB | DataProcessingType::CMP => {
                 // Note: 2s complementing
@@ -187,11 +188,15 @@ impl Operation for DataProcessingOp {
             DataProcessingType::SBC => {
                 // Note: 2s complementing
                 let rhs = !op2 as u64;
-                rn_value + rhs + carry
+                let res = rn_value + rhs + carry;
+                v_status = get_v_from_sub(rn_value, operand2, res);
+                res
             },
             DataProcessingType::RSC => {
                 let rhs = !cpu.get_register(self.rn as usize) as u64;
-                operand2 + rhs + carry
+                let res = operand2 + rhs + carry;
+                v_status = get_v_from_sub(operand2, rn_value, res);
+                res
             },
             DataProcessingType::ORR => {
                 rn_value | operand2
@@ -315,10 +320,14 @@ impl DataProcessingOp {
                     rm_value.shr_with_carry(s)
                 },
                 ShiftType::ASR => {
-                    rm_value.asr_with_carry(s)
+                    if s == 0 {
+                        rm_value.asr_with_carry(32)
+                    } else {
+                        rm_value.asr_with_carry(s)
+                    }
                 },
                 ShiftType::ROR => {
-                    if s == 32 {
+                    if s == 0 {
                         rm_value.rrx_with_carry(c_in)
                     } else {
                         rm_value.ror_with_carry(s)
@@ -1364,6 +1373,21 @@ mod test {
             rm: 0,
             rotate: 0,
             op: PsrTransferType::MRS
+        };
+        assert_eq!(op, op2);
+    }
+
+    #[test]
+    fn test_teq_decode() {
+        let inst: u32 = 0xe1300003;
+        let op = DataProcessingOp::from(inst);
+        let op2 = DataProcessingOp {
+            opcode: DataProcessingType::TEQ,
+            i: false,
+            operand: 3,
+            s: true,
+            rn: 0,
+            rd: 0
         };
         assert_eq!(op, op2);
     }

@@ -400,9 +400,11 @@ impl Operation for ALUOp {
             AluOpCode::Mul => {
                 rd_value.wrapping_mul(rs_value)
             },
-            AluOpCode::Bic => rd_value & !rs_value,
+            AluOpCode::Bic => {
+                (rd_value & !rs_value) | (carry << 32)
+            }
             // TODO: This is u64 so it always "carries". Fix it
-            AluOpCode::Mvn => !rs_value,
+            AluOpCode::Mvn => !rs_value & 0xffffffff,
         };
 
         let mut c_status = (res >> 32) & 1 == 1;

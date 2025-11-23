@@ -1,3 +1,5 @@
+use std::ops::Shr;
+
 use super::bit_is_one_at;
 
 pub trait ShiftWithCarry {
@@ -44,14 +46,17 @@ impl ShiftWithCarry for u32 {
     fn asr_with_carry(self, rhs: u32) -> (u32, bool) {
         if rhs == 0 {
             (self, false)
+        } else if rhs > 31 {
+            let res = (self as i32) >> 31;
+            (res as u32, bit_is_one_at(self, 31))
         } else {
-            let x = if rhs > 31 { 31 } else { rhs };
-            (((self as i32) >> x) as u32, bit_is_one_at(self, x - 1))
+            let res = (self as i32) >> rhs;
+            (res as u32, bit_is_one_at(self, rhs - 1))
         }
     }
 
     fn ror_with_carry(self, rhs: u32) -> (u32, bool) {
-        let carry = if rhs == 0 {
+        let carry = if rhs % 32 == 0 {
             false
         } else {
             bit_is_one_at(self, (rhs % 32) - 1)
@@ -69,5 +74,19 @@ impl ShiftWithCarry for u32 {
 
 mod test {
     use super::*;
+
+    #[test]
+    fn ror_32_1() {
+        let (res, carry) = 0xa2cef820.ror_with_carry(32);
+        assert_eq!(res, 0xa2cef820);
+        assert!(!carry);
+    }
+
+    #[test]
+    fn ror_32_2() {
+        let (res, carry) = 0x08dbcc9c.ror_with_carry(32);
+        assert_eq!(res, 0x08dbcc9c);
+        assert!(!carry);
+    }
 
 }

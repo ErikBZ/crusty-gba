@@ -822,4 +822,124 @@ mod test {
         };
         assert_eq!(cpu, rhs);
     }
+
+    #[test]
+    fn run_arm_sbc_instruction() {
+        let mut ram = SystemMemory::test();
+        let mut cpu = CPU {
+            registers: [0x53b672ab, 0, 0, 0x6116136, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+            cpsr: 0x8000001f,
+            ..CPU::default()
+        };
+
+        cpu.run_instruction(&mut ram, 0xe0d04003, 0x0);
+
+        let rhs = CPU {
+            registers: [0x53b672ab, 0, 0, 0x6116136, 0x4da51174, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+            cycles: 3,
+            cpsr: 0x2000001f,
+            ..CPU::default()
+        };
+        assert_eq!(cpu, rhs);
+    }
+
+    #[test]
+    fn run_arm_rsc_instruction() {
+        let mut ram = SystemMemory::test();
+        let mut cpu = CPU {
+            registers: [0xec3b7c6, 0, 0, 0x1e8, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+            cpsr: 0x2000001f,
+            ..CPU::default()
+        };
+
+        cpu.run_instruction(&mut ram, 0xe0f04003, 0x0);
+
+        let rhs = CPU {
+            registers: [0xec3b7c6, 0, 0, 0x1e8, 0xf13c4a22, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+            cycles: 3,
+            cpsr: 0x8000001f,
+            ..CPU::default()
+        };
+        assert_eq!(cpu, rhs);
+    }
+
+    #[test]
+    fn run_thumb_bic_instruction() {
+        let mut ram = SystemMemory::test();
+        let mut cpu = CPU {
+            registers: [0, 0, 0, 0xffffffff, 0x1232534, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+            cpsr: 0xb000003f,
+            ..CPU::default()
+        };
+
+        cpu.run_instruction(&mut ram, 0x439c, 0x0);
+
+        let rhs = CPU {
+            registers: [0, 0, 0, 0xffffffff, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+            cycles: 3,
+            cpsr: 0x7000001f,
+            ..CPU::default()
+        };
+        assert_eq!(cpu, rhs);
+    }
+
+    #[test]
+    fn run_thumb_asr_instruction() {
+        let mut ram = SystemMemory::test();
+        let mut cpu = CPU {
+            registers: [0, 0, 0x20, 0x81d75588, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+            cpsr: 0x9000003f,
+            ..CPU::default()
+        };
+
+        cpu.run_instruction(&mut ram, 0x4113, 0x0);
+
+        let rhs = CPU {
+            registers: [0, 0, 0x20, 0xffffffff, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+            cycles: 3,
+            cpsr: 0xb000001f,
+            ..CPU::default()
+        };
+        assert_eq!(cpu, rhs);
+    }
+
+    #[test]
+    fn run_arm_teq_ror_instruction() {
+        let mut ram = SystemMemory::test();
+        let mut cpu = CPU {
+            registers: [0xf3b4716, 0x8dbcc9c, 0x20, 0x8dbcc9c, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+            cpsr: 0x0000001f,
+            ..CPU::default()
+        };
+
+        cpu.run_instruction(&mut ram, 0xe1300003, 0x0);
+
+        let rhs = CPU {
+            registers: [0xf3b4716, 0x8dbcc9c, 0x20, 0x8dbcc9c, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+            cycles: 3,
+            cpsr: 0x0000001f,
+            ..CPU::default()
+        };
+        assert_eq!(cpu, rhs);
+    }
+
+    #[test]
+    fn run_arm_mov_instruction() {
+        let mut ram = SystemMemory::test();
+        let mut cpu = CPU {
+            registers: [0, 0x8dbcc9c, 0x20, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+            cpsr: 0x2000001f,
+            ..CPU::default()
+        };
+
+        cpu.run_instruction(&mut ram, 0xe1b03271, 0x0);
+
+        let rhs = CPU {
+            registers: [0, 0x8dbcc9c, 0x20, 0x08dbcc9c, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+            cycles: 3,
+            cpsr: 0x0000001f,
+            ..CPU::default()
+        };
+        assert_eq!(cpu, rhs);
+    }
 }
