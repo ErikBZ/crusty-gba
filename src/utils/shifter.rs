@@ -1,7 +1,66 @@
 use std::ops::Shr;
 
-use super::bit_is_one_at;
+use crate::gba::cpu::CPU;
 
+use super::bit_is_one_at;
+use super::Bitable;
+
+pub trait CpuShifter {
+    fn shl_with_carry(&self, lhs: u32, rhs: u32) -> (u32, bool);
+    fn shr_with_carry(&self, lhs: u32, rhs: u32) -> (u32, bool);
+    fn asr_with_carry(&self, lhs: u32, rhs: u32) -> (u32, bool);
+    fn ror_with_carry(&self, lhs: u32, rhs: u32) -> (u32, bool);
+    fn rrx_with_carry(&self, lhs: u32) -> (u32, bool);
+}
+
+impl CpuShifter for CPU {
+    fn shl_with_carry(&self, lhs: u32, rhs: u32) -> (u32, bool) {
+        if rhs == 0 {
+            (lhs, self.c_status())
+        } else if rhs > 31 {
+            (lhs << 31, lhs.bit_is_high(0))
+        } else {
+            (lhs << rhs, lhs.bit_is_high(32 - rhs))
+        }
+    }
+
+    fn shr_with_carry(&self, lhs: u32, rhs: u32) -> (u32, bool) {
+        if rhs == 0 {
+            (lhs, self.c_status())
+        } else if rhs > 31 {
+            (0, lhs.bit_is_high(31))
+        } else {
+            (lhs >> rhs, lhs.bit_is_high(rhs - 1))
+        }
+    }
+
+    fn asr_with_carry(&self, lhs: u32, rhs: u32) -> (u32, bool) {
+        let lhs = lhs as i32;
+        if rhs == 0 {
+            (lhs as u32, self.c_status())
+        } else if rhs > 31 {
+            ((lhs >> 31) as u32, lhs.bit_is_high(31))
+        } else {
+            ((lhs >> rhs) as u32, lhs.bit_is_high(rhs - 1))
+        }
+    }
+
+    fn ror_with_carry(&self, lhs: u32, rhs: u32) -> (u32, bool) {
+        let rhs = rhs % 32;
+        if rhs == 0 {
+            (lhs, false)
+        } else {
+            (lhs.rotate_right(rhs), lhs.bit_is_high(rhs - 1))
+        }
+    }
+
+    fn rrx_with_carry(&self, lhs: u32) -> (u32, bool) {
+        let c_in = if self.c_status() {0x80000000} else {0};
+        ((lhs >> 31) | c_in, (lhs & 1) == 0b1)
+    }
+}
+
+#[deprecated]
 pub trait ShiftWithCarry {
     fn shl_with_carry(self, rhs: u32) -> (u32, bool);
     fn shr_with_carry(self, rhs: u32) -> (u32, bool);
@@ -89,4 +148,10 @@ mod test {
         assert!(!carry);
     }
 
+    #[test]
+    fn asr_number_by_0() {
+        let (res, carry) = 0x08dbcc9c.ror_with_carry(32);
+        assert_eq!(res, 0x08dbcc9c);
+        assert!(!carry);
+    }
 }

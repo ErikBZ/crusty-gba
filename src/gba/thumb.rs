@@ -2,7 +2,7 @@ use super::cpu::{LR, PC, SP};
 use super::system::{read_cycles_per_32, read_cycles_per_8_16};
 use super::{add_nums, bit_map_to_array, count_cycles, get_abs_int_value, get_v_from_add, get_v_from_sub, is_signed, subtract_nums, Conditional, Operation, CPSR_C, CPSR_T};
 use crate::gba::CPSR_V;
-use crate::utils::shifter::ShiftWithCarry;
+use crate::utils::shifter::{CpuShifter, ShiftWithCarry};
 use crate::{SystemMemory, CPU};
 use tracing::{warn, error};
 use super::utils::calc_cycles_for_stm_ldm;
@@ -102,7 +102,6 @@ impl From<u32> for MoveShiftedRegisterOp {
     }
 }
 
-// TODO: Set carry for these
 impl Operation for MoveShiftedRegisterOp {
     fn run(&self, cpu: &mut super::cpu::CPU, _mem: &mut SystemMemory) {
         let rs = cpu.get_register(self.rs);
@@ -113,8 +112,7 @@ impl Operation for MoveShiftedRegisterOp {
             _ => unreachable!(),
         };
 
-        // TODO: This probably sets carry
-        cpu.update_cpsr(res, false, c_carry);
+        cpu.update_cpsr(res, cpu.v_status(), c_carry);
         cpu.set_register(self.rd, res);
         let mut cycles = 1;
         if self.rd == PC {
@@ -322,13 +320,13 @@ impl Operation for ALUOp {
         let mut v_status = false;
 
         let res = match self.op {
-            // TODO: Implement Shift check for carry
             AluOpCode::And => rd_value & rs_value | (carry << 32),
             AluOpCode::Eor => rd_value ^ rs_value | (carry << 32),
+            // NOTE: it seems the carry is perserved if rs_val is 0?
             AluOpCode::Lsl => {
-                let rd_val = cpu.get_register(self.rd);
-                let rs_val = cpu.get_register(self.rs);
-                let (val, is_carry) = rd_val.shl_with_carry(rs_val);
+                let lhs = cpu.get_register(self.rd);
+                let rhs = cpu.get_register(self.rs);
+                let (val, is_carry) = cpu.shl_with_carry(lhs, rhs);
                 if is_carry {
                     (val as u64) | 1 << 32
                 } else {
@@ -336,9 +334,9 @@ impl Operation for ALUOp {
                 }
             },
             AluOpCode::Lsr => {
-                let rd_val = cpu.get_register(self.rd);
-                let rs_val = cpu.get_register(self.rs);
-                let (val, is_carry) = rd_val.shr_with_carry(rs_val);
+                let lhs = cpu.get_register(self.rd);
+                let rhs = cpu.get_register(self.rs);
+                let (val, is_carry) = cpu.shr_with_carry(lhs, rhs);
                 if is_carry {
                     (val as u64) | 1 << 32
                 } else {
@@ -346,9 +344,9 @@ impl Operation for ALUOp {
                 }
             }
             AluOpCode::Asr => {
-                let rd_val = cpu.get_register(self.rd);
-                let rs_val = cpu.get_register(self.rs);
-                let (val, is_carry) = rd_val.asr_with_carry(rs_val);
+                let lhs = cpu.get_register(self.rd);
+                let rhs = cpu.get_register(self.rs);
+                let (val, is_carry) = cpu.asr_with_carry(lhs, rhs);
                 if is_carry {
                     (val as u64) | 1 << 32
                 } else {
@@ -367,11 +365,11 @@ impl Operation for ALUOp {
                 res
             },
             AluOpCode::Ror => {
-                let rd_val = cpu.get_register(self.rd);
-                let rs_val = cpu.get_register(self.rs);
-                let (res, c) = rd_val.ror_with_carry(rs_val);
-                let res = res as u64;
-                if c {
+                let lhs = cpu.get_register(self.rd);
+                let rhs = cpu.get_register(self.rs);
+                let (val, is_carry) = cpu.ror_with_carry(lhs, rhs);
+                let res = val as u64;
+                if is_carry {
                     res | 1 << 32
                 } else {
                     res
@@ -404,7 +402,9 @@ impl Operation for ALUOp {
                 (rd_value & !rs_value) | (carry << 32)
             }
             // TODO: This is u64 so it always "carries". Fix it
-            AluOpCode::Mvn => !rs_value & 0xffffffff,
+            AluOpCode::Mvn => {
+                (!rs_value & 0xffffffff) | (carry << 32)
+            }
         };
 
         let mut c_status = (res >> 32) & 1 == 1;
@@ -470,7 +470,9 @@ impl Operation for HiRegOp {
         }
 
         match self.op {
-            0b00 => cpu.set_register(self.rd, rd + rs),
+            0b00 => {
+                cpu.set_register(self.rd, rd + rs)
+            },
             0b01 => {
                 let (res, v_status) = subtract_nums(rd, rs, false);
                 let c_status = (res >> 32) & 1 == 1;

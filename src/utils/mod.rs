@@ -2,6 +2,8 @@ pub mod shifter;
 pub mod io_registers;
 
 // Returns true if the bit at x is 1
+/// Use u32.bit_is_high instead
+#[deprecated]
 pub fn bit_is_one_at(num: u32, x: u32) -> bool {
     if x > 31 {
         panic!()
@@ -19,6 +21,25 @@ pub trait Bitable {
 
 pub trait BittableColor {
     fn to_8bit_color(&self) -> ((u8, u8, u8), (u8, u8, u8));
+}
+
+impl Bitable for i32 {
+    fn bit_is_high(&self, x: u32) -> bool {
+        if x > 31 {
+            panic!()
+        } else {
+            (self >> x) & 1 == 1
+        }
+    }
+    fn byte_at(&self, _x: u32) -> u32 {
+        todo!()
+    }
+    fn halfword_at(&self, _x: u32) -> u32 {
+        todo!()
+    }
+    fn half_byte_at(&self, _x: u32) -> u32 {
+        todo!()
+    }
 }
 
 impl Bitable for u64 {

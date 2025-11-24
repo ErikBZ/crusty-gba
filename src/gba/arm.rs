@@ -1,5 +1,5 @@
 use crate::utils::{bit_is_one_at, Bitable};
-use crate::utils::shifter::ShiftWithCarry;
+use crate::utils::shifter::{CpuShifter, ShiftWithCarry};
 use super::system::{read_cycles_per_32, read_cycles_per_8_16};
 use super::{Operation, SystemMemory, get_v_from_sub, get_v_from_add, bit_map_to_array};
 use super::{CPSR_C, CPSR_T};
@@ -78,6 +78,7 @@ pub struct DataProcessingOp {
     pub rn: u8,
     pub rd: u8,
     pub operand: u32,
+    pub operand2: Operand2,
     opcode: DataProcessingType,
 }
 
@@ -127,6 +128,7 @@ impl From<u32> for DataProcessingOp {
             rd: (inst >> 12 & 0xf) as u8,
             rn: (inst >> 16 & 0xf) as u8,
             operand: (inst & 0xfff) as u32,
+            operand2: Operand2::from(inst),
             opcode
         }
     }
@@ -134,14 +136,17 @@ impl From<u32> for DataProcessingOp {
 
 impl Operation for DataProcessingOp {
     fn run(&self, cpu: &mut CPU, _mem: &mut SystemMemory) {
-        let (rhs, c_out, cycle) = self.get_operand2(cpu);
+        //let (rhs, c_out, cycle) = self.get_operand2(cpu);
+        // let op2 = match rhs {
+        //     Operand::Imm(x) => x,
+        //     Operand::Shift(x) => x
+        // };
+        let (op2, c_out) = self.operand2.apply(cpu);
+        // NOTE: check the operand type. Imm is 0, Reg is 1
+        let cycle = 1;
         let mut cycles = 1;
         let rn_value = cpu.get_register(self.rn as usize) as u64;
 
-        let op2 = match rhs {
-            Operand::Imm(x) => x,
-            Operand::Shift(x) => x
-        };
         cycles += cycle;
 
         if self.rd as usize == PC {
@@ -154,7 +159,6 @@ impl Operation for DataProcessingOp {
 
         let res = match self.opcode {
             DataProcessingType::AND | DataProcessingType::TST => {
-
                 rn_value & operand2
             },
             DataProcessingType::EOR | DataProcessingType::TEQ => {
@@ -232,7 +236,7 @@ impl Operation for DataProcessingOp {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq, Eq, Copy, Clone)]
 enum ShiftType {
     LSL,
     LSR,
@@ -257,6 +261,110 @@ enum Operand {
     Imm(u32),
     Shift(u32)
 }
+
+#[derive(Debug, PartialEq)]
+enum Operand2 {
+    // u32 ror u32 * 2
+    Imm (u32, u32, ShiftType),
+    /// reg[usize] shift_by reg[usize]
+    ShiftWithReg (usize, usize, ShiftType),
+    /// reg[usize] shift_by u32
+    ShiftImm (usize, u32, ShiftType),
+}
+
+// TODO: Try this instead? A bit cleaner:
+// enum ArmValue {
+//     Imm(u32),
+//     Reg(usize)
+// }
+//
+// struct Operand {
+//     lhs: ArmValue,
+//     rhs: ArmValue,
+//     shift_type: ShiftType,
+// }
+
+impl From<u32> for Operand2 {
+    fn from(value: u32) -> Self {
+        if value.bit_is_high(25) {
+            let rot = (value >> 8) & 0xf;
+            let op = value & 0xff;
+            Self::Imm (op, rot * 2, ShiftType::ROR)
+        } else {
+            let rm = (value & 0xf) as usize;
+            let shift_type = ShiftType::from((value >> 5) & 0b11);
+            if value.bit_is_high(4) {
+                let reg = ((value >> 8) & 0xf) as usize;
+                Self::ShiftWithReg(rm, reg, shift_type)
+            } else {
+                let val = (value >> 7) & 0x1f;
+                Self::ShiftImm(rm, val, shift_type)
+            }
+        }
+    }
+}
+
+impl Operand2 {
+    fn lhs(&self, cpu: &CPU) -> u32 {
+        match self {
+            Self::Imm(x, _, _) => *x,
+            Self::ShiftWithReg(x, _, _) => cpu.get_register(*x),
+            Self::ShiftImm(x, _, _) => cpu.get_register(*x),
+        }
+    }
+
+    fn rhs(&self, cpu: &CPU) -> u32 {
+        match self {
+            Self::Imm(_, y, _) => *y,
+            Self::ShiftWithReg(_, y, _) => cpu.get_register(*y),
+            Self::ShiftImm(_, y, _) => *y,
+        }
+    }
+
+    fn shift(&self) -> ShiftType {
+        match self {
+            Self::Imm(_, _, sh_type) => *sh_type,
+            Self::ShiftWithReg(_, _, sh_type) => *sh_type,
+            Self::ShiftImm(_, _, sh_type) => *sh_type,
+        }
+    }
+    /// Returns (value, cycles, carry_out)
+    //NOTE: The assembler will convert LSR #0, ROR #0, ASR #0 to LSL #0,
+    //      so I shouldn't have to do anything
+    fn apply(&self, cpu: &CPU) -> (u32, bool) {
+        let lhs = self.lhs(cpu);
+        //NOTE: Seems all my functions already handle the special cases, except rrx
+        //      Maybe use them directly here?
+        // ASR #0 encodes ASR #32 but we already handle that in the function
+        // LSR #32
+        if let Operand2::ShiftImm(_, 0, ShiftType::LSR) = self {
+            return cpu.shr_with_carry(lhs, 32);
+        // RRX
+        } else if let Operand2::ShiftImm(_, 0, ShiftType::ROR) = self {
+            return cpu.rrx_with_carry(lhs);
+        }
+
+        let rhs = self.rhs(cpu);
+        let shift_type = self.shift();
+        let (res, c_out) = match shift_type {
+            ShiftType::LSL => {
+                cpu.shl_with_carry(lhs, rhs)
+            },
+            ShiftType::LSR => {
+                cpu.shr_with_carry(lhs, rhs)
+            },
+            ShiftType::ASR => {
+                cpu.asr_with_carry(lhs, rhs)
+            },
+            ShiftType::ROR => {
+                cpu.ror_with_carry(lhs, rhs)
+            },
+        };
+
+        (res, c_out)
+    }
+}
+
 
 impl DataProcessingOp {
     fn is_logical_operation(&self) -> bool {
@@ -1385,6 +1493,7 @@ mod test {
             opcode: DataProcessingType::TEQ,
             i: false,
             operand: 3,
+            operand2: Operand2::ShiftWithReg(0, 3, ShiftType::LSR),
             s: true,
             rn: 0,
             rd: 0
