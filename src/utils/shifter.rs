@@ -46,11 +46,15 @@ impl CpuShifter for CPU {
     }
 
     fn ror_with_carry(&self, lhs: u32, rhs: u32) -> (u32, bool) {
-        let rhs = rhs % 32;
         if rhs == 0 {
-            (lhs, false)
+            (lhs, self.c_status())
         } else {
-            (lhs.rotate_right(rhs), lhs.bit_is_high(rhs - 1))
+            let rhs =  rhs % 32;
+            if rhs == 0 {
+                (lhs, lhs.bit_is_high(31))
+            } else {
+                (lhs.rotate_right(rhs), lhs.bit_is_high(rhs - 1))
+            }
         }
     }
 

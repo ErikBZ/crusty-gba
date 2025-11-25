@@ -1087,4 +1087,27 @@ mod test {
         assert!(cpu.v_status());
         assert_eq!(cpu.cycles, cycles);
     }
+
+    #[test]
+    fn run_tst_ror_1() {
+        let mut ram = SystemMemory::test();
+        let mut cpu = CPU {
+            registers: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0x88, 0, 0, 0, 0, 0, 0],
+            cpsr: 0x6000001f,
+            ..CPU::default()
+        };
+
+        cpu.run_instruction(&mut ram, 0xe3190010, 0x0);
+
+        let registers = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0x88, 0, 0, 0, 0, 0, 0];
+        let cycles = 6;
+
+        assert_eq!(cpu.registers, registers);
+        assert!(!cpu.n_status());
+        assert!(cpu.z_status());
+        assert!(cpu.c_status());
+        assert!(!cpu.v_status());
+        assert_eq!(cpu.cycles, cycles);
+
+    }
 }
