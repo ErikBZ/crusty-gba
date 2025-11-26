@@ -77,8 +77,7 @@ pub struct DataProcessingOp {
     pub i: bool,
     pub rn: u8,
     pub rd: u8,
-    pub operand: u32,
-    operand2: Operand2,
+    operand: Operand,
     opcode: DataProcessingType,
 }
 
@@ -127,8 +126,7 @@ impl From<u32> for DataProcessingOp {
             s: (inst >> 20 & 0x1) == 0x1,
             rd: (inst >> 12 & 0xf) as u8,
             rn: (inst >> 16 & 0xf) as u8,
-            operand: (inst & 0xfff) as u32,
-            operand2: Operand2::from(inst),
+            operand: Operand::from(inst),
             opcode
         }
     }
@@ -136,7 +134,7 @@ impl From<u32> for DataProcessingOp {
 
 impl Operation for DataProcessingOp {
     fn run(&self, cpu: &mut CPU, _mem: &mut SystemMemory) {
-        let (op2, c_out) = self.operand2.apply(cpu);
+        let (op2, c_out) = self.operand.apply(cpu);
         // NOTE: check the operand type. Imm is 0, Reg is 1
         let cycle = 1;
         let mut cycles = 1;
@@ -252,7 +250,7 @@ impl From<u32> for ShiftType {
 }
 
 #[derive(Debug, PartialEq)]
-enum Operand2 {
+enum Operand {
     // u32 ror u32 * 2
     Imm (u32, u32, ShiftType),
     /// reg[usize] shift_by reg[usize]
@@ -273,7 +271,7 @@ enum Operand2 {
 //     shift_type: ShiftType,
 // }
 
-impl From<u32> for Operand2 {
+impl From<u32> for Operand {
     fn from(value: u32) -> Self {
         if value.bit_is_high(25) {
             let rot = (value >> 8) & 0xf;
@@ -293,7 +291,7 @@ impl From<u32> for Operand2 {
     }
 }
 
-impl Operand2 {
+impl Operand {
     fn lhs(&self, cpu: &CPU) -> u32 {
         match self {
             Self::Imm(x, _, _) => *x,
@@ -326,10 +324,10 @@ impl Operand2 {
         //      Maybe use them directly here?
         // ASR #0 encodes ASR #32 but we already handle that in the function
         // LSR #32
-        if let Operand2::ShiftImm(_, 0, ShiftType::Lsr) = self {
+        if let Operand::ShiftImm(_, 0, ShiftType::Lsr) = self {
             return cpu.shr_with_carry(lhs, 32);
         // RRX
-        } else if let Operand2::ShiftImm(_, 0, ShiftType::Ror) = self {
+        } else if let Operand::ShiftImm(_, 0, ShiftType::Ror) = self {
             return cpu.rrx_with_carry(lhs);
         }
 
@@ -1411,10 +1409,9 @@ mod test {
         let inst: u32 = 0xe1300003;
         let op = DataProcessingOp::from(inst);
         let op2 = DataProcessingOp {
-            opcode: DataProcessingType::TEQ,
+            opcode: DataProcessingType::Teq,
             i: false,
-            operand: 3,
-            operand2: Operand2::ShiftWithReg(0, 3, ShiftType::Lsr),
+            operand: Operand::ShiftWithReg(0, 3, ShiftType::Lsr),
             s: true,
             rn: 0,
             rd: 0
