@@ -310,6 +310,30 @@ impl CPU {
         (self.get_psr() & CPSR_Z) == CPSR_Z
     }
 
+    pub fn set_v_status(&mut self, status: bool) {
+        self.set_status_code(status, CPSR_V)
+    }
+
+    pub fn set_n_status(&mut self, status: bool) {
+        self.set_status_code(status, CPSR_N)
+    }
+
+    pub fn set_c_status(&mut self, status: bool) {
+        self.set_status_code(status, CPSR_C)
+    }
+
+    pub fn set_z_status(&mut self, status: bool) {
+        self.set_status_code(status, CPSR_Z)
+    }
+
+    fn set_status_code(&mut self, status: bool, flag: u32) {
+        if status {
+            self.cpsr |= flag;
+        } else {
+            self.cpsr &= !flag;
+        }
+    }
+
     pub fn update_thumb(&mut self, is_thumb: bool) {
         if is_thumb {
             self.cpsr |= CPSR_T;

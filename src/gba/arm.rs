@@ -1,5 +1,5 @@
-use crate::utils::{bit_is_one_at, Bitable};
-use crate::utils::shifter::{CpuShifter, ShiftWithCarry};
+use crate::utils::Bitable;
+use crate::utils::shifter::CpuShifter;
 use super::system::{read_cycles_per_32, read_cycles_per_8_16};
 use super::{Operation, SystemMemory, get_v_from_sub, get_v_from_add, bit_map_to_array};
 use super::{CPSR_C, CPSR_T};
@@ -78,49 +78,49 @@ pub struct DataProcessingOp {
     pub rn: u8,
     pub rd: u8,
     pub operand: u32,
-    pub operand2: Operand2,
+    operand2: Operand2,
     opcode: DataProcessingType,
 }
 
 #[derive(Debug, PartialEq)]
 enum DataProcessingType {
-    AND,
-    EOR,
-    SUB,
-    RSB,
-    ADD,
-    ADC,
-    SBC,
-    RSC,
-    TST,
-    TEQ,
-    CMP,
-    CMN,
-    ORR,
-    MOV,
-    BIC,
-    MVN,
+    And,
+    Eor,
+    Sub,
+    Rsb,
+    Add,
+    Adc,
+    Sbc,
+    Rsc,
+    Tst,
+    Teq,
+    Cmp,
+    Cmn,
+    Orr,
+    Mov,
+    Bic,
+    Mvn,
 }
 
 impl From<u32> for DataProcessingOp {
     fn from(inst: u32) -> Self {
         let opcode = match inst >> 21 & 0xf {
-            0 => DataProcessingType::AND,
-            1 => DataProcessingType::EOR,
-            2 => DataProcessingType::SUB,
-            3 => DataProcessingType::RSB,
-            4 => DataProcessingType::ADD,
-            5 => DataProcessingType::ADC,
-            6 => DataProcessingType::SBC,
-            7 => DataProcessingType::RSC,
-            8 => DataProcessingType::TST,
-            9 => DataProcessingType::TEQ,
-            10 => DataProcessingType::CMP,
-            11 => DataProcessingType::CMN,
-            12 => DataProcessingType::ORR,
-            13 => DataProcessingType::MOV,
-            14 => DataProcessingType::BIC,
-            _ => DataProcessingType::MVN,
+            0 => DataProcessingType::And,
+            1 => DataProcessingType::Eor,
+            2 => DataProcessingType::Sub,
+            3 => DataProcessingType::Rsb,
+            4 => DataProcessingType::Add,
+            5 => DataProcessingType::Adc,
+            6 => DataProcessingType::Sbc,
+            7 => DataProcessingType::Rsc,
+            8 => DataProcessingType::Tst,
+            9 => DataProcessingType::Teq,
+            10 => DataProcessingType::Cmp,
+            11 => DataProcessingType::Cmn,
+            12 => DataProcessingType::Orr,
+            13 => DataProcessingType::Mov,
+            14 => DataProcessingType::Bic,
+            _ => DataProcessingType::Mvn,
         };
         DataProcessingOp {
             i: (inst >> 25 & 0x1) == 0x1,
@@ -136,11 +136,6 @@ impl From<u32> for DataProcessingOp {
 
 impl Operation for DataProcessingOp {
     fn run(&self, cpu: &mut CPU, _mem: &mut SystemMemory) {
-        //let (rhs, c_out, cycle) = self.get_operand2(cpu);
-        // let op2 = match rhs {
-        //     Operand::Imm(x) => x,
-        //     Operand::Shift(x) => x
-        // };
         let (op2, c_out) = self.operand2.apply(cpu);
         // NOTE: check the operand type. Imm is 0, Reg is 1
         let cycle = 1;
@@ -158,74 +153,74 @@ impl Operation for DataProcessingOp {
         let mut v_status = false;
 
         let res = match self.opcode {
-            DataProcessingType::AND | DataProcessingType::TST => {
+            DataProcessingType::And | DataProcessingType::Tst => {
                 rn_value & operand2
             },
-            DataProcessingType::EOR | DataProcessingType::TEQ => {
+            DataProcessingType::Eor | DataProcessingType::Teq => {
                 (rn_value ^ operand2) & 0xffffffff
             },
-            DataProcessingType::SUB | DataProcessingType::CMP => {
+            DataProcessingType::Sub | DataProcessingType::Cmp => {
                 // Note: 2s complementing
                 let rhs = !op2 as u64;
                 let res = rn_value + rhs + 1;
                 v_status = get_v_from_sub(rn_value, operand2, res);
                 res
             },
-            DataProcessingType::RSB => {
+            DataProcessingType::Rsb => {
                 // Note: 2s complementing
                 let rhs = !cpu.get_register(self.rn as usize) as u64;
                 let res = operand2 + rhs + 1;
                 v_status = get_v_from_sub(operand2, rn_value, res);
                 res
             },
-            DataProcessingType::ADD | DataProcessingType::CMN => {
+            DataProcessingType::Add | DataProcessingType::Cmn => {
                 let res = rn_value + operand2;
                 v_status = get_v_from_add(rn_value, operand2, res);
                 res
             },
-            DataProcessingType::ADC => {
+            DataProcessingType::Adc => {
                 let res = rn_value + operand2 + carry;
                 v_status = get_v_from_add(rn_value, operand2, res);
                 res
             },
             // TODO: Ccheck v_staus here:
-            DataProcessingType::SBC => {
+            DataProcessingType::Sbc => {
                 // Note: 2s complementing
                 let rhs = !op2 as u64;
                 let res = rn_value + rhs + carry;
                 v_status = get_v_from_sub(rn_value, operand2, res);
                 res
             },
-            DataProcessingType::RSC => {
+            DataProcessingType::Rsc => {
                 let rhs = !cpu.get_register(self.rn as usize) as u64;
                 let res = operand2 + rhs + carry;
                 v_status = get_v_from_sub(operand2, rn_value, res);
                 res
             },
-            DataProcessingType::ORR => {
+            DataProcessingType::Orr => {
                 rn_value | operand2
             },
-            DataProcessingType::MOV => {
+            DataProcessingType::Mov => {
                 operand2
             },
-            DataProcessingType::BIC => {
+            DataProcessingType::Bic => {
                 rn_value & !operand2
             }
-            DataProcessingType::MVN => {
+            DataProcessingType::Mvn => {
                 !operand2
             }
         };
         let c_out = if self.is_logical_operation() { c_out } else { res.bit_is_high(32) };
         let res: u32 = (res & 0xffffffff) as u32;
 
-        if !(self.opcode == DataProcessingType::CMP || self.opcode == DataProcessingType::TST ||
-            self.opcode == DataProcessingType::TEQ || self.opcode == DataProcessingType::CMN) {
+        if !(self.opcode == DataProcessingType::Cmp || self.opcode == DataProcessingType::Tst ||
+            self.opcode == DataProcessingType::Teq || self.opcode == DataProcessingType::Cmn) {
             cpu.set_register(self.rd as usize, res);
         }
 
         if matches!(self.opcode,
-            DataProcessingType::AND | DataProcessingType::EOR | DataProcessingType::TST | DataProcessingType::TEQ |
-            DataProcessingType::ORR | DataProcessingType::MOV | DataProcessingType::BIC | DataProcessingType::MVN) {
+            DataProcessingType::And | DataProcessingType::Eor | DataProcessingType::Tst | DataProcessingType::Teq |
+            DataProcessingType::Orr | DataProcessingType::Mov | DataProcessingType::Bic | DataProcessingType::Mvn) {
             v_status = cpu.v_status();
         }
 
@@ -238,28 +233,22 @@ impl Operation for DataProcessingOp {
 
 #[derive(Debug, PartialEq, Eq, Copy, Clone)]
 enum ShiftType {
-    LSL,
-    LSR,
-    ASR,
-    ROR,
+    Lsl,
+    Lsr,
+    Asr,
+    Ror,
 }
 
 impl From<u32> for ShiftType {
     fn from(value: u32) -> Self {
         match value {
-            0 => Self::LSL,
-            1 => Self::LSR,
-            2 => Self::ASR,
-            3 => Self::ROR,
+            0 => Self::Lsl,
+            1 => Self::Lsr,
+            2 => Self::Asr,
+            3 => Self::Ror,
             _ => unreachable!()
         }
     }
-}
-
-#[derive(Debug)]
-enum Operand {
-    Imm(u32),
-    Shift(u32)
 }
 
 #[derive(Debug, PartialEq)]
@@ -289,7 +278,7 @@ impl From<u32> for Operand2 {
         if value.bit_is_high(25) {
             let rot = (value >> 8) & 0xf;
             let op = value & 0xff;
-            Self::Imm (op, rot * 2, ShiftType::ROR)
+            Self::Imm (op, rot * 2, ShiftType::Ror)
         } else {
             let rm = (value & 0xf) as usize;
             let shift_type = ShiftType::from((value >> 5) & 0b11);
@@ -337,26 +326,26 @@ impl Operand2 {
         //      Maybe use them directly here?
         // ASR #0 encodes ASR #32 but we already handle that in the function
         // LSR #32
-        if let Operand2::ShiftImm(_, 0, ShiftType::LSR) = self {
+        if let Operand2::ShiftImm(_, 0, ShiftType::Lsr) = self {
             return cpu.shr_with_carry(lhs, 32);
         // RRX
-        } else if let Operand2::ShiftImm(_, 0, ShiftType::ROR) = self {
+        } else if let Operand2::ShiftImm(_, 0, ShiftType::Ror) = self {
             return cpu.rrx_with_carry(lhs);
         }
 
         let rhs = self.rhs(cpu);
         let shift_type = self.shift();
         let (res, c_out) = match shift_type {
-            ShiftType::LSL => {
+            ShiftType::Lsl => {
                 cpu.shl_with_carry(lhs, rhs)
             },
-            ShiftType::LSR => {
+            ShiftType::Lsr => {
                 cpu.shr_with_carry(lhs, rhs)
             },
-            ShiftType::ASR => {
+            ShiftType::Asr => {
                 cpu.asr_with_carry(lhs, rhs)
             },
-            ShiftType::ROR => {
+            ShiftType::Ror => {
                 cpu.ror_with_carry(lhs, rhs)
             },
         };
@@ -368,82 +357,14 @@ impl Operand2 {
 
 impl DataProcessingOp {
     fn is_logical_operation(&self) -> bool {
-        self.opcode == DataProcessingType::AND ||
-        self.opcode == DataProcessingType::EOR ||
-        self.opcode == DataProcessingType::TST ||
-        self.opcode == DataProcessingType::TEQ ||
-        self.opcode == DataProcessingType::ORR ||
-        self.opcode == DataProcessingType::MOV ||
-        self.opcode == DataProcessingType::BIC ||
-        self.opcode == DataProcessingType::MVN
-    }
-
-    fn get_operand2(&self, cpu: &CPU) -> (Operand, bool, u32) {
-        let c_in = (cpu.cpsr & CPSR_C) != 0;
-        if self.i {
-            let rotate = (self.operand >> 8 & 0xf) as u32;
-            let op = (self.operand & 0xff) as u32;
-            let (res, c_out) = if rotate == 0 {
-                // If ror is 0, just bump carry?
-                (op, c_in)
-            } else {
-                // we gotta rotate by twice the amount
-                op.ror_with_carry(rotate * 2)
-            };
-            (Operand::Imm(res), c_out, 0)
-        }
-        else {
-            let shift = (self.operand >> 4 & 0xff) as u32;
-
-            // TODO: This is hard to read
-            // TODO: Only add another cycle if we shift by register
-            // TODO: Shifting by register is always shifted by the number
-            // provided. Imm values are the ones that encode special actions
-            let (s, s_type, cycle) = if bit_is_one_at(shift, 0) {
-                let val = cpu.get_register((shift >> 4 & 0xf) as usize);
-                (val, ShiftType::from((shift >> 1) & 3), 1)
-            } else {
-                let mut val = (shift >> 3) & 0x1f;
-                if val == 0 {
-                    val = 32
-                };
-
-                (val, ShiftType::from((shift >> 1) & 3), 0)
-            };
-
-            let rm = (self.operand & 0xf) as usize;
-            let rm_value = cpu.get_register(rm);
-
-            // TODO Find a way to simplify this
-            // NOTE: LSR 0, ASR 0, and ROR 0 encode special things
-            let (res, c_out) = match s_type {
-                ShiftType::LSL => {
-                    if s == 0 || s == 32 {
-                        (rm_value, c_in)
-                    } else {
-                        rm_value.shl_with_carry(s)
-                    }
-                },
-                ShiftType::LSR => {
-                    rm_value.shr_with_carry(s)
-                },
-                ShiftType::ASR => {
-                    if s == 0 {
-                        rm_value.asr_with_carry(32)
-                    } else {
-                        rm_value.asr_with_carry(s)
-                    }
-                },
-                ShiftType::ROR => {
-                    if s == 0 {
-                        rm_value.rrx_with_carry(c_in)
-                    } else {
-                        rm_value.ror_with_carry(s)
-                    }
-                },
-            };
-            (Operand::Shift(res), c_out, cycle)
-        }
+        self.opcode == DataProcessingType::And ||
+        self.opcode == DataProcessingType::Eor ||
+        self.opcode == DataProcessingType::Tst ||
+        self.opcode == DataProcessingType::Teq ||
+        self.opcode == DataProcessingType::Orr ||
+        self.opcode == DataProcessingType::Mov ||
+        self.opcode == DataProcessingType::Bic ||
+        self.opcode == DataProcessingType::Mvn
     }
 }
 
@@ -1493,7 +1414,7 @@ mod test {
             opcode: DataProcessingType::TEQ,
             i: false,
             operand: 3,
-            operand2: Operand2::ShiftWithReg(0, 3, ShiftType::LSR),
+            operand2: Operand2::ShiftWithReg(0, 3, ShiftType::Lsr),
             s: true,
             rn: 0,
             rd: 0

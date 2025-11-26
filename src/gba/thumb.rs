@@ -1,8 +1,7 @@
 use super::cpu::{LR, PC, SP};
 use super::system::{read_cycles_per_32, read_cycles_per_8_16};
 use super::{add_nums, bit_map_to_array, count_cycles, get_abs_int_value, get_v_from_add, get_v_from_sub, is_signed, subtract_nums, Conditional, Operation, CPSR_C, CPSR_T};
-use crate::gba::CPSR_V;
-use crate::utils::shifter::{CpuShifter, ShiftWithCarry};
+use crate::utils::shifter::CpuShifter;
 use crate::{SystemMemory, CPU};
 use tracing::{warn, error};
 use super::utils::calc_cycles_for_stm_ldm;
@@ -106,9 +105,9 @@ impl Operation for MoveShiftedRegisterOp {
     fn run(&self, cpu: &mut super::cpu::CPU, _mem: &mut SystemMemory) {
         let rs = cpu.get_register(self.rs);
         let (res, c_carry) = match self.op {
-            0 => rs.shl_with_carry(self.offset),
-            1 => rs.shr_with_carry(self.offset),
-            2 => rs.asr_with_carry(self.offset),
+            0 => cpu.shl_with_carry(rs, self.offset),
+            1 => cpu.shr_with_carry(rs, self.offset),
+            2 => cpu.asr_with_carry(rs, self.offset),
             _ => unreachable!(),
         };
 
@@ -291,6 +290,10 @@ impl AluOpCode {
     fn is_logical(&self) -> bool {
         !matches!(self, Self::Mul | Self::Adc | Self::Sbc | Self::Neg | Self::Cmp | Self::Cmn)
     }
+
+    fn is_shift(&self) -> bool {
+        matches!(self, Self::Lsl | Self::Lsr | Self::Asr | Self::Ror)
+    }
 }
 
 #[derive(Debug, PartialEq)]
@@ -410,7 +413,7 @@ impl Operation for ALUOp {
         let mut c_status = (res >> 32) & 1 == 1;
         let res = (res & 0xffffffff) as u32;
 
-        if matches!(self.op, AluOpCode::Eor) {
+        if self.op.is_logical() && !self.op.is_shift() {
             c_status = cpu.c_status();
         }
 
