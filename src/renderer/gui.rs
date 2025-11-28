@@ -1,5 +1,5 @@
 use crate::gba::cpu::Cpu;
-use crate::ppu::PPU;
+use crate::ppu::Ppu;
 use crate::gba::system::SystemMemory;
 use std::time::Instant;
 use tracing::{event, Level};
@@ -23,7 +23,7 @@ pub fn run_gui(mut cpu: Cpu, mut memory: SystemMemory, reload_handle: Handle<Lev
     event!(Level::INFO, "Runing GUI");
     let event_loop = EventLoop::new().unwrap();
     let mut input = WinitInputHelper::new();
-    let mut ppu = PPU::default();
+    let mut ppu = Ppu::default();
 
     let window = {
         let size = LogicalSize::new(WIDTH as f64, HEIGHT as f64);

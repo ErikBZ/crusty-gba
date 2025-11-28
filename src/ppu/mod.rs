@@ -46,7 +46,7 @@ fn set_bit_low(ram: &mut SystemMemory, addr: usize, flag: u32) {
 }
 
 #[derive(Debug)]
-pub struct PPU {
+pub struct Ppu {
     old_cycle: u32,
     h_count: u32,
     v_count: u32,
@@ -55,9 +55,9 @@ pub struct PPU {
     next_frame: Vec<u8>,
 }
 
-impl Default for PPU {
+impl Default for Ppu {
     fn default() -> Self {
-        PPU {
+        Ppu {
             old_cycle: 0,
             h_count: 0,
             v_count: 0,
@@ -67,7 +67,7 @@ impl Default for PPU {
     }
 }
 
-impl PPU {
+impl Ppu {
     pub fn tick(&mut self, cycle: u32, ram: &mut SystemMemory) -> bool {
         if cycle >> 2 == self.old_cycle {
             return false;

@@ -9,7 +9,7 @@ use std::io::prelude::*;
 use clap::Parser;
 use cli::Args;
 use gba::cpu::Cpu;
-use crate::ppu::PPU;
+use crate::ppu::Ppu;
 use gba::system::SystemMemory;
 use tracing::{event, Level};
 use tracing_subscriber::{fmt, reload, prelude::*};
@@ -41,7 +41,7 @@ fn main() -> Result<(), Error> {
     let mut game_rom = File::open(args.game).expect("Unable to open GBA file");
     memory.copy_game_pak(read_file_into_u32(&mut game_rom));
 
-    let ppu = PPU::default();
+    let ppu = Ppu::default();
     event!(Level::INFO, "Copied the stuff over");
 
     match args.render {
