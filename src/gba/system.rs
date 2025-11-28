@@ -1,6 +1,5 @@
 use core::fmt;
-use tracing::{trace, warn, info};
-use crate::gba::get_v_from_add;
+use tracing::{trace, info};
 
 use super::dma::DmaControl;
 

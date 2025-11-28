@@ -118,6 +118,7 @@ pub enum ContinueSubcommand {
 }
 
 mod test {
+    #![allow(unused)]
     use super::*;
 
     #[test]

@@ -1,4 +1,4 @@
-use crate::{gba::system::{MemoryError, SystemMemory}, utils::{bit_is_one_at, Bitable}};
+use crate::{gba::system::{MemoryError, SystemMemory}, utils:: Bitable};
 use crate::utils::io_registers::{DISP_CONTROL, DISP_STAT};
 
 pub fn display_control(ram: &SystemMemory) -> Result<DisplayControl, MemoryError> {

@@ -5,9 +5,6 @@ use std::time::Instant;
 use tracing::{event, Level};
 use tracing_subscriber::{filter, reload::Handle, Registry};
 use tracing_subscriber::filter::LevelFilter;
-use std::io::Write;
-use std::path::Path;
-use std::fs::File;
 
 use pixels::{Pixels, SurfaceTexture};
 use winit::{
@@ -59,7 +56,7 @@ pub fn run_gui(mut cpu: Cpu, mut memory: SystemMemory, reload_handle: Handle<Lev
 
                 }
                 {
-                    let ppu_buffer = ppu.get_next_frame(&mut memory);
+                    let ppu_buffer = ppu.get_next_frame(&memory);
                     let frame = pixels.frame_mut();
                     let mut i = 0;
                     for pixel in frame.chunks_exact_mut(4) {
@@ -67,7 +64,7 @@ pub fn run_gui(mut cpu: Cpu, mut memory: SystemMemory, reload_handle: Handle<Lev
                         pixel[1] = ppu_buffer[i + 1];
                         pixel[2] = ppu_buffer[i + 2];
                         // Alpha Channel
-                        pixel[3] = u8::max_value();
+                        pixel[3] = u8::MAX;
                         i += 4;
                     }
                 }

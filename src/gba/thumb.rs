@@ -3,7 +3,7 @@ use super::system::{read_cycles_per_32, read_cycles_per_8_16};
 use super::{add_nums, bit_map_to_array, count_cycles, get_abs_int_value, get_v_from_add, get_v_from_sub, is_signed, subtract_nums, Conditional, Operation, CPSR_C, CPSR_T};
 use crate::utils::shifter::CpuShifter;
 use crate::{SystemMemory, Cpu};
-use tracing::{warn, error};
+use tracing::{warn};
 use super::utils::calc_cycles_for_stm_ldm;
 use super::error::InstructionDecodeError;
 

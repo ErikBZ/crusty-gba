@@ -59,6 +59,7 @@ impl CpuShifter for Cpu {
 }
 
 mod test {
+    #![allow(unused)]
     use super::{CpuShifter, Cpu};
 
     #[test]

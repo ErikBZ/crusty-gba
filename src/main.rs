@@ -11,7 +11,7 @@ use cli::Args;
 use gba::cpu::Cpu;
 use crate::ppu::PPU;
 use gba::system::SystemMemory;
-use tracing::{error, event, Level};
+use tracing::{event, Level};
 use tracing_subscriber::{fmt, reload, prelude::*};
 use tracing_subscriber::filter::LevelFilter;
 use crate::renderer::{run_gui, run_debug, run_ratatui};

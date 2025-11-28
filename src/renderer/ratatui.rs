@@ -13,13 +13,10 @@ pub fn run_ratatui() -> Result<(), std::io::Error> {
         if event::poll(dur)? {
             if let Event::Key(key) = event::read()? {
                 if key.kind == KeyEventKind::Press {
-                    match key.code {
-                        KeyCode::Char(c) => {
-                            if c == 'q' {
-                                break Ok(());
-                            }
+                    if let KeyCode::Char(c) = key.code {
+                        if c == 'q' {
+                            break Ok(());
                         }
-                        _ => {},
                     }
                 }
             }

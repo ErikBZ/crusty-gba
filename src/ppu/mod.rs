@@ -36,13 +36,13 @@ const FRAME_BUFFER_1_OFFSET: u32 = 0xA000;
 fn set_bit_high(ram: &mut SystemMemory, addr: usize, flag: u32) {
     let io_ram = ram.get_io_ram();
     let idx = (addr >> 2) & 0xffff;
-    io_ram[idx] = io_ram[idx] | flag;
+    io_ram[idx] |=  flag;
 }
 
 fn set_bit_low(ram: &mut SystemMemory, addr: usize, flag: u32) {
     let io_ram = ram.get_io_ram();
     let idx = (addr >> 2) & 0xffff;
-    io_ram[idx] = io_ram[idx] & !flag;
+    io_ram[idx] |= !flag;
 }
 
 #[derive(Debug)]

@@ -1,5 +1,4 @@
 use clap::Parser;
-use tracing::Level;
 use tracing_subscriber::filter::LevelFilter;
 
 #[derive(Parser, Debug)]
