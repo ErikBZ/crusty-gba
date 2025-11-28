@@ -18,7 +18,7 @@ use crate::SystemMemory;
 
 // Operations can be ARM or Thumb instructions
 pub trait Operation: std::fmt::Debug {
-    fn run(&self, cpu: &mut cpu::CPU, mem: &mut SystemMemory);
+    fn run(&self, cpu: &mut cpu::Cpu, mem: &mut SystemMemory);
 }
 
 #[derive(Debug, strum_macros::Display, PartialEq)]

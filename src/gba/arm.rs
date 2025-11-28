@@ -3,7 +3,7 @@ use crate::utils::shifter::CpuShifter;
 use super::system::{read_cycles_per_32, read_cycles_per_8_16};
 use super::{Operation, SystemMemory, get_v_from_sub, get_v_from_add, bit_map_to_array};
 use super::{CPSR_C, CPSR_T};
-use super::cpu::{CPU,PC, LR};
+use super::cpu::{Cpu,PC, LR};
 use tracing::warn;
 use super::utils::calc_cycles_for_stm_ldm;
 use super::error::InstructionDecodeError;
@@ -48,7 +48,7 @@ struct UndefinedInstruction;
 impl Operation for UndefinedInstruction {
     // TODO: Implement. Take undef trap
     // TODO: Track Cycles 2S + 1I + 1N
-    fn run(&self, _cpu: &mut CPU, _mem: &mut SystemMemory) {
+    fn run(&self, _cpu: &mut Cpu, _mem: &mut SystemMemory) {
         unreachable!()
     }
 }
@@ -58,7 +58,7 @@ struct SoftwareInterruptOp;
 impl Operation for SoftwareInterruptOp {
     // TODO: Implement
     // TODO: Track Cycles 2S + 1N
-    fn run(&self, _cpu: &mut CPU, _mem: &mut SystemMemory) {
+    fn run(&self, _cpu: &mut Cpu, _mem: &mut SystemMemory) {
         todo!()
     }
 }
@@ -133,7 +133,7 @@ impl From<u32> for DataProcessingOp {
 }
 
 impl Operation for DataProcessingOp {
-    fn run(&self, cpu: &mut CPU, _mem: &mut SystemMemory) {
+    fn run(&self, cpu: &mut Cpu, _mem: &mut SystemMemory) {
         let (op2, c_out) = self.operand.apply(cpu);
         // NOTE: check the operand type. Imm is 0, Reg is 1
         let cycle = 1;
@@ -292,7 +292,7 @@ impl From<u32> for Operand {
 }
 
 impl Operand {
-    fn lhs(&self, cpu: &CPU) -> u32 {
+    fn lhs(&self, cpu: &Cpu) -> u32 {
         match self {
             Self::Imm(x, _, _) => *x,
             Self::ShiftWithReg(x, _, _) => cpu.get_register(*x),
@@ -300,7 +300,7 @@ impl Operand {
         }
     }
 
-    fn rhs(&self, cpu: &CPU) -> u32 {
+    fn rhs(&self, cpu: &Cpu) -> u32 {
         match self {
             Self::Imm(_, y, _) => *y,
             Self::ShiftWithReg(_, y, _) => cpu.get_register(*y),
@@ -318,7 +318,7 @@ impl Operand {
     /// Returns (value, cycles, carry_out)
     //NOTE: The assembler will convert LSR #0, ROR #0, ASR #0 to LSL #0,
     //      so I shouldn't have to do anything
-    fn apply(&self, cpu: &CPU) -> (u32, bool) {
+    fn apply(&self, cpu: &Cpu) -> (u32, bool) {
         let lhs = self.lhs(cpu);
         //NOTE: Seems all my functions already handle the special cases, except rrx
         //      Maybe use them directly here?
@@ -378,7 +378,7 @@ pub struct MultiplyOp {
 }
 
 impl Operation for MultiplyOp {
-    fn run(&self, cpu: &mut CPU, _mem: &mut SystemMemory) {
+    fn run(&self, cpu: &mut Cpu, _mem: &mut SystemMemory) {
         let rn_value = cpu.get_register(self.rn as usize);
         let rs_value = cpu.get_register(self.rs as usize);
         let rm_value = cpu.get_register(self.rm as usize);
@@ -447,7 +447,7 @@ pub struct MultiplyLongOp {
 impl Operation for MultiplyLongOp {
     // TODO: Implement
     // TODO: Track Cycles
-    fn run(&self, _cpu: &mut CPU, _mem: &mut SystemMemory) {
+    fn run(&self, _cpu: &mut Cpu, _mem: &mut SystemMemory) {
         todo!()
     }
 }
@@ -476,7 +476,7 @@ pub struct SingleDataSwapOp {
 
 impl Operation for SingleDataSwapOp {
     // TODO: Propogate Error for ABORT signals
-    fn run(&self, cpu: &mut CPU, mem: &mut SystemMemory) {
+    fn run(&self, cpu: &mut Cpu, mem: &mut SystemMemory) {
         let address = cpu.get_register(self.rn as usize) as usize;
         match mem.read_from_mem(address) {
             Ok(n) => cpu.set_register(self.rd as usize, n),
@@ -520,7 +520,7 @@ pub struct BranchExchangeOp {
 }
 
 impl Operation for BranchExchangeOp {
-    fn run(&self, cpu: &mut CPU, mem: &mut SystemMemory) {
+    fn run(&self, cpu: &mut Cpu, mem: &mut SystemMemory) {
         let mut addr = cpu.get_register(self.rn as usize);
         cpu.update_thumb(addr & 1 == 1);
         addr &= !1;
@@ -570,7 +570,7 @@ pub struct BranchOp {
 }
 
 impl Operation for BranchOp {
-    fn run(&self, cpu: &mut CPU, mem: &mut SystemMemory) {
+    fn run(&self, cpu: &mut Cpu, mem: &mut SystemMemory) {
         let offset = self.get_offset();
         let addr = cpu.get_register(PC).wrapping_add(offset);
 
@@ -628,7 +628,7 @@ pub struct HalfwordRegOffset {
 }
 
 impl Operation for HalfwordRegOffset {
-    fn run(&self, cpu: &mut CPU, mem: &mut SystemMemory) {
+    fn run(&self, cpu: &mut Cpu, mem: &mut SystemMemory) {
         let offset = cpu.get_register(self.rm as usize);
         let mut address = cpu.get_register(self.rn as usize);
 
@@ -732,7 +732,7 @@ pub struct SingleDataTfx {
 }
 
 impl Operation for SingleDataTfx {
-    fn run(&self, cpu: &mut CPU, mem: &mut SystemMemory) {
+    fn run(&self, cpu: &mut Cpu, mem: &mut SystemMemory) {
         // TODO: add write back check somewhere
         let offset = self.get_offset(cpu);
         let mut tfx_add = cpu.get_register(self.rn as usize);
@@ -824,7 +824,7 @@ impl From<u32> for SingleDataTfx {
 }
 
 impl SingleDataTfx {
-    pub fn get_offset(&self, cpu: &CPU) -> u32 {
+    pub fn get_offset(&self, cpu: &Cpu) -> u32 {
         if self.i {
             let shift = (self.offset >> 4) & 0xff;
             (cpu.get_register((self.offset & 0xf) as usize) << shift) as u32
@@ -846,7 +846,7 @@ pub struct BlockDataTransfer {
 }
 
 impl Operation for BlockDataTransfer {
-    fn run(&self, cpu: &mut CPU, mem: &mut SystemMemory) {
+    fn run(&self, cpu: &mut Cpu, mem: &mut SystemMemory) {
         // TODO: Take into consideration the S flag
         // TODO: Propogate the mem error to signify ABORT signal
         // When rn is 13 then we are doing stack ops, otherwise no
@@ -932,7 +932,7 @@ pub struct CoprocessDataTfx {
 }
 
 impl Operation for CoprocessDataTfx {
-    fn run(&self, _cpu: &mut CPU, _mem: &mut SystemMemory) {
+    fn run(&self, _cpu: &mut Cpu, _mem: &mut SystemMemory) {
         todo!()
     }
 }
@@ -964,7 +964,7 @@ pub struct CoprocessDataOp {
 }
 
 impl Operation for CoprocessDataOp {
-    fn run(&self, _cpu: &mut CPU, _mem: &mut SystemMemory) {
+    fn run(&self, _cpu: &mut Cpu, _mem: &mut SystemMemory) {
         todo!()
     }
 }
@@ -994,7 +994,7 @@ pub struct CoprocessRegTfx {
 }
 
 impl Operation for CoprocessRegTfx {
-    fn run(&self, _cpu: &mut CPU, _mem: &mut SystemMemory) {
+    fn run(&self, _cpu: &mut Cpu, _mem: &mut SystemMemory) {
         todo!()
     }
 }
@@ -1032,7 +1032,7 @@ enum PsrTransferType {
 }
 
 impl Operation for PsrTransferOp {
-    fn run(&self, cpu: &mut CPU, _mem: &mut SystemMemory) {
+    fn run(&self, cpu: &mut Cpu, _mem: &mut SystemMemory) {
         match self.op {
             PsrTransferType::MSR => {
                 let operand = self.get_operand(cpu);
@@ -1084,7 +1084,7 @@ impl From<u32> for PsrTransferOp {
 }
 
 impl PsrTransferOp {
-    pub fn get_operand(&self, cpu: &CPU) -> u32 {
+    pub fn get_operand(&self, cpu: &Cpu) -> u32 {
         if self.i {
             let imm = self.imm as u32;
             imm.rotate_right((self.rotate as u32) * 2)
@@ -1116,7 +1116,7 @@ pub struct HalfwordDataOp {
 }
 
 impl Operation for HalfwordDataOp {
-    fn run(&self, cpu: &mut CPU, mem: &mut SystemMemory) {
+    fn run(&self, cpu: &mut Cpu, mem: &mut SystemMemory) {
         let offset = match self.mode {
             AddressingMode3::Reg(m) => cpu.get_register(m as usize),
             AddressingMode3::Imm(byte_offset) => byte_offset as u32,
@@ -1306,6 +1306,7 @@ fn is_psr_flag_bits_only(inst: u32) -> bool {
 }
 
 mod test {
+    #![allow(unused)]
     use super::*;
 
     #[test]

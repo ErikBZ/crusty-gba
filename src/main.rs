@@ -8,7 +8,7 @@ use std::fs::File;
 use std::io::prelude::*;
 use clap::Parser;
 use cli::Args;
-use gba::cpu::CPU;
+use gba::cpu::Cpu;
 use crate::ppu::PPU;
 use gba::system::SystemMemory;
 use tracing::{error, event, Level};
@@ -28,7 +28,7 @@ fn main() -> Result<(), Error> {
     let (filter, reload_handle) = reload::Layer::new(filter);
     tracing_subscriber::registry().with(filter).with(fmt::Layer::default()).init();
 
-    let mut cpu = CPU::default();
+    let mut cpu = Cpu::default();
     let mut memory = SystemMemory::new();
     if let Some(bios_rom) = args.bios {
         let mut bios_rom_f = File::open(bios_rom).expect("Unable to open bios file");

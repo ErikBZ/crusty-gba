@@ -1,4 +1,4 @@
-use crate::gba::cpu::CPU;
+use crate::gba::cpu::Cpu;
 use super::Bitable;
 
 pub trait CpuShifter {
@@ -9,7 +9,7 @@ pub trait CpuShifter {
     fn rrx_with_carry(&self, lhs: u32) -> (u32, bool);
 }
 
-impl CpuShifter for CPU {
+impl CpuShifter for Cpu {
     fn shl_with_carry(&self, lhs: u32, rhs: u32) -> (u32, bool) {
         match rhs {
             0 => (lhs, self.c_status()),
@@ -59,11 +59,11 @@ impl CpuShifter for CPU {
 }
 
 mod test {
-    use super::{CpuShifter, CPU};
+    use super::{CpuShifter, Cpu};
 
     #[test]
     fn ror_32_1() {
-        let cpu = CPU::default();
+        let cpu = Cpu::default();
         let (res, carry) = cpu.ror_with_carry(0xa2cef820, 32);
         assert_eq!(res, 0xa2cef820);
         assert!(!carry);
@@ -71,7 +71,7 @@ mod test {
 
     #[test]
     fn lsl_1() {
-        let mut cpu = CPU::default();
+        let mut cpu = Cpu::default();
         cpu.set_v_status(true);
         let (res, carry) = cpu.shl_with_carry(0xbfbfc0cf, 0xb);
         assert_eq!(res, 0xfe067800);
@@ -80,7 +80,7 @@ mod test {
 
     #[test]
     fn lsr_1() {
-        let mut cpu = CPU::default();
+        let mut cpu = Cpu::default();
         cpu.set_v_status(true);
         let (res, carry) = cpu.shr_with_carry(0xb220b2e9, 0x21);
         assert_eq!(res, 0x0);

@@ -1,5 +1,5 @@
 use std::collections::HashSet;
-use crate::gba::cpu::CPU;
+use crate::gba::cpu::Cpu;
 use crate::ppu::PPU;
 use crate::gba::debugger::{DebuggerCommand, ContinueSubcommand};
 use crate::gba::system::SystemMemory;
@@ -7,7 +7,7 @@ use tracing::{event, Level};
 use tracing_subscriber::{reload::Handle, Registry};
 use tracing_subscriber::filter::LevelFilter;
 
-pub fn run_debug(mut cpu: CPU, mut memory: SystemMemory, mut ppu: PPU, reload_handle: Handle<LevelFilter, Registry>) {
+pub fn run_debug(mut cpu: Cpu, mut memory: SystemMemory, mut ppu: PPU, reload_handle: Handle<LevelFilter, Registry>) {
     event!(Level::INFO, "Running Debug session");
     use std::io;
     let mut break_points: HashSet<usize> = HashSet::new();

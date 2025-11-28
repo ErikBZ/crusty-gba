@@ -2,7 +2,7 @@ use super::cpu::{LR, PC, SP};
 use super::system::{read_cycles_per_32, read_cycles_per_8_16};
 use super::{add_nums, bit_map_to_array, count_cycles, get_abs_int_value, get_v_from_add, get_v_from_sub, is_signed, subtract_nums, Conditional, Operation, CPSR_C, CPSR_T};
 use crate::utils::shifter::CpuShifter;
-use crate::{SystemMemory, CPU};
+use crate::{SystemMemory, Cpu};
 use tracing::{warn, error};
 use super::utils::calc_cycles_for_stm_ldm;
 use super::error::InstructionDecodeError;
@@ -102,7 +102,7 @@ impl From<u32> for MoveShiftedRegisterOp {
 }
 
 impl Operation for MoveShiftedRegisterOp {
-    fn run(&self, cpu: &mut super::cpu::CPU, _mem: &mut SystemMemory) {
+    fn run(&self, cpu: &mut super::cpu::Cpu, _mem: &mut SystemMemory) {
         let rs = cpu.get_register(self.rs);
         let (res, c_carry) = match self.op {
             0 => cpu.shl_with_carry(rs, self.offset),
@@ -149,7 +149,7 @@ impl From<u32> for AddSubtractOp {
 
 impl Operation for AddSubtractOp {
     // TODO: PC is being tracked incorrectly. Gotta fix that
-    fn run(&self, cpu: &mut super::cpu::CPU, _mem: &mut SystemMemory) {
+    fn run(&self, cpu: &mut super::cpu::Cpu, _mem: &mut SystemMemory) {
         let offset = if self.i {
             self.offset
         } else {
@@ -197,7 +197,7 @@ impl From<u32> for MathImmOp {
 
 impl Operation for MathImmOp {
     // TODO: Improve this, looks too ugly
-    fn run(&self, cpu: &mut super::cpu::CPU, _mem: &mut SystemMemory) {
+    fn run(&self, cpu: &mut super::cpu::Cpu, _mem: &mut SystemMemory) {
         let rd = cpu.get_register(self.rd) as u64;
         let mut v_status = false;
 
@@ -316,7 +316,7 @@ impl From<u32> for ALUOp {
 impl Operation for ALUOp {
     // TODO: Too much casting into u64 and u32, gotta find a better solution
     // TODO: Refactor this for cleaner solution to V_STATUS and C_STATUS
-    fn run(&self, cpu: &mut CPU, _mem: &mut SystemMemory) {
+    fn run(&self, cpu: &mut Cpu, _mem: &mut SystemMemory) {
         let rd_value = cpu.get_register(self.rd) as u64;
         let rs_value = cpu.get_register(self.rs) as u64;
         let carry = ((cpu.cpsr & CPSR_C) >> 29) as u64;
@@ -464,7 +464,7 @@ impl From<u32> for HiRegOp {
 }
 
 impl Operation for HiRegOp {
-    fn run(&self, cpu: &mut CPU, mem: &mut SystemMemory) {
+    fn run(&self, cpu: &mut Cpu, mem: &mut SystemMemory) {
         let rd = cpu.get_register(self.rd);
         let rs = cpu.get_register(self.rs);
         // NOTE: h1 = 0, h2 = 0, op = 00 | 01 | 10 is undefined, and should not be used
@@ -550,7 +550,7 @@ impl From<u32> for PcRelativeLoadOp {
 }
 
 impl Operation for PcRelativeLoadOp {
-    fn run(&self, cpu: &mut CPU, mem: &mut SystemMemory) {
+    fn run(&self, cpu: &mut Cpu, mem: &mut SystemMemory) {
         // NOTE: The value of PC will always be 4 bytes greater, but bit 1 of PC will always be 0
         let offset = self.word << 2; 
         let addr = (cpu.get_register(PC) + offset) as usize;
@@ -594,7 +594,7 @@ impl From<u32> for LoadStoreRegOffsetOp {
 }
 
 impl Operation for LoadStoreRegOffsetOp {
-    fn run(&self, cpu: &mut CPU, mem: &mut SystemMemory) {
+    fn run(&self, cpu: &mut Cpu, mem: &mut SystemMemory) {
         let ro_val = cpu.get_register(self.ro);
         let offset = get_abs_int_value(ro_val);
 
@@ -669,7 +669,7 @@ impl From<u32> for LoadStoreSignExOp {
 }
 
 impl Operation for LoadStoreSignExOp {
-    fn run(&self, cpu: &mut CPU, mem: &mut SystemMemory) {
+    fn run(&self, cpu: &mut Cpu, mem: &mut SystemMemory) {
         let addr = (cpu.get_register(self.rb) + cpu.get_register(self.ro)) as usize;
         if !self.h && !self.s {
             match mem.write_halfword(addr, cpu.get_register(self.rd)) {
@@ -727,7 +727,7 @@ impl From<u32> for LoadStoreImmOffsetOp {
 }
 
 impl Operation for LoadStoreImmOffsetOp {
-    fn run(&self, cpu: &mut CPU, mem: &mut SystemMemory) {
+    fn run(&self, cpu: &mut Cpu, mem: &mut SystemMemory) {
         let addr = (cpu.get_register(self.rb) + if self.b { self.offset } else { self.offset << 2 }) as usize;
         if self.l {
             let val = if self.b {
@@ -789,7 +789,7 @@ impl From<u32> for LoadStoreHalfWordOp {
 }
 
 impl Operation for LoadStoreHalfWordOp {
-    fn run(&self, cpu: &mut CPU, mem: &mut SystemMemory) {
+    fn run(&self, cpu: &mut Cpu, mem: &mut SystemMemory) {
         let addr = (cpu.get_register(self.rb) + self.offset) as usize;
         if self.l {
             let block_from_mem = match mem.read_halfword(addr) {
@@ -836,7 +836,7 @@ impl From<u32> for SpRelativeLoadOp {
 }
 
 impl Operation for SpRelativeLoadOp {
-    fn run(&self, cpu: &mut CPU, mem: &mut SystemMemory) {
+    fn run(&self, cpu: &mut Cpu, mem: &mut SystemMemory) {
         let addr = (cpu.get_register(SP) + self.offset) as usize;
 
         if self.l {
@@ -884,7 +884,7 @@ impl From<u32> for LoadAddressOp {
 }
 
 impl Operation for LoadAddressOp {
-    fn run(&self, cpu: &mut CPU, _mem: &mut SystemMemory) {
+    fn run(&self, cpu: &mut Cpu, _mem: &mut SystemMemory) {
         let res = if self.sp {
             cpu.get_register(SP) + self.word
         } else {
@@ -921,7 +921,7 @@ impl From<u32> for AddOffsetSPOp {
 
 impl Operation for AddOffsetSPOp {
     // TODO: This may need to be updated
-    fn run(&self, cpu: &mut CPU, _mem: &mut SystemMemory) {
+    fn run(&self, cpu: &mut Cpu, _mem: &mut SystemMemory) {
         if self.s {
             cpu.set_register(SP, cpu.get_register(SP) - self.word);
         } else {
@@ -950,7 +950,7 @@ impl From<u32> for PushPopRegOp {
 }
 
 impl Operation for PushPopRegOp {
-    fn run(&self, cpu: &mut CPU, mem: &mut SystemMemory) {
+    fn run(&self, cpu: &mut Cpu, mem: &mut SystemMemory) {
         let mut registers = bit_map_to_array(self.rlist as u32);
         if self.r {
             registers.push(if self.l { PC as u32 } else { LR as u32 });
@@ -1027,7 +1027,7 @@ impl From<u32> for MultipleLoadStoreOp {
 }
 
 impl Operation for MultipleLoadStoreOp {
-    fn run(&self, cpu: &mut CPU, mem: &mut SystemMemory) {
+    fn run(&self, cpu: &mut Cpu, mem: &mut SystemMemory) {
         // TODO: use bit_map_to_array function here?
         let mut address = cpu.get_register(self.rb) as usize;
         for i in 0..8 {
@@ -1101,7 +1101,7 @@ impl TryFrom<u32> for ConditionalBranchOp {
 }
 
 impl Operation for ConditionalBranchOp {
-    fn run(&self, cpu: &mut CPU, mem: &mut SystemMemory) {
+    fn run(&self, cpu: &mut Cpu, mem: &mut SystemMemory) {
         if !self.cond.should_run(cpu.cpsr) {
             cpu.add_cycles(1);
             return;
@@ -1147,9 +1147,9 @@ impl From<u32> for SoftwareInterruptOp {
 }
 
 impl Operation for SoftwareInterruptOp {
-    fn run(&self, cpu: &mut CPU, _mem: &mut SystemMemory) {
+    fn run(&self, cpu: &mut Cpu, _mem: &mut SystemMemory) {
         println!("{:?}", cpu);
-        println!("CPU PC: {:x}", cpu.pc());
+        println!("Cpu PC: {:x}", cpu.pc());
         // Move address of next instruction into LR, Copy CPSR to SPSR
         // Load SWI Vector Address into PC, swith to ARM mode, enter SVC
         // todo!()
@@ -1170,7 +1170,7 @@ impl From<u32> for UnconditionalBranchOp {
 }
 
 impl Operation for UnconditionalBranchOp {
-    fn run(&self, cpu: &mut CPU, mem: &mut SystemMemory) {
+    fn run(&self, cpu: &mut Cpu, mem: &mut SystemMemory) {
         let offset = if self.offset & (1 << 11) == (1 << 11) {
             (self.offset) | 0xfffff000
         } else {
@@ -1210,7 +1210,7 @@ impl From<u32> for LongBranchWithLinkOp {
 
 impl Operation for LongBranchWithLinkOp {
     // NOTE: The cycles for this command are split in 2
-    fn run(&self, cpu: &mut CPU, mem: &mut SystemMemory) {
+    fn run(&self, cpu: &mut Cpu, mem: &mut SystemMemory) {
         // !self.h runs first, the next addr MUST be another LongBranchWithLinkOp
         // with self.h == true
         if !self.h {
@@ -1247,6 +1247,7 @@ impl Operation for LongBranchWithLinkOp {
 }
 
 mod test {
+    #![allow(unused)]
     use super::*;
 
     #[test]

@@ -1,4 +1,4 @@
-use crate::gba::cpu::CPU;
+use crate::gba::cpu::Cpu;
 use crate::ppu::PPU;
 use crate::gba::system::SystemMemory;
 use std::time::Instant;
@@ -22,7 +22,7 @@ use winit_input_helper::WinitInputHelper;
 const WIDTH: u32 = 240;
 const HEIGHT: u32 = 160;
 
-pub fn run_gui(mut cpu: CPU, mut memory: SystemMemory, reload_handle: Handle<LevelFilter, Registry>)  -> Result<(), Box<dyn std::error::Error> >{
+pub fn run_gui(mut cpu: Cpu, mut memory: SystemMemory, reload_handle: Handle<LevelFilter, Registry>)  -> Result<(), Box<dyn std::error::Error> >{
     event!(Level::INFO, "Runing GUI");
     let event_loop = EventLoop::new().unwrap();
     let mut input = WinitInputHelper::new();
