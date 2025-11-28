@@ -1,11 +1,14 @@
 use super::cpu::{LR, PC, SP};
-use super::system::{read_cycles_per_32, read_cycles_per_8_16};
-use super::{add_nums, bit_map_to_array, count_cycles, get_abs_int_value, get_v_from_add, get_v_from_sub, is_signed, subtract_nums, Conditional, Operation, CPSR_C, CPSR_T};
-use crate::utils::shifter::CpuShifter;
-use crate::{SystemMemory, Cpu};
-use tracing::{warn};
-use super::utils::calc_cycles_for_stm_ldm;
 use super::error::InstructionDecodeError;
+use super::system::{read_cycles_per_32, read_cycles_per_8_16};
+use super::utils::calc_cycles_for_stm_ldm;
+use super::{
+    add_nums, bit_map_to_array, count_cycles, get_abs_int_value, get_v_from_add, get_v_from_sub,
+    is_signed, subtract_nums, Conditional, Operation, CPSR_C, CPSR_T,
+};
+use crate::utils::shifter::CpuShifter;
+use crate::{Cpu, SystemMemory};
+use tracing::warn;
 
 // TODO: There's some 'unreachable' blocks in Operation.
 // They should be replaced with TryFrom's, so that there are no unreachable!
@@ -87,7 +90,7 @@ struct MoveShiftedRegisterOp {
     op: u8,
     offset: u32,
     rs: usize,
-    rd: usize
+    rd: usize,
 }
 
 impl From<u32> for MoveShiftedRegisterOp {
@@ -130,7 +133,7 @@ struct AddSubtractOp {
     rn: usize,
     offset: u32,
     rs: usize,
-    rd: usize
+    rd: usize,
 }
 
 impl From<u32> for AddSubtractOp {
@@ -138,12 +141,11 @@ impl From<u32> for AddSubtractOp {
         AddSubtractOp {
             i: (value >> 10 & 0x1) == 1,
             op: (value >> 9 & 0x1) == 1,
-            rn : get_triplet_as_usize(value, 6),
+            rn: get_triplet_as_usize(value, 6),
             offset: get_triplet_as_u32(value, 6),
-            rs : get_triplet_as_usize(value, 3),
-            rd : get_triplet_as_usize(value, 0),       
+            rs: get_triplet_as_usize(value, 3),
+            rd: get_triplet_as_usize(value, 0),
         }
-
     }
 }
 
@@ -182,7 +184,7 @@ impl Operation for AddSubtractOp {
 struct MathImmOp {
     op: u8,
     rd: usize,
-    offset: u32
+    offset: u32,
 }
 
 impl From<u32> for MathImmOp {
@@ -209,12 +211,12 @@ impl Operation for MathImmOp {
                 } else {
                     res
                 }
-            },
+            }
             1 | 3 => {
                 let (x, v_stat) = subtract_nums(cpu.get_register(self.rd), self.offset, false);
                 v_status = v_stat;
                 x
-            },
+            }
             2 => {
                 let offset = self.offset as u64;
                 let res = rd + offset;
@@ -259,7 +261,7 @@ enum AluOpCode {
     Orr,
     Mul,
     Bic,
-    Mvn
+    Mvn,
 }
 
 impl From<u32> for AluOpCode {
@@ -281,14 +283,17 @@ impl From<u32> for AluOpCode {
             13 => Self::Mul,
             14 => Self::Bic,
             15 => Self::Mvn,
-            _ => unreachable!()
+            _ => unreachable!(),
         }
     }
 }
 
 impl AluOpCode {
     fn is_logical(&self) -> bool {
-        !matches!(self, Self::Mul | Self::Adc | Self::Sbc | Self::Neg | Self::Cmp | Self::Cmn)
+        !matches!(
+            self,
+            Self::Mul | Self::Adc | Self::Sbc | Self::Neg | Self::Cmp | Self::Cmn
+        )
     }
 
     fn is_shift(&self) -> bool {
@@ -297,7 +302,7 @@ impl AluOpCode {
 }
 
 #[derive(Debug, PartialEq)]
-struct  ALUOp {
+struct ALUOp {
     op: AluOpCode,
     rs: usize,
     rd: usize,
@@ -335,7 +340,7 @@ impl Operation for ALUOp {
                 } else {
                     val as u64
                 }
-            },
+            }
             AluOpCode::Lsr => {
                 let lhs = cpu.get_register(self.rd);
                 let rhs = cpu.get_register(self.rs);
@@ -355,18 +360,18 @@ impl Operation for ALUOp {
                 } else {
                     val as u64
                 }
-            },
+            }
             AluOpCode::Adc => {
                 let res = rd_value + rs_value + carry;
                 v_status = get_v_from_add(rd_value, rs_value, res);
                 res
-            },
+            }
             AluOpCode::Sbc => {
                 let rhs = !cpu.get_register(self.rs) as u64;
                 let res = rd_value + rhs + carry;
                 v_status = get_v_from_sub(rd_value, rs_value, res);
                 res
-            },
+            }
             AluOpCode::Ror => {
                 let lhs = cpu.get_register(self.rd);
                 let rhs = cpu.get_register(self.rs);
@@ -377,37 +382,29 @@ impl Operation for ALUOp {
                 } else {
                     res
                 }
-            },
-            AluOpCode::Tst => {
-                rd_value & rs_value | (carry << 32)
             }
+            AluOpCode::Tst => rd_value & rs_value | (carry << 32),
             AluOpCode::Neg => {
                 let res = !cpu.get_register(self.rs) as u64;
                 res + 1
-            },
+            }
             AluOpCode::Cmp => {
                 let rhs = !cpu.get_register(self.rs) as u64;
                 let res = rd_value + rhs + 1;
                 v_status = get_v_from_sub(rd_value, rs_value, res);
                 res
-            },
+            }
             AluOpCode::Cmn => {
                 let res = rd_value + rs_value;
                 v_status = get_v_from_add(rd_value, rs_value, res);
                 res
-            },
+            }
             AluOpCode::Orr => rd_value | rs_value | (carry << 32),
             // TODO: This is gonna cause issues
-            AluOpCode::Mul => {
-                rd_value.wrapping_mul(rs_value)
-            },
-            AluOpCode::Bic => {
-                (rd_value & !rs_value) | (carry << 32)
-            }
+            AluOpCode::Mul => rd_value.wrapping_mul(rs_value),
+            AluOpCode::Bic => (rd_value & !rs_value) | (carry << 32),
             // TODO: This is u64 so it always "carries". Fix it
-            AluOpCode::Mvn => {
-                (!rs_value & 0xffffffff) | (carry << 32)
-            }
+            AluOpCode::Mvn => (!rs_value & 0xffffffff) | (carry << 32),
         };
 
         let mut c_status = (res >> 32) & 1 == 1;
@@ -418,7 +415,7 @@ impl Operation for ALUOp {
         }
 
         match self.op {
-            AluOpCode::Cmp | AluOpCode::Cmn | AluOpCode::Tst => {},
+            AluOpCode::Cmp | AluOpCode::Cmn | AluOpCode::Tst => {}
             _ => cpu.set_register(self.rd, res),
         }
 
@@ -473,14 +470,12 @@ impl Operation for HiRegOp {
         }
 
         match self.op {
-            0b00 => {
-                cpu.set_register(self.rd, rd + rs)
-            },
+            0b00 => cpu.set_register(self.rd, rd + rs),
             0b01 => {
                 let (res, v_status) = subtract_nums(rd, rs, false);
                 let c_status = (res >> 32) & 1 == 1;
                 cpu.update_cpsr((res & 0xffffffff) as u32, v_status, c_status);
-            },
+            }
             0b10 => cpu.set_register(self.rd, rs),
             0b11 => {
                 let mut addr = cpu.get_register(self.rs);
@@ -498,7 +493,10 @@ impl Operation for HiRegOp {
                 cpu.decode = match next_inst {
                     Ok(n) => n,
                     Err(e) => {
-                        warn!("Error reading from memory while decoding instruction: {}", e);
+                        warn!(
+                            "Error reading from memory while decoding instruction: {}",
+                            e
+                        );
                         0
                     }
                 };
@@ -509,8 +507,8 @@ impl Operation for HiRegOp {
                 } else {
                     cpu.set_register(PC, addr + 4);
                 }
-            },
-            _ => unreachable!(), 
+            }
+            _ => unreachable!(),
         }
 
         if self.op == 0b11 {
@@ -552,7 +550,7 @@ impl From<u32> for PcRelativeLoadOp {
 impl Operation for PcRelativeLoadOp {
     fn run(&self, cpu: &mut Cpu, mem: &mut SystemMemory) {
         // NOTE: The value of PC will always be 4 bytes greater, but bit 1 of PC will always be 0
-        let offset = self.word << 2; 
+        let offset = self.word << 2;
         let addr = (cpu.get_register(PC) + offset) as usize;
 
         let block_from_mem = match mem.read_word(addr) {
@@ -560,14 +558,14 @@ impl Operation for PcRelativeLoadOp {
             Err(e) => {
                 warn!("{}", e);
                 panic!()
-            },
+            }
         };
 
         cpu.set_register(self.rd, block_from_mem);
         let cycles_per_entries = read_cycles_per_32(addr);
         cpu.add_cycles(
             // TOOD: will this ever be anything other than 1?
-            cycles_for_str_ldr(true, self.rd == PC, cycles_per_entries)
+            cycles_for_str_ldr(true, self.rd == PC, cycles_per_entries),
         )
     }
 }
@@ -641,9 +639,7 @@ impl Operation for LoadStoreRegOffsetOp {
             read_cycles_per_32(addr)
         };
 
-        cpu.add_cycles(
-            cycles_for_str_ldr(self.l, self.rd == PC, cycles)
-        );
+        cpu.add_cycles(cycles_for_str_ldr(self.l, self.rd == PC, cycles));
     }
 }
 
@@ -679,7 +675,7 @@ impl Operation for LoadStoreSignExOp {
                 }
             }
         } else {
-            let data = if self.h && !self.s{
+            let data = if self.h && !self.s {
                 mem.read_halfword(addr)
             } else if !self.h && self.s {
                 mem.read_byte_sign_ex(addr)
@@ -692,16 +688,14 @@ impl Operation for LoadStoreSignExOp {
                 Err(e) => {
                     warn!("{}", e);
                     0
-                },
+                }
             };
 
             cpu.set_register(self.rd, data);
         }
 
         let cycles = read_cycles_per_8_16(addr);
-        cpu.add_cycles(
-            cycles_for_str_ldr(self.s || self.h, self.rd == PC, cycles)
-        );
+        cpu.add_cycles(cycles_for_str_ldr(self.s || self.h, self.rd == PC, cycles));
     }
 }
 
@@ -728,7 +722,12 @@ impl From<u32> for LoadStoreImmOffsetOp {
 
 impl Operation for LoadStoreImmOffsetOp {
     fn run(&self, cpu: &mut Cpu, mem: &mut SystemMemory) {
-        let addr = (cpu.get_register(self.rb) + if self.b { self.offset } else { self.offset << 2 }) as usize;
+        let addr = (cpu.get_register(self.rb)
+            + if self.b {
+                self.offset
+            } else {
+                self.offset << 2
+            }) as usize;
         if self.l {
             let val = if self.b {
                 mem.read_byte(addr)
@@ -763,9 +762,7 @@ impl Operation for LoadStoreImmOffsetOp {
             read_cycles_per_32(addr)
         };
 
-        cpu.add_cycles(
-            cycles_for_str_ldr(self.l, self.rd == PC, cycles)
-        );
+        cpu.add_cycles(cycles_for_str_ldr(self.l, self.rd == PC, cycles));
     }
 }
 
@@ -797,7 +794,7 @@ impl Operation for LoadStoreHalfWordOp {
                 Err(e) => {
                     warn!("{}", e);
                     panic!()
-                },
+                }
             };
 
             cpu.set_register(self.rd, block_from_mem);
@@ -812,9 +809,7 @@ impl Operation for LoadStoreHalfWordOp {
 
         let cycles = read_cycles_per_8_16(addr);
 
-        cpu.add_cycles(
-            cycles_for_str_ldr(self.l, self.rd == PC, cycles)
-        );
+        cpu.add_cycles(cycles_for_str_ldr(self.l, self.rd == PC, cycles));
     }
 }
 
@@ -822,7 +817,7 @@ impl Operation for LoadStoreHalfWordOp {
 struct SpRelativeLoadOp {
     l: bool,
     rd: usize,
-    offset: u32
+    offset: u32,
 }
 
 impl From<u32> for SpRelativeLoadOp {
@@ -845,7 +840,7 @@ impl Operation for SpRelativeLoadOp {
                 Err(e) => {
                     warn!("{}", e);
                     panic!();
-                },
+                }
             };
 
             cpu.set_register(self.rd, block_from_mem);
@@ -860,9 +855,7 @@ impl Operation for SpRelativeLoadOp {
         }
         let cycles = read_cycles_per_32(addr);
 
-        cpu.add_cycles(
-            cycles_for_str_ldr(self.l, self.rd == PC, cycles)
-        );
+        cpu.add_cycles(cycles_for_str_ldr(self.l, self.rd == PC, cycles));
     }
 }
 
@@ -870,7 +863,7 @@ impl Operation for SpRelativeLoadOp {
 struct LoadAddressOp {
     sp: bool,
     rd: usize,
-    word: u32
+    word: u32,
 }
 
 impl From<u32> for LoadAddressOp {
@@ -878,7 +871,7 @@ impl From<u32> for LoadAddressOp {
         LoadAddressOp {
             sp: (value >> 11 & 0x1) == 1,
             rd: get_triplet_as_usize(value, 8),
-            word: (value & 0xff) << 2, 
+            word: (value & 0xff) << 2,
         }
     }
 }
@@ -966,7 +959,7 @@ impl Operation for PushPopRegOp {
                         } else {
                             n
                         }
-                    },
+                    }
                     Err(e) => {
                         warn!("{}", e);
                         0
@@ -994,7 +987,10 @@ impl Operation for PushPopRegOp {
             } else {
                 let reg = registers[registers.len() - i - 1];
                 cpu.set_register(SP, cpu.get_register(SP) - 4);
-                match mem.write_word(cpu.get_register(SP) as usize, cpu.get_register(reg as usize)) {
+                match mem.write_word(
+                    cpu.get_register(SP) as usize,
+                    cpu.get_register(reg as usize),
+                ) {
                     Ok(_) => (),
                     Err(e) => warn!("{}", e),
                 };
@@ -1004,7 +1000,12 @@ impl Operation for PushPopRegOp {
         // NOTE: This only read from the SP so it's always a cycle per entry of 1
         let n = registers.len() as u32;
         let cycles_per_entires = read_cycles_per_32(cpu.get_register(SP) as usize);
-        let cycles = calc_cycles_for_stm_ldm(cycles_per_entires, n, self.l, registers.contains(&(PC as u32)));
+        let cycles = calc_cycles_for_stm_ldm(
+            cycles_per_entires,
+            n,
+            self.l,
+            registers.contains(&(PC as u32)),
+        );
         cpu.add_cycles(cycles);
     }
 }
@@ -1058,7 +1059,12 @@ impl Operation for MultipleLoadStoreOp {
         let registers = bit_map_to_array(self.rlist.into());
         let n = registers.len() as u32;
         let cycles_per_entires = read_cycles_per_32(address);
-        let cycles = calc_cycles_for_stm_ldm(cycles_per_entires, n, self.l, registers.contains(&(PC as u32)));
+        let cycles = calc_cycles_for_stm_ldm(
+            cycles_per_entires,
+            n,
+            self.l,
+            registers.contains(&(PC as u32)),
+        );
         cpu.add_cycles(cycles);
     }
 }
@@ -1075,16 +1081,16 @@ impl TryFrom<u32> for ConditionalBranchOp {
         Ok(ConditionalBranchOp {
             offset: (value & 0xff) as u32,
             cond: match value >> 8 & 0xf {
-                0  => Conditional::EQ,
-                1  => Conditional::NE,
-                2  => Conditional::CS,
-                3  => Conditional::CC,
-                4  => Conditional::MI,
-                5  => Conditional::PL,
-                6  => Conditional::VS,
-                7  => Conditional::VC,
-                8  => Conditional::HI,
-                9  => Conditional::LS,
+                0 => Conditional::EQ,
+                1 => Conditional::NE,
+                2 => Conditional::CS,
+                3 => Conditional::CC,
+                4 => Conditional::MI,
+                5 => Conditional::PL,
+                6 => Conditional::VS,
+                7 => Conditional::VC,
+                8 => Conditional::HI,
+                9 => Conditional::LS,
                 10 => Conditional::GE,
                 11 => Conditional::LT,
                 12 => Conditional::GT,
@@ -1092,7 +1098,7 @@ impl TryFrom<u32> for ConditionalBranchOp {
                 _ => {
                     return Err(InstructionDecodeError::ConditionalNotValid {
                         cond: value >> 8 & 0xf,
-                        value
+                        value,
                     })
                 }
             },
@@ -1165,8 +1171,8 @@ impl From<u32> for UnconditionalBranchOp {
     fn from(value: u32) -> Self {
         UnconditionalBranchOp {
             offset: (value & 0x7ff) << 1,
-        } 
-    } 
+        }
+    }
 }
 
 impl Operation for UnconditionalBranchOp {
@@ -1205,7 +1211,7 @@ impl From<u32> for LongBranchWithLinkOp {
             h: (value >> 11 & 1) == 1,
             offset: value & 0x7ff,
         }
-    } 
+    }
 }
 
 impl Operation for LongBranchWithLinkOp {
@@ -1254,56 +1260,126 @@ mod test {
     fn test_lsl_decode() {
         let inst: u32 = 0x0636;
         let op = MoveShiftedRegisterOp::from(inst);
-        assert_eq!(op, MoveShiftedRegisterOp{op:0 ,rd: 6, rs: 6, offset: 0x18});
+        assert_eq!(
+            op,
+            MoveShiftedRegisterOp {
+                op: 0,
+                rd: 6,
+                rs: 6,
+                offset: 0x18
+            }
+        );
     }
 
     #[test]
     fn test_add_reg_variant() {
         let inst: u32 = 0x19ad;
         let op = AddSubtractOp::from(inst);
-        assert_eq!(op, AddSubtractOp{rd: 5, rs: 5, rn: 6, i: false, op: false, offset: 6});
+        assert_eq!(
+            op,
+            AddSubtractOp {
+                rd: 5,
+                rs: 5,
+                rn: 6,
+                i: false,
+                op: false,
+                offset: 6
+            }
+        );
     }
 
     #[test]
     fn test_sub_imm_variant() {
         let inst: u32 = 0x1e68;
         let op = AddSubtractOp::from(inst);
-        assert_eq!(op, AddSubtractOp{rd: 0, rs: 5, rn: 1, i: true, op: true, offset: 1});
+        assert_eq!(
+            op,
+            AddSubtractOp {
+                rd: 0,
+                rs: 5,
+                rn: 1,
+                i: true,
+                op: true,
+                offset: 1
+            }
+        );
     }
 
     #[test]
     fn test_add_imm_variant() {
         let inst: u32 = 0x1c22;
         let op = AddSubtractOp::from(inst);
-        assert_eq!(op, AddSubtractOp{rd: 2, rs: 4, offset: 0, rn: 0, i: true, op: false});
+        assert_eq!(
+            op,
+            AddSubtractOp {
+                rd: 2,
+                rs: 4,
+                offset: 0,
+                rn: 0,
+                i: true,
+                op: false
+            }
+        );
     }
 
     #[test]
     fn test_mov_imm_variant() {
         let inst: u32 = 0x2400;
         let op = MathImmOp::from(inst);
-        assert_eq!(op, MathImmOp{rd: 4, offset: 0, op: 0});
+        assert_eq!(
+            op,
+            MathImmOp {
+                rd: 4,
+                offset: 0,
+                op: 0
+            }
+        );
     }
 
     #[test]
     fn test_add_byte_imm_vairant() {
         let inst: u32 = 0x3210;
         let op = MathImmOp::from(inst);
-        assert_eq!(op, MathImmOp{rd: 2, offset: 0x10, op: 2});
+        assert_eq!(
+            op,
+            MathImmOp {
+                rd: 2,
+                offset: 0x10,
+                op: 2
+            }
+        );
     }
 
     #[test]
     fn test_bx_variant_one() {
         let inst: u32 = 0x4770;
         let op = HiRegOp::from(inst);
-        assert_eq!(op, HiRegOp{h1: false, h2: true, rd: 0, rs: 14, op: 3});
+        assert_eq!(
+            op,
+            HiRegOp {
+                h1: false,
+                h2: true,
+                rd: 0,
+                rs: 14,
+                op: 3
+            }
+        );
     }
 
     #[test]
     fn test_bx_variant_two() {
         let inst: u32 = 0x4718;
         let op = HiRegOp::from(inst);
-        assert_eq!(op, HiRegOp{h1: false, h2: false, rd: 0, rs: 3, op: 3});
+        assert_eq!(
+            op,
+            HiRegOp {
+                h1: false,
+                h2: false,
+                rd: 0,
+                rs: 3,
+                op: 3
+            }
+        );
     }
 
     #[test]
@@ -1311,41 +1387,74 @@ mod test {
         let inst: u32 = 0x49f8;
         let op = PcRelativeLoadOp::from(inst);
         // TODO: in ghidra this is DAT_0000ac0
-        assert_eq!(op, PcRelativeLoadOp{rd: 1, word: 0xf8});
+        assert_eq!(op, PcRelativeLoadOp { rd: 1, word: 0xf8 });
     }
 
     #[test]
     fn test_ldrb_decode() {
         let inst: u32 = 0x5d82;
         let op = LoadStoreRegOffsetOp::from(inst);
-        assert_eq!(op, LoadStoreRegOffsetOp{l: true, b: true, rd: 2, rb: 0, ro: 6});
+        assert_eq!(
+            op,
+            LoadStoreRegOffsetOp {
+                l: true,
+                b: true,
+                rd: 2,
+                rb: 0,
+                ro: 6
+            }
+        );
     }
 
     #[test]
     fn test_strh_decode() {
         let inst: u32 = 0x81bb;
         let op = LoadStoreHalfWordOp::from(inst);
-        assert_eq!(op, LoadStoreHalfWordOp{l: false, offset: 0xc, rb: 7, rd: 3});
+        assert_eq!(
+            op,
+            LoadStoreHalfWordOp {
+                l: false,
+                offset: 0xc,
+                rb: 7,
+                rd: 3
+            }
+        );
     }
 
     #[test]
     fn test_b_decode() {
         let inst: u32 = 0xe3a0;
         let op = UnconditionalBranchOp::from(inst);
-        assert_eq!(op, UnconditionalBranchOp{offset: 0x740});
+        assert_eq!(op, UnconditionalBranchOp { offset: 0x740 });
     }
 
     #[test]
     fn test_push_decode() {
         let inst: u32 = 0xb578;
         let op = PushPopRegOp::from(inst);
-        assert_eq!(op, PushPopRegOp{l: false, r: true, rlist: 0b1111000});
+        assert_eq!(
+            op,
+            PushPopRegOp {
+                l: false,
+                r: true,
+                rlist: 0b1111000
+            }
+        );
     }
 
     #[test]
     fn test_strh_decode_two() {
         let inst: u32 = 0x7090;
         let op = LoadStoreImmOffsetOp::from(inst);
-        assert_eq!(op, LoadStoreImmOffsetOp{offset: 2, rd: 0, rb: 2, l: false, b: true});
+        assert_eq!(
+            op,
+            LoadStoreImmOffsetOp {
+                offset: 2,
+                rd: 0,
+                rb: 2,
+                l: false,
+                b: true
+            }
+        );
     }
 }

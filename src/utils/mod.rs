@@ -1,5 +1,5 @@
-pub mod shifter;
 pub mod io_registers;
+pub mod shifter;
 
 // Returns true if the bit at x is 1
 /// Use u32.bit_is_high instead
@@ -112,7 +112,7 @@ impl BittableColor for u32 {
                 (self.byte_at(16) * 4) as u8,
                 (self.byte_at(21) * 4) as u8,
                 (self.byte_at(26) * 4) as u8,
-            )
+            ),
         )
     }
 }

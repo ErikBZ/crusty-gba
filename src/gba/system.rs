@@ -1,8 +1,7 @@
 use core::fmt;
-use tracing::{trace, info};
+use tracing::{info, trace};
 
 use super::dma::DmaControl;
-
 
 const KILOBYTE: usize = 1024;
 const WORD: u32 = 0xffffffff;
@@ -21,7 +20,7 @@ fn address_shift(addr: usize) -> usize {
 pub fn read_cycles_per_8_16(address: usize) -> u32 {
     let mem_type = address >> 24 & 0xf;
     match mem_type {
-        0x0 | 0x3 | 0x4 |0x7 => 1,
+        0x0 | 0x3 | 0x4 | 0x7 => 1,
         0x2 => 3,
         0x5 | 0x6 => 1,
         // Might be differnet
@@ -52,10 +51,14 @@ pub enum MemoryError {
 impl fmt::Display for MemoryError {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
-            Self::OutOfBounds(a, b) => write!(f, "Memory Address is out of bounds: {:#08x} index: {:#08x}", a, b),
+            Self::OutOfBounds(a, b) => write!(
+                f,
+                "Memory Address is out of bounds: {:#08x} index: {:#08x}",
+                a, b
+            ),
             Self::MapNotFound(a) => write!(f, "Memory Mapping not found for address: {:#08x}", a),
         }
-    } 
+    }
 }
 
 struct ReadOnlyMapping(Vec<u32>);
@@ -140,7 +143,6 @@ impl SystemMemory {
     }
 }
 
-
 impl SystemMemory {
     fn get_readonly_mask(&self, addr: usize) -> Option<u32> {
         match addr {
@@ -169,7 +171,12 @@ impl SystemMemory {
         Ok(())
     }
 
-    fn write_with_mask(&mut self, address: usize, block: u32, mask: u32) -> Result<(), MemoryError> {
+    fn write_with_mask(
+        &mut self,
+        address: usize,
+        block: u32,
+        mask: u32,
+    ) -> Result<(), MemoryError> {
         let i = (address & 0xffffff) >> 2;
         let shift = (address & 0x3) * 8;
 
@@ -182,7 +189,12 @@ impl SystemMemory {
         };
 
         let new_data = (old_data & !(mask << shift)) | ((write_only_block & mask) << shift);
-        trace!("addr: {:x}, old value: {:x}, new_value: {:x}", address, old_data, new_data);
+        trace!(
+            "addr: {:x}, old value: {:x}, new_value: {:x}",
+            address,
+            old_data,
+            new_data
+        );
 
         let ram: &mut Vec<u32> = self.memory_map_mut(address)?;
         if i > ram.len() {
@@ -248,12 +260,11 @@ impl SystemMemory {
         enabled
     }
 
-
     // should return cycles run
     pub fn run_dma(&mut self) -> Result<u32, MemoryError> {
         todo!()
     }
-    
+
     //TODO: Make another that isn't mut?
     // deal with lifetimes later
     fn memory_map(&self, address: usize) -> Result<&Vec<u32>, MemoryError> {
@@ -268,7 +279,7 @@ impl SystemMemory {
             0x7 => Ok(&self.oam),
             0x8..=0xd => Ok(&self.pak_rom),
             0xe => Ok(&self.cart_ram),
-            _ => Err(MemoryError::MapNotFound(address))
+            _ => Err(MemoryError::MapNotFound(address)),
         }
     }
 
@@ -284,7 +295,7 @@ impl SystemMemory {
             0x7 => Ok(&mut self.oam),
             0x8..=0xd => Ok(&mut self.pak_rom),
             0xe => Ok(&mut self.cart_ram),
-            _ => Err(MemoryError::MapNotFound(address))
+            _ => Err(MemoryError::MapNotFound(address)),
         }
     }
 
@@ -308,4 +319,3 @@ impl SystemMemory {
         &self.pal_ram.as_slice()
     }
 }
-

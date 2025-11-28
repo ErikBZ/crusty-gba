@@ -1,20 +1,20 @@
-mod gba;
-mod utils;
 mod cli;
+mod gba;
 mod ppu;
 mod renderer;
+mod utils;
 
-use std::fs::File;
-use std::io::prelude::*;
+use crate::ppu::Ppu;
+use crate::renderer::{run_debug, run_gui, run_ratatui};
 use clap::Parser;
 use cli::Args;
 use gba::cpu::Cpu;
-use crate::ppu::Ppu;
 use gba::system::SystemMemory;
+use std::fs::File;
+use std::io::prelude::*;
 use tracing::{event, Level};
-use tracing_subscriber::{fmt, reload, prelude::*};
 use tracing_subscriber::filter::LevelFilter;
-use crate::renderer::{run_gui, run_debug, run_ratatui};
+use tracing_subscriber::{fmt, prelude::*, reload};
 
 use pixels::Error;
 
@@ -26,7 +26,10 @@ fn main() -> Result<(), Error> {
     };
 
     let (filter, reload_handle) = reload::Layer::new(filter);
-    tracing_subscriber::registry().with(filter).with(fmt::Layer::default()).init();
+    tracing_subscriber::registry()
+        .with(filter)
+        .with(fmt::Layer::default())
+        .init();
 
     let mut cpu = Cpu::default();
     let mut memory = SystemMemory::new();
@@ -48,10 +51,10 @@ fn main() -> Result<(), Error> {
         cli::Renderer::Debug => run_debug(cpu, memory, ppu, reload_handle),
         cli::Renderer::Gui => {
             let _ = run_gui(cpu, memory, reload_handle);
-        },
+        }
         cli::Renderer::Ratatui => {
             let _ = run_ratatui();
-        },
+        }
     };
 
     Ok(())
@@ -79,4 +82,3 @@ fn read_file_into_u32(file: &mut File) -> Vec<u32> {
 
     instructions
 }
-

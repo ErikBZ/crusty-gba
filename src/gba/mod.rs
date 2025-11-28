@@ -1,12 +1,12 @@
+pub mod arm;
 pub mod cpu;
 pub mod debugger;
-pub mod arm;
-pub mod thumb;
-pub mod system;
-mod mapped_io;
-mod utils;
 mod dma;
 mod error;
+mod mapped_io;
+pub mod system;
+pub mod thumb;
+mod utils;
 
 pub const CPSR_N: u32 = 0x80000000;
 pub const CPSR_Z: u32 = 0x40000000;
@@ -69,51 +69,21 @@ impl From<u32> for Conditional {
 impl Conditional {
     pub fn should_run(&self, cpsr: u32) -> bool {
         match self {
-            Conditional::EQ => {
-                (cpsr & CPSR_Z) == CPSR_Z
-            },
-            Conditional::NE => {
-                (cpsr & CPSR_Z) == 0
-            },
-            Conditional::CS => {
-                (cpsr & CPSR_C) == CPSR_C
-            },
-            Conditional::CC => {
-                (cpsr & CPSR_C) == 0
-            },
-            Conditional::MI => {
-                (cpsr & CPSR_N) == CPSR_N
-            },
-            Conditional::PL => {
-                (cpsr & CPSR_N) == 0
-            },
-            Conditional::VS => {
-                (cpsr & CPSR_V) == CPSR_V
-            },
-            Conditional::VC => {
-                (cpsr & CPSR_V) == 0
-            },
-            Conditional::HI => {
-                (cpsr & CPSR_C) == CPSR_C && (cpsr & CPSR_Z) == 0
-            },
-            Conditional::LS => {
-                (cpsr & CPSR_C) == 0 || (cpsr & CPSR_Z) == CPSR_Z
-            },
-            Conditional::GE => {
-                (cpsr & CPSR_N) == (cpsr & CPSR_V) << 3
-            },
-            Conditional::LT => {
-                (cpsr & CPSR_N) != (cpsr & CPSR_V) << 3
-            },
-            Conditional::GT => {
-                (cpsr & CPSR_Z) == 0 && (cpsr & CPSR_N == (cpsr & CPSR_V) << 3)
-            },
-            Conditional::LE => {
-                (cpsr & CPSR_Z) == CPSR_Z || (cpsr & CPSR_N != (cpsr & CPSR_V) << 3)
-            },
-            Conditional::AL => {
-                true
-            },
+            Conditional::EQ => (cpsr & CPSR_Z) == CPSR_Z,
+            Conditional::NE => (cpsr & CPSR_Z) == 0,
+            Conditional::CS => (cpsr & CPSR_C) == CPSR_C,
+            Conditional::CC => (cpsr & CPSR_C) == 0,
+            Conditional::MI => (cpsr & CPSR_N) == CPSR_N,
+            Conditional::PL => (cpsr & CPSR_N) == 0,
+            Conditional::VS => (cpsr & CPSR_V) == CPSR_V,
+            Conditional::VC => (cpsr & CPSR_V) == 0,
+            Conditional::HI => (cpsr & CPSR_C) == CPSR_C && (cpsr & CPSR_Z) == 0,
+            Conditional::LS => (cpsr & CPSR_C) == 0 || (cpsr & CPSR_Z) == CPSR_Z,
+            Conditional::GE => (cpsr & CPSR_N) == (cpsr & CPSR_V) << 3,
+            Conditional::LT => (cpsr & CPSR_N) != (cpsr & CPSR_V) << 3,
+            Conditional::GT => (cpsr & CPSR_Z) == 0 && (cpsr & CPSR_N == (cpsr & CPSR_V) << 3),
+            Conditional::LE => (cpsr & CPSR_Z) == CPSR_Z || (cpsr & CPSR_N != (cpsr & CPSR_V) << 3),
+            Conditional::AL => true,
             _ => false,
         }
     }
@@ -142,8 +112,8 @@ pub fn get_v_from_sub(o1: u64, o2: u64, res: u64) -> bool {
     let o1_sign = (o1 >> 31) & 1 == 1;
     let o2_sign = (o2 >> 31) & 1 == 1;
     let res_sign = (res >> 31) & 1 == 1;
-    ((o1_sign == true) && (o2_sign == false) && (res_sign == false)) ||
-    ((o1_sign == false) && (o2_sign == true) && (res_sign == true))
+    ((o1_sign == true) && (o2_sign == false) && (res_sign == false))
+        || ((o1_sign == false) && (o2_sign == true) && (res_sign == true))
 }
 
 // TODO: There is an overlfow_add and overflow_sub maybe check those
@@ -187,4 +157,3 @@ fn count_cycles(mult_operand: u32) -> u32 {
         5
     }
 }
-

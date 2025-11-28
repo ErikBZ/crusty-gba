@@ -1,13 +1,18 @@
-use std::collections::HashSet;
 use crate::gba::cpu::Cpu;
-use crate::ppu::Ppu;
-use crate::gba::debugger::{DebuggerCommand, ContinueSubcommand};
+use crate::gba::debugger::{ContinueSubcommand, DebuggerCommand};
 use crate::gba::system::SystemMemory;
+use crate::ppu::Ppu;
+use std::collections::HashSet;
 use tracing::{event, Level};
-use tracing_subscriber::{reload::Handle, Registry};
 use tracing_subscriber::filter::LevelFilter;
+use tracing_subscriber::{reload::Handle, Registry};
 
-pub fn run_debug(mut cpu: Cpu, mut memory: SystemMemory, mut ppu: Ppu, reload_handle: Handle<LevelFilter, Registry>) {
+pub fn run_debug(
+    mut cpu: Cpu,
+    mut memory: SystemMemory,
+    mut ppu: Ppu,
+    reload_handle: Handle<LevelFilter, Registry>,
+) {
     event!(Level::INFO, "Running Debug session");
     use std::io;
     let mut break_points: HashSet<usize> = HashSet::new();
@@ -15,7 +20,7 @@ pub fn run_debug(mut cpu: Cpu, mut memory: SystemMemory, mut ppu: Ppu, reload_ha
     loop {
         let mut input = String::new();
         match io::stdin().read_line(&mut input) {
-            Ok(_) => {},
+            Ok(_) => {}
             Err(e) => {
                 println!("{}", e);
                 continue;
@@ -27,7 +32,7 @@ pub fn run_debug(mut cpu: Cpu, mut memory: SystemMemory, mut ppu: Ppu, reload_ha
             Err(e) => {
                 println!("{}", e);
                 continue;
-            },
+            }
         };
 
         match cmd {
@@ -38,7 +43,7 @@ pub fn run_debug(mut cpu: Cpu, mut memory: SystemMemory, mut ppu: Ppu, reload_ha
                     break_points.insert(address);
                     println!("{:?}", break_points);
                 }
-            },
+            }
             DebuggerCommand::Continue(ContinueSubcommand::Endless) => {
                 cpu.tick(&mut memory);
                 ppu.tick(cpu.cycles(), &mut memory);
@@ -51,7 +56,7 @@ pub fn run_debug(mut cpu: Cpu, mut memory: SystemMemory, mut ppu: Ppu, reload_ha
                     }
                 }
                 println!("{}", cpu);
-            },
+            }
             DebuggerCommand::Continue(ContinueSubcommand::For(l)) => {
                 let mut n = 0;
                 while !break_points.contains(&cpu.instruction_address()) && l > n {
@@ -63,7 +68,7 @@ pub fn run_debug(mut cpu: Cpu, mut memory: SystemMemory, mut ppu: Ppu, reload_ha
 
                     n += 1;
                 }
-            },
+            }
             DebuggerCommand::Next => {
                 cpu.tick(&mut memory);
                 if ppu.tick(cpu.cycles(), &mut memory) {
@@ -71,22 +76,19 @@ pub fn run_debug(mut cpu: Cpu, mut memory: SystemMemory, mut ppu: Ppu, reload_ha
                 }
 
                 println!("{}", cpu);
-            },
+            }
             DebuggerCommand::Info => {
                 println!("{}", cpu);
-            },
+            }
             DebuggerCommand::Quit => break,
             DebuggerCommand::LogLevel(lf) => {
                 let _ = reload_handle.modify(|filter| *filter = lf);
-            },
-            DebuggerCommand::ReadMem(address) => {
-                match memory.read_word(address) {
-                    Ok(d) =>  println!("{:x}: {:x}", address, d),
-                    Err(e) => println!("{}", e),
-                }
             }
+            DebuggerCommand::ReadMem(address) => match memory.read_word(address) {
+                Ok(d) => println!("{:x}: {:x}", address, d),
+                Err(e) => println!("{}", e),
+            },
             _ => (),
         }
     }
 }
-

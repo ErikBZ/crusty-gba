@@ -14,7 +14,7 @@ pub struct Args {
     pub game: String,
     // TODO: Add Logging Level
     #[arg(short, long)]
-    pub log_level: Option<LogLevel>
+    pub log_level: Option<LogLevel>,
 }
 
 #[derive(Debug, clap::ValueEnum, Clone, Default)]

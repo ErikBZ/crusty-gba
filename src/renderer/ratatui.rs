@@ -1,6 +1,14 @@
 use std::time::Duration;
 
-use ratatui::{buffer::{Buffer, Cell}, crossterm::{event::{self, Event, KeyCode, KeyEventKind}, terminal}, style::Color, DefaultTerminal, Frame};
+use ratatui::{
+    buffer::{Buffer, Cell},
+    crossterm::{
+        event::{self, Event, KeyCode, KeyEventKind},
+        terminal,
+    },
+    style::Color,
+    DefaultTerminal, Frame,
+};
 
 // TODO: for the ratatui renderer
 //
@@ -26,7 +34,12 @@ pub fn run_ratatui() -> Result<(), std::io::Error> {
 
 // will probably have to split each char
 fn render(frame: &mut Frame) {
-    let area = ratatui::layout::Rect { x: 3, y: 1, width: 1, height: 4 };
+    let area = ratatui::layout::Rect {
+        x: 3,
+        y: 1,
+        width: 1,
+        height: 4,
+    };
     let mut thing = Cell::new("x");
     thing.set_bg(Color::from_u32(0x60ff6060));
     *frame.buffer_mut() = Buffer::filled(area, thing)

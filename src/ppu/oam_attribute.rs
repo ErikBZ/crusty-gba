@@ -1,4 +1,7 @@
-use crate::{gba::system::SystemMemory, utils::{Bitable, BittableColor}};
+use crate::{
+    gba::system::SystemMemory,
+    utils::{Bitable, BittableColor},
+};
 
 const ROT_SCALE_FLAG: u32 = 0x100;
 const OBJECT_FLAG: u32 = 0x200;
@@ -15,7 +18,7 @@ pub fn get_obj_palettes(ram: &SystemMemory) -> Colors {
 
 pub fn get_bg_palettes(ram: &SystemMemory) -> Colors {
     let palette_ram = ram.get_palette_ram_slice();
-    Colors::from(&palette_ram[0 .. 512 / 4])
+    Colors::from(&palette_ram[0..512 / 4])
 }
 
 #[derive(Debug)]
@@ -37,13 +40,13 @@ pub struct OamAttribute {
 #[derive(Debug)]
 pub struct Shape {
     pub w: u32,
-    pub h: u32
+    pub h: u32,
 }
 
 #[derive(Debug)]
 pub enum ObjectFlag {
     DoublSize(bool),
-    Disbale(bool)
+    Disbale(bool),
 }
 
 impl From<&[u32]> for ObjectFlag {
@@ -61,7 +64,7 @@ impl From<&[u32]> for ObjectFlag {
 #[derive(Debug)]
 pub enum Transformation {
     RotScale { idx: usize },
-    Flip { horizontal: bool, veritical: bool }
+    Flip { horizontal: bool, veritical: bool },
 }
 
 impl From<&[u32]> for Transformation {
@@ -69,11 +72,16 @@ impl From<&[u32]> for Transformation {
         let rot = value[0] & ROT_SCALE_FLAG == ROT_SCALE_FLAG;
         if rot {
             let rot_scale_param = (value[0] >> 24) & 0x1f;
-            Transformation::RotScale {idx: rot_scale_param as usize}
+            Transformation::RotScale {
+                idx: rot_scale_param as usize,
+            }
         } else {
             let horizontal = (value[0] >> 27) == 0x1;
             let veritical = (value[0] >> 28) == 0x1;
-            Transformation::Flip { horizontal, veritical }
+            Transformation::Flip {
+                horizontal,
+                veritical,
+            }
         }
     }
 }
@@ -86,10 +94,19 @@ impl From<&[u32]> for OamAttribute {
 
         let base_size = 8 * (1 << obj_size);
         let shape = match obj_shape {
-            0 => Shape { w: base_size, h: base_size },
-            1 => Shape { w: base_size, h: secondary_size[obj_size as usize] },
-            2 => Shape { w: secondary_size[obj_size as usize], h: base_size },
-            _ => panic!()
+            0 => Shape {
+                w: base_size,
+                h: base_size,
+            },
+            1 => Shape {
+                w: base_size,
+                h: secondary_size[obj_size as usize],
+            },
+            2 => Shape {
+                w: secondary_size[obj_size as usize],
+                h: base_size,
+            },
+            _ => panic!(),
         };
 
         Self {
@@ -119,13 +136,13 @@ pub struct RotationScaleParameter {
 }
 
 pub struct RotationScaleParameterBuilder {
-    parameters: Vec<u32>
+    parameters: Vec<u32>,
 }
 
 impl RotationScaleParameterBuilder {
     pub fn new() -> Self {
         Self {
-            parameters: Vec::new()
+            parameters: Vec::new(),
         }
     }
 
@@ -156,7 +173,7 @@ pub struct Colors {
 }
 
 pub struct Palette {
-    colors: Vec<(u8, u8, u8)>
+    colors: Vec<(u8, u8, u8)>,
 }
 
 impl Colors {
@@ -190,11 +207,9 @@ impl From<&[u32]> for Colors {
                 colors.push(c2);
             }
 
-            palettes.push(Palette {colors: pal_colors});
+            palettes.push(Palette { colors: pal_colors });
         }
 
-        Self {
-            palettes,
-        }
+        Self { palettes }
     }
 }

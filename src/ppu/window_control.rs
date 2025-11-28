@@ -11,10 +11,10 @@ pub(super) struct WindowDimensions {
 impl From<(u32, u32)> for WindowDimensions {
     fn from(value: (u32, u32)) -> Self {
         WindowDimensions {
-            left: value.0.byte_at(8), 
+            left: value.0.byte_at(8),
             right: value.0.byte_at(0),
             bottom: value.1.byte_at(0),
-            top: value.1.byte_at(8), 
+            top: value.1.byte_at(8),
         }
     }
 }
@@ -36,7 +36,7 @@ impl From<u32> for InternalWindowCnt {
             bg2: value.bit_is_high(2),
             bg3: value.bit_is_high(3),
             obj: value.bit_is_high(4),
-            color_special: value.bit_is_high(5)
+            color_special: value.bit_is_high(5),
         }
     }
 }
@@ -49,13 +49,12 @@ pub(super) struct WindowCnt {
 }
 
 impl From<u32> for WindowCnt {
-   fn from(value: u32) -> Self {
+    fn from(value: u32) -> Self {
         WindowCnt {
             window_0: InternalWindowCnt::from(value),
             window_1: InternalWindowCnt::from(value >> 8),
             outside: InternalWindowCnt::from(value >> 16),
             obj: InternalWindowCnt::from(value >> 24),
         }
-   } 
+    }
 }
-

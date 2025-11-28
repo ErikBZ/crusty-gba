@@ -1,25 +1,29 @@
 use crate::gba::cpu::Cpu;
-use crate::ppu::Ppu;
 use crate::gba::system::SystemMemory;
+use crate::ppu::Ppu;
 use std::time::Instant;
 use tracing::{event, Level};
-use tracing_subscriber::{filter, reload::Handle, Registry};
 use tracing_subscriber::filter::LevelFilter;
+use tracing_subscriber::{filter, reload::Handle, Registry};
 
 use pixels::{Pixels, SurfaceTexture};
 use winit::{
+    dpi::LogicalSize,
     event::{Event, WindowEvent},
     event_loop::EventLoop,
-    dpi::LogicalSize,
-    window::WindowBuilder,
     keyboard::KeyCode,
+    window::WindowBuilder,
 };
 use winit_input_helper::WinitInputHelper;
 
 const WIDTH: u32 = 240;
 const HEIGHT: u32 = 160;
 
-pub fn run_gui(mut cpu: Cpu, mut memory: SystemMemory, reload_handle: Handle<LevelFilter, Registry>)  -> Result<(), Box<dyn std::error::Error> >{
+pub fn run_gui(
+    mut cpu: Cpu,
+    mut memory: SystemMemory,
+    reload_handle: Handle<LevelFilter, Registry>,
+) -> Result<(), Box<dyn std::error::Error>> {
     event!(Level::INFO, "Runing GUI");
     let event_loop = EventLoop::new().unwrap();
     let mut input = WinitInputHelper::new();
@@ -46,14 +50,16 @@ pub fn run_gui(mut cpu: Cpu, mut memory: SystemMemory, reload_handle: Handle<Lev
         elwt.set_control_flow(winit::event_loop::ControlFlow::Poll);
 
         match event {
-            Event::WindowEvent { event: WindowEvent::RedrawRequested, .. } => {
+            Event::WindowEvent {
+                event: WindowEvent::RedrawRequested,
+                ..
+            } => {
                 let current = Instant::now();
                 loop {
                     cpu.tick(&mut memory);
                     if ppu.tick(cpu.cycles(), &mut memory) {
                         break;
                     }
-
                 }
                 {
                     let ppu_buffer = ppu.get_next_frame(&memory);
@@ -74,8 +80,7 @@ pub fn run_gui(mut cpu: Cpu, mut memory: SystemMemory, reload_handle: Handle<Lev
                 if dt.as_secs_f64() > 0.0 {
                     std::thread::sleep(dt);
                 }
-
-            },
+            }
             _ => (),
         }
 
@@ -93,4 +98,3 @@ pub fn run_gui(mut cpu: Cpu, mut memory: SystemMemory, reload_handle: Handle<Lev
     });
     Ok(())
 }
-

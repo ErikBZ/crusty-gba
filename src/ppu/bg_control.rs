@@ -1,5 +1,8 @@
-use crate::{gba::system::{MemoryError, SystemMemory}, utils::Bitable};
 use crate::utils::io_registers::{BG_CONTROL0, BG_CONTROL1, BG_CONTROL2, BG_CONTROL3};
+use crate::{
+    gba::system::{MemoryError, SystemMemory},
+    utils::Bitable,
+};
 
 pub fn bg_control0(ram: &SystemMemory) -> Result<BgControl, MemoryError> {
     let data = ram.read_halfword(BG_CONTROL0)?;

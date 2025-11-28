@@ -23,9 +23,9 @@ impl From<u32> for InternalColorEffect {
 }
 
 pub(super) enum ColorEffect {
-    AlphaBlending{ eva: EffectCoef, evb: EffectCoef},
+    AlphaBlending { eva: EffectCoef, evb: EffectCoef },
     BrightnessIncrease(EffectCoef),
-    BrightnessDecrease(EffectCoef)
+    BrightnessDecrease(EffectCoef),
 }
 
 // EffectCoef maxes out at 16
@@ -45,29 +45,25 @@ impl From<u32> for EffectCoef {
 pub(super) struct ColorEffectSelection {
     pub first_target: InternalColorEffect,
     pub second_target: InternalColorEffect,
-    pub effect: Option<ColorEffect>
+    pub effect: Option<ColorEffect>,
 }
 
 impl From<(u32, u32)> for ColorEffectSelection {
     fn from(value: (u32, u32)) -> Self {
         let effect = match (value.0 >> 6) & 0b11 {
             0 => None,
-            1 => Some(ColorEffect::AlphaBlending { 
+            1 => Some(ColorEffect::AlphaBlending {
                 eva: EffectCoef::from(value.0 >> 15),
-                evb: EffectCoef::from(value.0 >> 23)
+                evb: EffectCoef::from(value.0 >> 23),
             }),
-            2 => Some(ColorEffect::BrightnessIncrease (
-                EffectCoef(value.1)
-            )),
-            3 => Some(ColorEffect::BrightnessDecrease (
-                EffectCoef(value.1)
-            )),
-            _ => panic!()
+            2 => Some(ColorEffect::BrightnessIncrease(EffectCoef(value.1))),
+            3 => Some(ColorEffect::BrightnessDecrease(EffectCoef(value.1))),
+            _ => panic!(),
         };
         ColorEffectSelection {
             first_target: InternalColorEffect::from(value.0 & 0x1f),
             second_target: InternalColorEffect::from(value.0 >> 8),
-            effect
+            effect,
         }
     }
 }

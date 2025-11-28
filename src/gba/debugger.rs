@@ -44,7 +44,7 @@ impl DebuggerCommand {
             "b" | "break" => {
                 let inst_addr = parse_number(&mut cmd_iter, cmd, 16)?;
                 DebuggerCommand::BreakPoint(inst_addr as usize)
-            },
+            }
             "w" | "write" => {
                 let data = parse_number(&mut cmd_iter, command, 16)?;
                 let addr = parse_number(&mut cmd_iter, command, 16)?;
@@ -57,18 +57,18 @@ impl DebuggerCommand {
             "c" | "continue" => {
                 let lines: Result<u32, _> = match cmd_iter.next() {
                     Some(s) => s.parse::<u32>(),
-                    None => return Ok(DebuggerCommand::Continue(ContinueSubcommand::Endless))
+                    None => return Ok(DebuggerCommand::Continue(ContinueSubcommand::Endless)),
                 };
-                
+
                 let lines = match lines {
                     Ok(n) => n,
-                    Err(_) => return Err(
-                        CommandParseError::CommandNotRecognized(command.to_string())
-                    )
+                    Err(_) => {
+                        return Err(CommandParseError::CommandNotRecognized(command.to_string()))
+                    }
                 };
 
                 DebuggerCommand::Continue(ContinueSubcommand::For(lines as usize))
-            },
+            }
             "l" | "log_level" => {
                 if let Some(l) = cmd_iter.next() {
                     match l {
@@ -78,12 +78,18 @@ impl DebuggerCommand {
                         "debug" => DebuggerCommand::LogLevel(LevelFilter::DEBUG),
                         "trace" => DebuggerCommand::LogLevel(LevelFilter::TRACE),
                         "off" => DebuggerCommand::LogLevel(LevelFilter::OFF),
-                        _ => return Err(CommandParseError::CommandNotRecognized(command.to_string()))
+                        _ => {
+                            return Err(CommandParseError::CommandNotRecognized(
+                                command.to_string(),
+                            ))
+                        }
                     }
                 } else {
-                    return Err(CommandParseError::CommandMissingArguments(command.to_string()))
+                    return Err(CommandParseError::CommandMissingArguments(
+                        command.to_string(),
+                    ));
                 }
-            },
+            }
             "i" | "info" => DebuggerCommand::Info,
             "n" | "next" => DebuggerCommand::Next,
             "q" | "quit" => DebuggerCommand::Quit,
@@ -91,14 +97,20 @@ impl DebuggerCommand {
         };
 
         if cmd_iter.count() > 0 {
-            Err(CommandParseError::CommandNotRecognized("Extra arguements not supported for command".to_string()))
+            Err(CommandParseError::CommandNotRecognized(
+                "Extra arguements not supported for command".to_string(),
+            ))
         } else {
             Ok(debug_cmd)
         }
     }
 }
 
-fn parse_number(cmd_iter: &mut SplitWhitespace, cmd: &str, radix: u32) -> Result<u32, CommandParseError> {
+fn parse_number(
+    cmd_iter: &mut SplitWhitespace,
+    cmd: &str,
+    radix: u32,
+) -> Result<u32, CommandParseError> {
     let point: Result<u32, _> = match cmd_iter.next() {
         Some(s) => u32::from_str_radix(s, radix),
         None => return Err(CommandParseError::CommandMissingArguments(cmd.to_string())),
@@ -114,7 +126,7 @@ fn parse_number(cmd_iter: &mut SplitWhitespace, cmd: &str, radix: u32) -> Result
 #[derive(PartialEq, Debug)]
 pub enum ContinueSubcommand {
     Endless,
-    For(usize)
+    For(usize),
 }
 
 mod test {
@@ -136,7 +148,10 @@ mod test {
     #[test]
     fn test_parse_continue() {
         let cmd = DebuggerCommand::parse("continue");
-        assert_eq!(cmd, Ok(DebuggerCommand::Continue(ContinueSubcommand::Endless)));
+        assert_eq!(
+            cmd,
+            Ok(DebuggerCommand::Continue(ContinueSubcommand::Endless))
+        );
     }
 
     #[test]

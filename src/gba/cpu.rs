@@ -1,9 +1,9 @@
-use core::fmt;
 use super::arm::decode_as_arm;
+use super::system::SystemMemory;
 use super::thumb::decode_as_thumb;
 use super::{is_signed, Conditional, CPSR_C, CPSR_N, CPSR_T, CPSR_V, CPSR_Z};
-use super::system::SystemMemory;
-use tracing::{debug, trace, error};
+use core::fmt;
+use tracing::{debug, error, trace};
 
 pub const PC: usize = 15;
 pub const LR: usize = 14;
@@ -28,7 +28,7 @@ pub enum CpuMode {
     Supervisor,
     Abort,
     Irq,
-    Undefined
+    Undefined,
 }
 
 impl From<u32> for CpuMode {
@@ -78,7 +78,13 @@ impl fmt::Display for Cpu {
             write!(f, "r{}\t{:#08x}\t", i + 2, self.get_register(i + 2))?;
             writeln!(f, "r{}\t{:#08x}", i + 3, self.get_register(i + 3))?;
         }
-        write!(f, "cpsr: {:#8x}, cycles: {}, instruction address: {:#08x} ", self.cpsr, self.cycles, self.instruction_address())?;
+        write!(
+            f,
+            "cpsr: {:#8x}, cycles: {}, instruction address: {:#08x} ",
+            self.cpsr,
+            self.cycles,
+            self.instruction_address()
+        )?;
         write!(f, "status: ")?;
         if self.n_status() {
             write!(f, "n ")?;
@@ -125,13 +131,15 @@ impl fmt::Debug for Cpu {
 impl Cpu {
     pub fn new(initial_pc: u32, initial_sp: u32, init_cycles: u32) -> Self {
         Self {
-            registers: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, initial_sp, 0, initial_pc],
+            registers: [
+                0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, initial_sp, 0, initial_pc,
+            ],
             fiq_banked_gen_regs: [0, 0, 0, 0, 0, initial_sp, 0],
             svc_banked_regs: [initial_sp, 0],
             abt_banked_regs: [initial_sp, 0],
             irq_banked_regs: [initial_sp, 0],
             und_banked_regs: [initial_sp, 0],
-            psr: [0x1f,0,0,0,0,0],
+            psr: [0x1f, 0, 0, 0, 0, 0],
             cpsr: 0x1f,
             decode: 0x0,
             inst_addr: 0x0,
@@ -154,7 +162,6 @@ impl Cpu {
             self.irq_banked_regs[i] = 0;
             self.und_banked_regs[i] = 0;
         }
-
 
         for ref mut x in self.psr {
             *x = 0;
@@ -191,7 +198,11 @@ impl Cpu {
     }
 
     pub fn add_cycles(&mut self, cycles: u32) {
-        trace!("Current cycle count {}. Adding {} to cycle count", self.cycles, cycles);
+        trace!(
+            "Current cycle count {}. Adding {} to cycle count",
+            self.cycles,
+            cycles
+        );
         self.cycles = self.cycles.wrapping_add(cycles);
     }
 
@@ -259,31 +270,15 @@ impl Cpu {
     }
 
     pub fn update_cpsr(&mut self, res: u32, v: bool, c: bool) {
-        let zero = if res == 0 {
-            CPSR_Z
-        } else {
-            0
-        };
+        let zero = if res == 0 { CPSR_Z } else { 0 };
 
-        let neg = if is_signed(res) {
-            CPSR_N
-        } else {
-            0
-        };
+        let neg = if is_signed(res) { CPSR_N } else { 0 };
 
         // Over is set when POS + POS = neg, NEG + NEG = pos
         // or POS - NEG = NEG, NEG - POS = POS
-        let over = if v {
-            CPSR_V
-        } else {
-            0
-        };
+        let over = if v { CPSR_V } else { 0 };
 
-        let carry = if c {
-            CPSR_C
-        } else {
-            0
-        };
+        let carry = if c { CPSR_C } else { 0 };
 
         // 0 out the Status Bits
         self.cpsr &= 0x0fffffff;
@@ -367,11 +362,7 @@ impl Cpu {
 
         // NOTE: I think this has to happen after run
         // that's why the reg is always 8 ahead, and not just 4 ahead
-        self.registers[PC] += if !self.is_thumb_mode() {
-            4
-        } else {
-            2
-        };
+        self.registers[PC] += if !self.is_thumb_mode() { 4 } else { 2 };
 
         self.run_instruction(ram, inst, i_addr);
     }
@@ -415,7 +406,7 @@ impl Cpu {
 
 mod test {
     #![allow(unused)]
-    use super::{Cpu, SP, PC};
+    use super::{Cpu, PC, SP};
     use crate::SystemMemory;
 
     #[test]
@@ -479,11 +470,15 @@ mod test {
         assert_eq!(4, ram.read_word(0x0dc).unwrap());
         assert_eq!(10, cpu.cycles());
 
-        cpu.registers = [255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 0xdc, 255, 255];
+        cpu.registers = [
+            255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 0xdc, 255, 255,
+        ];
         cpu.run_instruction(&mut ram, 0xe8bd4ff0, 0x0);
 
         let rhs = Cpu {
-            registers: [255, 255, 255, 255, 4, 5, 6, 7, 8, 9, 10, 11, 255, 256, 14, 255],
+            registers: [
+                255, 255, 255, 255, 4, 5, 6, 7, 8, 9, 10, 11, 255, 256, 14, 255,
+            ],
             cycles: 21,
             ..Cpu::default()
         };
@@ -544,12 +539,16 @@ mod test {
         assert_eq!(4, ram.read_word(0x80000dc).unwrap());
         assert_eq!(73, cpu.cycles());
 
-        cpu.registers = [255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 0x80000dc, 255, 255];
+        cpu.registers = [
+            255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 0x80000dc, 255, 255,
+        ];
         //load: r4,r5,r6,r7,r8,r9,r10,r11,lr
         cpu.run_instruction(&mut ram, 0xe8bd4ff0, 0x0);
 
         let rhs = Cpu {
-            registers: [255, 255, 255, 255, 4, 5, 6, 7, 8, 9, 10, 11, 255, 0x8000100, 14, 255],
+            registers: [
+                255, 255, 255, 255, 4, 5, 6, 7, 8, 9, 10, 11, 255, 0x8000100, 14, 255,
+            ],
             cycles: 147,
             ..Cpu::default()
         };
@@ -724,7 +723,10 @@ mod test {
     fn run_thumb_or_main_gba() {
         let mut ram = SystemMemory::test();
         let mut cpu = Cpu {
-            registers: [0x26e725e, 0x3f538ba9, 0x11, 0x1fa9, 0x26e7fff, 0, 0xffffff55, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+            registers: [
+                0x26e725e, 0x3f538ba9, 0x11, 0x1fa9, 0x26e7fff, 0, 0xffffff55, 0, 0, 0, 0, 0, 0, 0,
+                0, 0,
+            ],
             cpsr: 0x6000003f,
             ..Cpu::default()
         };
@@ -733,7 +735,10 @@ mod test {
         cpu.run_instruction(&mut ram, 0x431c, 0x0);
 
         let rhs = Cpu {
-            registers: [0x26e725e, 0x3f538ba9, 0x11, 0x1fa9, 0x26e7fff, 0, 0xffffff55, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+            registers: [
+                0x26e725e, 0x3f538ba9, 0x11, 0x1fa9, 0x26e7fff, 0, 0xffffff55, 0, 0, 0, 0, 0, 0, 0,
+                0, 0,
+            ],
             cycles: 1,
             cpsr: 0x2000003f,
             ..Cpu::default()
@@ -745,7 +750,10 @@ mod test {
     fn run_main_gba_asr() {
         let mut ram = SystemMemory::test();
         let mut cpu = Cpu {
-            registers: [0x26e725e, 0x3f538ba9, 0x11, 0x3f538ba9, 0x26e7fff, 0, 0xffffff55, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+            registers: [
+                0x26e725e, 0x3f538ba9, 0x11, 0x3f538ba9, 0x26e7fff, 0, 0xffffff55, 0, 0, 0, 0, 0,
+                0, 0, 0, 0,
+            ],
             cpsr: 0x6000003f,
             ..Cpu::default()
         };
@@ -754,7 +762,10 @@ mod test {
         cpu.run_instruction(&mut ram, 0x4113, 0x0);
 
         let rhs = Cpu {
-            registers: [0x26e725e, 0x3f538ba9, 0x11, 0x1fa9, 0x26e7fff, 0, 0xffffff55, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+            registers: [
+                0x26e725e, 0x3f538ba9, 0x11, 0x1fa9, 0x26e7fff, 0, 0xffffff55, 0, 0, 0, 0, 0, 0, 0,
+                0, 0,
+            ],
             cycles: 1,
             cpsr: 0x2000003f,
             ..Cpu::default()
@@ -766,7 +777,10 @@ mod test {
     fn run_main_gba_muls() {
         let mut ram = SystemMemory::test();
         let mut cpu = Cpu {
-            registers: [0x9eba0185, 0x6086d63f, 0x7a0000a4, 0x6086d63f, 0x9eba0185, 0, 0x6086d63f, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+            registers: [
+                0x9eba0185, 0x6086d63f, 0x7a0000a4, 0x6086d63f, 0x9eba0185, 0, 0x6086d63f, 0, 0, 0,
+                0, 0, 0, 0, 0, 0,
+            ],
             cpsr: 0x8000001f,
             ..Cpu::default()
         };
@@ -776,7 +790,10 @@ mod test {
         // TODO: We always set carry to false cause it doens't mattter
         // maybe i should actually calc it
         let rhs = Cpu {
-            registers: [0x9eba0185, 0x6086d63f, 0x7a0000a4, 0x38a98dbb, 0x9eba0185, 0, 0x6086d63f, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+            registers: [
+                0x9eba0185, 0x6086d63f, 0x7a0000a4, 0x38a98dbb, 0x9eba0185, 0, 0x6086d63f, 0, 0, 0,
+                0, 0, 0, 0, 0, 0,
+            ],
             // TODO: mgba has these cycles at 12
             cycles: 12,
             cpsr: 0x0000001f,
@@ -789,7 +806,9 @@ mod test {
     fn run_thumb_eor_instruction() {
         let mut ram = SystemMemory::test();
         let mut cpu = Cpu {
-            registers: [0, 0, 0x16, 0x92ea642e, 0xea566259, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+            registers: [
+                0, 0, 0x16, 0x92ea642e, 0xea566259, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+            ],
             cpsr: 0xb000003f,
             ..Cpu::default()
         };
@@ -798,7 +817,9 @@ mod test {
         cpu.run_instruction(&mut ram, 0x405c, 0x0);
 
         let rhs = Cpu {
-            registers: [0, 0, 0x16, 0x92ea642e, 0x78bc0677, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+            registers: [
+                0, 0, 0x16, 0x92ea642e, 0x78bc0677, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+            ],
             cycles: 3,
             cpsr: 0x3000003f,
             ..Cpu::default()
@@ -861,7 +882,9 @@ mod test {
         cpu.run_instruction(&mut ram, 0x43dc, 0x0);
 
         let rhs = Cpu {
-            registers: [0, 0, 0, 0x37f8361d, 0xc807c9e2, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+            registers: [
+                0, 0, 0, 0x37f8361d, 0xc807c9e2, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+            ],
             cycles: 3,
             cpsr: 0x9000003f,
             ..Cpu::default()
@@ -873,7 +896,9 @@ mod test {
     fn run_arm_sbc_instruction() {
         let mut ram = SystemMemory::test();
         let mut cpu = Cpu {
-            registers: [0x53b672ab, 0, 0, 0x6116136, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+            registers: [
+                0x53b672ab, 0, 0, 0x6116136, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+            ],
             cpsr: 0x8000001f,
             ..Cpu::default()
         };
@@ -881,7 +906,9 @@ mod test {
         cpu.run_instruction(&mut ram, 0xe0d04003, 0x0);
 
         let rhs = Cpu {
-            registers: [0x53b672ab, 0, 0, 0x6116136, 0x4da51174, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+            registers: [
+                0x53b672ab, 0, 0, 0x6116136, 0x4da51174, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+            ],
             cycles: 3,
             cpsr: 0x2000001f,
             ..Cpu::default()
@@ -901,7 +928,9 @@ mod test {
         cpu.run_instruction(&mut ram, 0xe0f04003, 0x0);
 
         let rhs = Cpu {
-            registers: [0xec3b7c6, 0, 0, 0x1e8, 0xf13c4a22, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+            registers: [
+                0xec3b7c6, 0, 0, 0x1e8, 0xf13c4a22, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+            ],
             cycles: 3,
             cpsr: 0x8000001f,
             ..Cpu::default()
@@ -913,7 +942,9 @@ mod test {
     fn run_thumb_bic_instruction() {
         let mut ram = SystemMemory::test();
         let mut cpu = Cpu {
-            registers: [0, 0, 0, 0xffffffff, 0x1232534, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+            registers: [
+                0, 0, 0, 0xffffffff, 0x1232534, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+            ],
             cpsr: 0xb000003f,
             ..Cpu::default()
         };
@@ -953,7 +984,9 @@ mod test {
     fn run_arm_teq_ror_instruction() {
         let mut ram = SystemMemory::test();
         let mut cpu = Cpu {
-            registers: [0xf3b4716, 0x8dbcc9c, 0x20, 0x8dbcc9c, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+            registers: [
+                0xf3b4716, 0x8dbcc9c, 0x20, 0x8dbcc9c, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+            ],
             cpsr: 0x0000001f,
             ..Cpu::default()
         };
@@ -961,7 +994,9 @@ mod test {
         cpu.run_instruction(&mut ram, 0xe1300003, 0x0);
 
         let rhs = Cpu {
-            registers: [0xf3b4716, 0x8dbcc9c, 0x20, 0x8dbcc9c, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+            registers: [
+                0xf3b4716, 0x8dbcc9c, 0x20, 0x8dbcc9c, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+            ],
             cycles: 3,
             cpsr: 0x0000001f,
             ..Cpu::default()
@@ -981,7 +1016,9 @@ mod test {
         cpu.run_instruction(&mut ram, 0xe1b03271, 0x0);
 
         let rhs = Cpu {
-            registers: [0, 0x8dbcc9c, 0x20, 0x08dbcc9c, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+            registers: [
+                0, 0x8dbcc9c, 0x20, 0x08dbcc9c, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+            ],
             cycles: 3,
             cpsr: 0x0000001f,
             ..Cpu::default()
@@ -1001,7 +1038,9 @@ mod test {
         cpu.run_instruction(&mut ram, 0x43dc, 0x0);
 
         let rhs = Cpu {
-            registers: [0, 0, 0, 0x6629e286, 0x99d61d79, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+            registers: [
+                0, 0, 0, 0x6629e286, 0x99d61d79, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+            ],
             cycles: 3,
             cpsr: 0xa000001f,
             ..Cpu::default()
@@ -1013,7 +1052,9 @@ mod test {
     fn run_arm_adc() {
         let mut ram = SystemMemory::test();
         let mut cpu = Cpu {
-            registers: [0x4bf9da2b, 0, 0, 0x737586c6, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+            registers: [
+                0x4bf9da2b, 0, 0, 0x737586c6, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+            ],
             cpsr: 0xe000001f,
             ..Cpu::default()
         };
@@ -1021,7 +1062,9 @@ mod test {
         cpu.run_instruction(&mut ram, 0xe0b04003, 0x0);
 
         let rhs = Cpu {
-            registers: [0x4bf9da2b, 0, 0, 0x737586c6, 0xbf6f60f2, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+            registers: [
+                0x4bf9da2b, 0, 0, 0x737586c6, 0xbf6f60f2, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+            ],
             cycles: 3,
             cpsr: 0x9000001f,
             ..Cpu::default()
@@ -1041,7 +1084,9 @@ mod test {
         cpu.run_instruction(&mut ram, 0xe1b03271, 0x0);
 
         let rhs = Cpu {
-            registers: [0, 0x737586c6, 0, 0x737586c6, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+            registers: [
+                0, 0x737586c6, 0, 0x737586c6, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+            ],
             cycles: 7,
             cpsr: 0x2000001f,
             ..Cpu::default()
@@ -1102,7 +1147,9 @@ mod test {
 
         cpu.run_instruction(&mut ram, 0xe1b03211, 0x0);
 
-        let registers = [0, 0x7396a150, 0x1b, 0x80000000, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0];
+        let registers = [
+            0, 0x7396a150, 0x1b, 0x80000000, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+        ];
         let cycles = 7;
 
         assert_eq!(cpu.registers, registers);
@@ -1133,6 +1180,5 @@ mod test {
         assert!(cpu.c_status());
         assert!(!cpu.v_status());
         assert_eq!(cpu.cycles, cycles);
-
     }
 }

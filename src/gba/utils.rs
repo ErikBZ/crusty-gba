@@ -1,4 +1,9 @@
-pub fn calc_cycles_for_stm_ldm(cycles_per_entry: u32, entries: u32, load: bool, is_pc: bool) -> u32 {
+pub fn calc_cycles_for_stm_ldm(
+    cycles_per_entry: u32,
+    entries: u32,
+    load: bool,
+    is_pc: bool,
+) -> u32 {
     // TODO: Double check this. It may be wrong, but assuming it's right for now
     if load {
         if is_pc {

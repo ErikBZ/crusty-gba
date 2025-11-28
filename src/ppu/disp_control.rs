@@ -1,5 +1,8 @@
-use crate::{gba::system::{MemoryError, SystemMemory}, utils:: Bitable};
 use crate::utils::io_registers::{DISP_CONTROL, DISP_STAT};
+use crate::{
+    gba::system::{MemoryError, SystemMemory},
+    utils::Bitable,
+};
 
 pub fn display_control(ram: &SystemMemory) -> Result<DisplayControl, MemoryError> {
     let data = ram.read_word(DISP_CONTROL)?;
@@ -24,9 +27,9 @@ pub(super) struct DisplayControl {
     pub display_bg2: bool,
     pub display_bg3: bool,
     pub display_obj: bool,
-    pub display_window0:bool,
-    pub display_window1:bool,
-    pub display_window_obj: bool
+    pub display_window0: bool,
+    pub display_window1: bool,
+    pub display_window_obj: bool,
 }
 
 impl From<u32> for DisplayControl {

@@ -25,4 +25,3 @@ impl From<u32> for DmaControl {
         }
     }
 }
-

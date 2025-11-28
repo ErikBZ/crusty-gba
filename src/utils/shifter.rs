@@ -1,5 +1,5 @@
-use crate::gba::cpu::Cpu;
 use super::Bitable;
+use crate::gba::cpu::Cpu;
 
 pub trait CpuShifter {
     fn shl_with_carry(&self, lhs: u32, rhs: u32) -> (u32, bool);
@@ -15,16 +15,16 @@ impl CpuShifter for Cpu {
             0 => (lhs, self.c_status()),
             1..=31 => (lhs << rhs, lhs.bit_is_high(32 - rhs)),
             32 => (0, lhs.bit_is_high(0)),
-            _ => (0, false)
+            _ => (0, false),
         }
     }
 
     fn shr_with_carry(&self, lhs: u32, rhs: u32) -> (u32, bool) {
         match rhs {
             0 => (lhs, self.c_status()),
-            1..=31 => (lhs >> rhs, lhs.bit_is_high(rhs -1)),
+            1..=31 => (lhs >> rhs, lhs.bit_is_high(rhs - 1)),
             32 => (0, lhs.bit_is_high(31)),
-            _ => (0, false)
+            _ => (0, false),
         }
     }
 
@@ -43,7 +43,7 @@ impl CpuShifter for Cpu {
         if rhs == 0 {
             (lhs, self.c_status())
         } else {
-            let rhs =  rhs % 32;
+            let rhs = rhs % 32;
             if rhs == 0 {
                 (lhs, lhs.bit_is_high(31))
             } else {
@@ -53,14 +53,14 @@ impl CpuShifter for Cpu {
     }
 
     fn rrx_with_carry(&self, lhs: u32) -> (u32, bool) {
-        let c_in = if self.c_status() {0x80000000} else {0};
+        let c_in = if self.c_status() { 0x80000000 } else { 0 };
         ((lhs >> 31) | c_in, (lhs & 1) == 0b1)
     }
 }
 
 mod test {
     #![allow(unused)]
-    use super::{CpuShifter, Cpu};
+    use super::{Cpu, CpuShifter};
 
     #[test]
     fn ror_32_1() {
