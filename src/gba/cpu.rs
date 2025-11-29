@@ -233,6 +233,10 @@ impl Cpu {
             return self.registers[rn] = value;
         }
 
+        self.set_register_for_mode(rn, value, mode);
+    }
+
+    pub fn set_register_for_mode(&mut self, rn: usize, value: u32, mode :CpuMode) {
         match mode {
             CpuMode::Fiq => self.fiq_banked_gen_regs[rn - 8] = value,
             CpuMode::Supervisor => self.svc_banked_regs[rn - 13] = value,
@@ -247,6 +251,10 @@ impl Cpu {
     // corresponding spsr for other modes
     pub fn get_psr(&self) -> u32 {
         let mode = CpuMode::from(self.cpsr);
+        self.get_psr_for_mode(mode)
+    }
+
+    pub fn get_psr_for_mode(&self, mode: CpuMode) -> u32 {
         match mode {
             CpuMode::User | CpuMode::System => self.cpsr,
             CpuMode::Fiq => self.psr[0],
@@ -259,6 +267,10 @@ impl Cpu {
 
     pub fn set_psr(&mut self, value: u32) {
         let mode = CpuMode::from(self.cpsr);
+        self.set_psr_for_mode(value, mode);
+    }
+
+    pub fn set_psr_for_mode(&mut self, value: u32, mode: CpuMode) {
         match mode {
             CpuMode::User | CpuMode::System => println!("Can't set SPSR in User and System mode"),
             CpuMode::Fiq => self.psr[0] = value,
@@ -287,6 +299,11 @@ impl Cpu {
         self.cpsr |= neg;
         self.cpsr |= over;
         self.cpsr |= carry;
+    }
+
+    // TODO
+    pub fn flush_pipeline(&self) {
+        todo!()
     }
 
     pub fn v_status(&self) -> bool {

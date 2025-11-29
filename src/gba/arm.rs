@@ -4,6 +4,7 @@ use super::system::{read_cycles_per_32, read_cycles_per_8_16};
 use super::utils::calc_cycles_for_stm_ldm;
 use super::{bit_map_to_array, get_v_from_add, get_v_from_sub, Operation, SystemMemory};
 use super::{CPSR_C, CPSR_T};
+use crate::gba::cpu::CpuMode;
 use crate::utils::shifter::CpuShifter;
 use crate::utils::Bitable;
 use tracing::warn;
@@ -21,7 +22,7 @@ pub fn decode_as_arm(inst: u32) -> Result<Box<dyn Operation>, InstructionDecodeE
     } else if is_branch(inst) {
         Ok(Box::new(BranchOp::from(inst)))
     } else if is_software_interrupt(inst) {
-        Ok(Box::new(SoftwareInterruptOp))
+        Ok(Box::new(SoftwareInterruptOp::from(inst)))
     } else if is_single_data_tfx(inst) {
         Ok(Box::new(SingleDataTfx::from(inst)))
     } else if is_block_data_tfx(inst) {
@@ -48,18 +49,32 @@ struct UndefinedInstruction;
 impl Operation for UndefinedInstruction {
     // TODO: Implement. Take undef trap
     // TODO: Track Cycles 2S + 1I + 1N
-    fn run(&self, _cpu: &mut Cpu, _mem: &mut SystemMemory) {
-        unreachable!()
+    fn run(&self, cpu: &mut Cpu, _mem: &mut SystemMemory) {
+        cpu.set_register_for_mode(LR, cpu.instruction_address() as u32, CpuMode::Supervisor);
+        cpu.set_psr_for_mode(cpu.cpsr, CpuMode::Supervisor);
+        cpu.set_register(PC, 0x8);
+        cpu.flush_pipeline();
     }
 }
 
 #[derive(Debug)]
-struct SoftwareInterruptOp;
+struct SoftwareInterruptOp {
+    comment: usize
+}
+
 impl Operation for SoftwareInterruptOp {
     // TODO: Implement
     // TODO: Track Cycles 2S + 1N
     fn run(&self, _cpu: &mut Cpu, _mem: &mut SystemMemory) {
         todo!()
+    }
+}
+
+impl From<u32> for SoftwareInterruptOp {
+    fn from(value: u32) -> Self {
+        Self {
+            comment: (value & 0xffffff) as usize
+        }
     }
 }
 
