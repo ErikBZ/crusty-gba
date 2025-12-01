@@ -49,11 +49,9 @@ struct UndefinedInstruction;
 impl Operation for UndefinedInstruction {
     // TODO: Implement. Take undef trap
     // TODO: Track Cycles 2S + 1I + 1N
-    fn run(&self, cpu: &mut Cpu, _mem: &mut SystemMemory) {
-        cpu.set_register_for_mode(LR, cpu.instruction_address() as u32, CpuMode::Supervisor);
-        cpu.set_psr_for_mode(cpu.cpsr, CpuMode::Supervisor);
-        cpu.set_register(PC, 0x8);
-        cpu.flush_pipeline();
+    fn run(&self, _cpu: &mut Cpu, _mem: &mut SystemMemory) {
+        todo!()
+
     }
 }
 
@@ -65,8 +63,11 @@ struct SoftwareInterruptOp {
 impl Operation for SoftwareInterruptOp {
     // TODO: Implement
     // TODO: Track Cycles 2S + 1N
-    fn run(&self, _cpu: &mut Cpu, _mem: &mut SystemMemory) {
-        todo!()
+    fn run(&self, cpu: &mut Cpu, _mem: &mut SystemMemory) {
+        cpu.set_register_for_mode(LR, cpu.instruction_address() as u32, CpuMode::Supervisor);
+        cpu.set_psr_for_mode(cpu.cpsr, CpuMode::Supervisor);
+        cpu.set_register(PC, 0x8);
+        cpu.flush_pipeline();
     }
 }
 
