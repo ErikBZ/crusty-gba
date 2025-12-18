@@ -339,12 +339,12 @@ impl Operand {
     //      so I shouldn't have to do anything
     fn apply(&self, cpu: &Cpu) -> (u32, bool) {
         let lhs = self.lhs(cpu);
-        //NOTE: Seems all my functions already handle the special cases, except rrx
-        //      Maybe use them directly here?
-        // ASR #0 encodes ASR #32 but we already handle that in the function
         // LSR #32
         if let Operand::ShiftImm(_, 0, ShiftType::Lsr) = self {
             return cpu.shr_with_carry(lhs, 32);
+        // ASR #32
+        } else if let Operand::ShiftImm(_, 0, ShiftType::Asr) = self {
+            return cpu.asr_with_carry(lhs, 32);
         // RRX
         } else if let Operand::ShiftImm(_, 0, ShiftType::Ror) = self {
             return cpu.rrx_with_carry(lhs);

@@ -67,7 +67,7 @@ mod test {
         let cpu = Cpu::default();
         let (res, carry) = cpu.ror_with_carry(0xa2cef820, 32);
         assert_eq!(res, 0xa2cef820);
-        assert!(!carry);
+        assert!(carry);
     }
 
     #[test]
