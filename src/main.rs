@@ -32,7 +32,7 @@ fn main() -> Result<(), Error> {
         .init();
 
     let mut cpu = Cpu::default();
-    let mut memory = SystemMemory::new();
+    let mut memory = SystemMemory::default();
     if let Some(bios_rom) = args.bios {
         let mut bios_rom_f = File::open(bios_rom).expect("Unable to open bios file");
         memory.copy_bios(read_file_into_u32(&mut bios_rom_f));

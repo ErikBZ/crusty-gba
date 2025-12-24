@@ -92,6 +92,14 @@ impl fmt::Debug for SystemMemory {
 
 impl Default for SystemMemory {
     fn default() -> Self {
+        let mut x = Self::new();
+        let _ = x.write_word(0x4000088, 0x200);
+        x
+    }
+}
+
+impl SystemMemory {
+    pub fn new() -> Self {
         Self {
             // Should be divded by 4 since u32 are already 4 bytes
             system_rom: vec![0; (16 * KILOBYTE) / 4],
@@ -105,15 +113,8 @@ impl Default for SystemMemory {
             cart_ram: vec![0; 16 * 1],
         }
     }
-}
 
-impl SystemMemory {
-    pub fn new() -> Self {
-        let mut x = Self::default();
-        let _ = x.write_word(0x4000088, 0x200);
-        x
-    }
-
+    #[allow(unused)]
     pub fn test() -> Self {
         Self {
             system_rom: vec![0; KILOBYTE / 4],
@@ -128,6 +129,7 @@ impl SystemMemory {
         }
     }
 
+    #[allow(unused)]
     pub fn test_pak_ram() -> Self {
         let mut x = Self::test();
         x.pak_rom = vec![0; KILOBYTE / 4];

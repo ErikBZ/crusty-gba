@@ -57,7 +57,7 @@ pub struct Cpu {
     irq_banked_regs: [u32; 2],
     und_banked_regs: [u32; 2],
     pub cpsr: u32,
-    psr: [u32; 6],
+    psr: [u32; 5],
     pub decode: u32,
     // NOTE: Make this instruction_addr
     pub inst_addr: usize,
@@ -139,7 +139,7 @@ impl Cpu {
             abt_banked_regs: [initial_sp, 0],
             irq_banked_regs: [initial_sp, 0],
             und_banked_regs: [initial_sp, 0],
-            psr: [0x1f, 0, 0, 0, 0, 0],
+            psr: [0x1f, 0, 0, 0, 0],
             cpsr: 0x1f,
             decode: 0x0,
             inst_addr: 0x0,
@@ -302,8 +302,16 @@ impl Cpu {
     }
 
     // TODO
-    pub fn flush_pipeline(&self) {
-        todo!()
+    pub fn flush_pipeline(&mut self, mem: &SystemMemory, addr: usize) {
+        self.inst_addr = addr;
+        let inst = match mem.read_word(addr) {
+            Ok(i) => i,
+            Err(_) => {
+                error!("Could not read instruction at: {}", addr);
+                0
+            }
+        };
+        self.decode = inst;
     }
 
     pub fn v_status(&self) -> bool {

@@ -5,6 +5,7 @@ use super::utils::calc_cycles_for_stm_ldm;
 use super::{bit_map_to_array, get_v_from_add, get_v_from_sub, Operation, SystemMemory};
 use super::{CPSR_C, CPSR_T};
 use crate::gba::cpu::CpuMode;
+use crate::gba::EXCEPTION_VECTOR_SWI;
 use crate::utils::shifter::CpuShifter;
 use crate::utils::Bitable;
 use tracing::warn;
@@ -63,11 +64,12 @@ struct SoftwareInterruptOp {
 impl Operation for SoftwareInterruptOp {
     // TODO: Implement
     // TODO: Track Cycles 2S + 1N
-    fn run(&self, cpu: &mut Cpu, _mem: &mut SystemMemory) {
+    fn run(&self, cpu: &mut Cpu, mem: &mut SystemMemory) {
         cpu.set_register_for_mode(LR, cpu.instruction_address() as u32, CpuMode::Supervisor);
         cpu.set_psr_for_mode(cpu.cpsr, CpuMode::Supervisor);
-        cpu.set_register(PC, 0x8);
-        cpu.flush_pipeline();
+
+        cpu.set_register(PC, EXCEPTION_VECTOR_SWI as u32);
+        cpu.flush_pipeline(mem, EXCEPTION_VECTOR_SWI);
     }
 }
 

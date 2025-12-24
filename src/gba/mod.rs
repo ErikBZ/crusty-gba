@@ -8,6 +8,16 @@ pub mod system;
 pub mod thumb;
 mod utils;
 
+const EXCEPTION_VECTOR_RESET: usize = 0x0;
+const EXCEPTION_VECTOR_UNDF: usize = 0x4;
+const EXCEPTION_VECTOR_SWI: usize = 0x8;
+const EXCEPTION_VECTOR_IRQ: usize = 0x18;
+// NOTE: These below may not be used
+const EXCEPTION_VECTOR_ABORT_PREFETCH: usize = 0xc;
+const EXCEPTION_VECTOR_ABORT_DATA: usize = 0x10;
+const EXCEPTION_VECTOR_RESERVE: usize = 0x14;
+const EXCEPTION_VECTOR_FIQ: usize = 0x1c;
+
 pub const CPSR_N: u32 = 0x80000000;
 pub const CPSR_Z: u32 = 0x40000000;
 pub const CPSR_C: u32 = 0x20000000;
