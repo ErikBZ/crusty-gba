@@ -9,6 +9,8 @@ pub struct Args {
     // Path to Game Boy Advance Bios
     #[arg(short, long)]
     pub bios: Option<String>,
+    #[arg(long)]
+    pub boot_bios: bool,
     // Path to Game Boy Advance Rom
     #[arg(short, long)]
     pub game: String,

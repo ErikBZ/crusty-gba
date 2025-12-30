@@ -36,6 +36,9 @@ fn main() -> Result<(), Error> {
     if let Some(bios_rom) = args.bios {
         let mut bios_rom_f = File::open(bios_rom).expect("Unable to open bios file");
         memory.copy_bios(read_file_into_u32(&mut bios_rom_f));
+    }
+
+    if args.boot_bios {
         cpu.reset_cpu_with_bios();
     } else {
         cpu.reset_cpu();
