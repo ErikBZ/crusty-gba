@@ -557,14 +557,11 @@ impl Operation for BranchExchangeOp {
         };
 
         cpu.inst_addr = addr as usize;
-        if cpu.cpsr & CPSR_T == CPSR_T {
-            cpu.set_register(PC, addr + 2);
-        } else {
-            cpu.set_register(PC, addr + 4);
-        }
+        cpu.set_register(PC, addr);
 
         // NOTE: 2S + 1N
         cpu.add_cycles(3);
+        panic!()
     }
 }
 
@@ -589,7 +586,8 @@ impl Operation for BranchOp {
 
         if self.l {
             // NOTE: LR has to be the current decode
-            cpu.set_register(LR, cpu.get_register(PC) - 4);
+            // TODO: Fix PC
+            cpu.set_register(LR, cpu.get_register(PC));
         }
 
         cpu.decode = match mem.read_from_mem(addr as usize) {
@@ -601,7 +599,8 @@ impl Operation for BranchOp {
         };
         cpu.inst_addr = addr as usize;
 
-        cpu.set_register(PC, addr + 4);
+        // TODO: Fix PC
+        cpu.set_register(PC, addr);
         // NOTE: 2S + 1N
         cpu.add_cycles(3);
     }

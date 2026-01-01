@@ -501,12 +501,7 @@ impl Operation for HiRegOp {
                     }
                 };
                 cpu.inst_addr = addr as usize;
-
-                if cpu.cpsr & CPSR_T == CPSR_T {
-                    cpu.set_register(PC, addr + 2);
-                } else {
-                    cpu.set_register(PC, addr + 4);
-                }
+                cpu.set_register(PC, addr);
             }
             _ => unreachable!(),
         }
@@ -551,7 +546,8 @@ impl Operation for PcRelativeLoadOp {
     fn run(&self, cpu: &mut Cpu, mem: &mut SystemMemory) {
         // NOTE: The value of PC will always be 4 bytes greater, but bit 1 of PC will always be 0
         let offset = self.word << 2;
-        let addr = (cpu.get_register(PC) + offset) as usize;
+        // TODO: This was PC + 4 before so would we add 4 here?
+        let addr = (cpu.get_register(PC) + offset + 4) as usize;
 
         let block_from_mem = match mem.read_word(addr) {
             Ok(n) => n,
@@ -882,7 +878,7 @@ impl Operation for LoadAddressOp {
             cpu.get_register(SP) + self.word
         } else {
             // TODO: Adding 2 here because it's 2 ahead where it should be.
-            // BUG: Fix Pipeline
+            // TODO: Fix PC
             (cpu.get_register(PC) & !3) + self.word
         };
 
@@ -966,6 +962,7 @@ impl Operation for PushPopRegOp {
                     }
                 };
                 cpu.set_register(reg as usize, value);
+                // TODO: Fix PC
                 // TODO: Super Hacky, update pipeline. This should need to be done and, we should fetch inst at the
                 // end i think.
                 if reg == PC as u32 {
@@ -1121,6 +1118,7 @@ impl Operation for ConditionalBranchOp {
 
         let offset_abs: u32 = u32::try_from(offset.abs()).unwrap_or(0);
 
+        // TODO: Fix PC
         let addr = if offset < 0 {
             cpu.get_register(PC) - offset_abs
         } else {
@@ -1133,6 +1131,7 @@ impl Operation for ConditionalBranchOp {
         };
         cpu.inst_addr = addr as usize;
 
+        // TODO: Fix PC
         cpu.set_register(PC, addr + 2);
         // NOTE: 3S + 1N
         cpu.add_cycles(3)
@@ -1182,6 +1181,7 @@ impl Operation for UnconditionalBranchOp {
         } else {
             self.offset
         };
+        // TODO: Fix PC
         let addr = cpu.get_register(PC).wrapping_add(offset);
 
         cpu.decode = match mem.read_halfword(addr as usize) {
@@ -1193,6 +1193,7 @@ impl Operation for UnconditionalBranchOp {
         };
         cpu.inst_addr = addr as usize;
 
+        // TODO: Fix PC
         cpu.set_register(PC, addr + 2);
         // NOTE: 2S + 1N
         cpu.add_cycles(3);
@@ -1231,7 +1232,7 @@ impl Operation for LongBranchWithLinkOp {
             // NOTE: 3S + 1N
             cpu.add_cycles(1)
         } else {
-            let temp = (cpu.get_register(PC) - 2) | 1;
+            let temp = cpu.get_register(PC) | 1;
             let res = cpu.get_register(LR).wrapping_add(self.offset << 1);
             cpu.set_register(PC, res);
             cpu.set_register(LR, temp);
@@ -1245,7 +1246,8 @@ impl Operation for LongBranchWithLinkOp {
             };
             cpu.inst_addr = res as usize;
 
-            cpu.set_register(PC, cpu.get_register(PC) + 2);
+            // TODO: Fix PC
+            cpu.set_register(PC, cpu.get_register(PC));
             // NOTE: 3S + 1N
             cpu.add_cycles(3);
         }

@@ -385,11 +385,9 @@ impl Cpu {
             }
         };
 
-        // NOTE: I think this has to happen after run
-        // that's why the reg is always 8 ahead, and not just 4 ahead
-        self.registers[PC] += if !self.is_thumb_mode() { 4 } else { 2 };
-
         self.run_instruction(ram, inst, i_addr);
+
+        self.registers[PC] += if !self.is_thumb_mode() { 4 } else { 2 };
     }
 
     fn run_instruction(&mut self, ram: &mut SystemMemory, inst: u32, i_addr: usize) {
