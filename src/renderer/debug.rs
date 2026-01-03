@@ -41,7 +41,7 @@ pub fn run_debug(
                     break_points.remove(&address);
                 } else {
                     break_points.insert(address);
-                    println!("{:?}", break_points);
+                    println!("{:X?}", break_points);
                 }
             }
             DebuggerCommand::Continue(ContinueSubcommand::Endless) => {

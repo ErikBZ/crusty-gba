@@ -301,17 +301,24 @@ impl Cpu {
         self.cpsr |= carry;
     }
 
-    // TODO
-    pub fn flush_pipeline(&mut self, mem: &SystemMemory, addr: usize) {
-        self.inst_addr = addr;
-        let inst = match mem.read_word(addr) {
+    /// Sets the decode instruction prefetch operation, and bumps the PC register
+    pub fn flush_pipeline(&mut self, mem: &SystemMemory, fetch_inst_addr: usize) {
+        self.inst_addr = fetch_inst_addr;
+        let inst = match mem.read_word(fetch_inst_addr) {
             Ok(i) => i,
             Err(_) => {
-                error!("Could not read instruction at: {}", addr);
+                error!("Could not read instruction at: {}", fetch_inst_addr);
                 0
             }
         };
+
         self.decode = inst;
+        let next_pc = if self.is_thumb_mode() {
+            fetch_inst_addr + 2
+        } else {
+            fetch_inst_addr + 4
+        };
+        self.set_register(PC, next_pc as u32)
     }
 
     pub fn v_status(&self) -> bool {

@@ -8,7 +8,7 @@ use crate::gba::cpu::CpuMode;
 use crate::gba::EXCEPTION_VECTOR_SWI;
 use crate::utils::shifter::CpuShifter;
 use crate::utils::Bitable;
-use tracing::warn;
+use tracing::{warn, info};
 
 // TODO: currently all regs are u8 or u32 types, maybe they should be usizes
 pub fn decode_as_arm(inst: u32) -> Result<Box<dyn Operation>, InstructionDecodeError> {
@@ -67,7 +67,6 @@ impl Operation for SoftwareInterruptOp {
     fn run(&self, cpu: &mut Cpu, mem: &mut SystemMemory) {
         cpu.set_register_for_mode(LR, cpu.instruction_address() as u32, CpuMode::Supervisor);
         cpu.set_psr_for_mode(cpu.cpsr, CpuMode::Supervisor);
-
         cpu.set_register(PC, EXCEPTION_VECTOR_SWI as u32);
         cpu.flush_pipeline(mem, EXCEPTION_VECTOR_SWI);
     }
