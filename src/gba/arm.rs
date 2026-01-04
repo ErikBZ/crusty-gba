@@ -67,6 +67,7 @@ impl Operation for SoftwareInterruptOp {
     fn run(&self, cpu: &mut Cpu, mem: &mut SystemMemory) {
         cpu.set_register_for_mode(LR, cpu.instruction_address() as u32, CpuMode::Supervisor);
         cpu.set_psr_for_mode(cpu.cpsr, CpuMode::Supervisor);
+        cpu.set_cpsr_mode(CpuMode::System);
         cpu.set_register(PC, EXCEPTION_VECTOR_SWI as u32);
         cpu.flush_pipeline(mem, EXCEPTION_VECTOR_SWI);
     }
@@ -1046,6 +1047,7 @@ enum PsrTransferType {
 
 impl Operation for PsrTransferOp {
     fn run(&self, cpu: &mut Cpu, _mem: &mut SystemMemory) {
+        // TODO: change htis to if to remove a nest
         match self.op {
             PsrTransferType::MSR => {
                 let operand = self.get_operand(cpu);

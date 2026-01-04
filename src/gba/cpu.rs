@@ -281,6 +281,20 @@ impl Cpu {
         }
     }
 
+    pub fn set_cpsr_mode(&mut self, mode: CpuMode) {
+        self.cpsr &= 0xffffffe0;
+
+        match mode {
+            CpuMode::User => self.cpsr |= 0x10,
+            CpuMode::Fiq => self.cpsr |= 0x11,
+            CpuMode::Irq => self.cpsr |= 0x12,
+            CpuMode::Supervisor => self.cpsr |= 0x13,
+            CpuMode::Abort => self.cpsr |= 0x17,
+            CpuMode::Undefined => self.cpsr |= 0x1b,
+            CpuMode::System => self.cpsr |= 0x1f,
+        };
+    }
+
     pub fn update_cpsr(&mut self, res: u32, v: bool, c: bool) {
         let zero = if res == 0 { CPSR_Z } else { 0 };
 
@@ -322,19 +336,19 @@ impl Cpu {
     }
 
     pub fn v_status(&self) -> bool {
-        (self.get_psr() & CPSR_V) == CPSR_V
+        (self.cpsr & CPSR_V) == CPSR_V
     }
 
     pub fn n_status(&self) -> bool {
-        (self.get_psr() & CPSR_N) == CPSR_N
+        (self.cpsr & CPSR_N) == CPSR_N
     }
 
     pub fn c_status(&self) -> bool {
-        (self.get_psr() & CPSR_C) == CPSR_C
+        (self.cpsr & CPSR_C) == CPSR_C
     }
 
     pub fn z_status(&self) -> bool {
-        (self.get_psr() & CPSR_Z) == CPSR_Z
+        (self.cpsr & CPSR_Z) == CPSR_Z
     }
 
     pub fn set_v_status(&mut self, status: bool) {
