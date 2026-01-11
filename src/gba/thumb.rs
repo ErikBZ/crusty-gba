@@ -1145,6 +1145,7 @@ struct SoftwareInterruptOp {
 }
 
 impl From<u32> for SoftwareInterruptOp {
+    // TOOD: Disable Thumb State
     fn from(value: u32) -> Self {
         SoftwareInterruptOp {
             value: (value & 0xff) as u32,

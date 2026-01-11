@@ -67,9 +67,13 @@ impl Operation for SoftwareInterruptOp {
     fn run(&self, cpu: &mut Cpu, mem: &mut SystemMemory) {
         cpu.set_register_for_mode(LR, cpu.instruction_address() as u32, CpuMode::Supervisor);
         cpu.set_psr_for_mode(cpu.cpsr, CpuMode::Supervisor);
-        cpu.set_cpsr_mode(CpuMode::System);
         cpu.set_register(PC, EXCEPTION_VECTOR_SWI as u32);
         cpu.flush_pipeline(mem, EXCEPTION_VECTOR_SWI);
+        // Irq always disabled during a SWI
+        cpu.disable_irq();
+        info!("Setting the CpuMode. Current: {:X}", cpu.cpsr);
+        cpu.set_cpsr_mode(CpuMode::Supervisor);
+        info!("Now it is: {:X}", cpu.cpsr);
     }
 }
 
@@ -749,6 +753,7 @@ impl Operation for SingleDataTfx {
         // TODO: add write back check somewhere
         let offset = self.get_offset(cpu);
         let mut tfx_add = cpu.get_register(self.rn as usize);
+        info!("offset: {:X}", offset);
 
         if self.p {
             if self.u {

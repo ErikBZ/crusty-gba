@@ -22,7 +22,11 @@ pub const CPSR_N: u32 = 0x80000000;
 pub const CPSR_Z: u32 = 0x40000000;
 pub const CPSR_C: u32 = 0x20000000;
 pub const CPSR_V: u32 = 0x10000000;
+
+/// Thumb State
 pub const CPSR_T: u32 = 0x20;
+pub const CPSR_FIQ: u32 = 0x40;
+pub const CPSR_IRQ: u32 = 0x80;
 
 use crate::SystemMemory;
 

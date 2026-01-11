@@ -1,3 +1,5 @@
+use crate::gba::{CPSR_FIQ, CPSR_IRQ};
+
 use super::arm::decode_as_arm;
 use super::system::SystemMemory;
 use super::thumb::decode_as_thumb;
@@ -56,6 +58,7 @@ pub struct Cpu {
     abt_banked_regs: [u32; 2],
     irq_banked_regs: [u32; 2],
     und_banked_regs: [u32; 2],
+    // TODO: Make this private
     pub cpsr: u32,
     psr: [u32; 5],
     pub decode: u32,
@@ -265,6 +268,7 @@ impl Cpu {
         }
     }
 
+    // NOTE: I don't think this would ever be called?
     pub fn set_psr(&mut self, value: u32) {
         let mode = CpuMode::from(self.cpsr);
         self.set_psr_for_mode(value, mode);
@@ -293,6 +297,36 @@ impl Cpu {
             CpuMode::Undefined => self.cpsr |= 0x1b,
             CpuMode::System => self.cpsr |= 0x1f,
         };
+    }
+
+    //NOTE: Would forcing these to be inline be faster, or would it not matter?
+    pub fn disable_fiq(&mut self) {
+        self.cpsr |= CPSR_FIQ;
+    }
+
+    pub fn enable_fiq(&mut self) {
+        self.cpsr &= !CPSR_FIQ;
+    }
+
+    pub fn is_fiq(&self) -> bool {
+        self.cpsr & CPSR_FIQ != 0
+    }
+
+    pub fn disable_irq(&mut self) {
+        self.cpsr |= CPSR_IRQ;
+    }
+
+    pub fn enable_irq(&mut self) {
+        self.cpsr &= !CPSR_IRQ;
+    }
+
+    pub fn is_irq(&self) -> bool {
+        self.cpsr & CPSR_IRQ != 0
+    }
+
+    pub fn set_cpsr_mode_bits(&mut self, value: u32) {
+        let mode = CpuMode::from(value);
+        self.set_cpsr_mode(mode);
     }
 
     pub fn update_cpsr(&mut self, res: u32, v: bool, c: bool) {
