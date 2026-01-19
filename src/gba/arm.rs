@@ -71,9 +71,7 @@ impl Operation for SoftwareInterruptOp {
         cpu.flush_pipeline(mem, EXCEPTION_VECTOR_SWI);
         // Irq always disabled during a SWI
         cpu.disable_irq();
-        info!("Setting the CpuMode. Current: {:X}", cpu.cpsr);
         cpu.set_cpsr_mode(CpuMode::Supervisor);
-        info!("Now it is: {:X}", cpu.cpsr);
     }
 }
 
@@ -745,15 +743,43 @@ pub struct SingleDataTfx {
     pub l: bool,
     pub rn: u8,
     pub rd: u8,
-    pub offset: u16,
+    operand: DataTfxOperand,
+}
+
+#[derive(PartialEq, Debug)]
+enum DataTfxOperand {
+    Operand(Operand),
+    Imm(u32)
+}
+
+impl From<u32> for DataTfxOperand {
+    fn from(value: u32) -> Self {
+        if value.bit_is_high(25) {
+            DataTfxOperand::Operand(
+                // Have to 0 out the immiedate bit so it works with Operand
+                Operand::from(value & !(1 << 25))
+            )
+        } else {
+            DataTfxOperand::Imm(value & 0xfff)
+        }
+    }
+}
+
+impl DataTfxOperand {
+    fn apply(&self, cpu: &Cpu) -> (u32, bool) {
+        match self  {
+            DataTfxOperand::Operand(x) => x.apply(cpu),
+            DataTfxOperand::Imm(x) => (*x, false)
+        }
+    }
 }
 
 impl Operation for SingleDataTfx {
     fn run(&self, cpu: &mut Cpu, mem: &mut SystemMemory) {
         // TODO: add write back check somewhere
-        let offset = self.get_offset(cpu);
+        // NOTE: IDK if c_out is gonna get set in this op?
+        let (offset, c_out) = self.operand.apply(cpu);
         let mut tfx_add = cpu.get_register(self.rn as usize);
-        info!("offset: {:X}", offset);
 
         if self.p {
             if self.u {
@@ -836,18 +862,7 @@ impl From<u32> for SingleDataTfx {
             l: (inst >> 20 & 1) == 1,
             rn: (inst >> 16 & 0xf) as u8,
             rd: (inst >> 12 & 0xf) as u8,
-            offset: (inst & 0xfff) as u16,
-        }
-    }
-}
-
-impl SingleDataTfx {
-    pub fn get_offset(&self, cpu: &Cpu) -> u32 {
-        if self.i {
-            let shift = (self.offset >> 4) & 0xff;
-            (cpu.get_register((self.offset & 0xf) as usize) << shift) as u32
-        } else {
-            self.offset as u32
+            operand: DataTfxOperand::from(inst),
         }
     }
 }
@@ -1365,7 +1380,7 @@ mod test {
             l: false,
             rn: 12,
             rd: 3,
-            offset: 0x301,
+            operand: DataTfxOperand::Imm(769)
         };
         assert_eq!(op, op2);
     }
