@@ -65,6 +65,9 @@ impl Operation for SoftwareInterruptOp {
     // TODO: Implement
     // TODO: Track Cycles 2S + 1N
     fn run(&self, cpu: &mut Cpu, mem: &mut SystemMemory) {
+        // The PC is updated before this instruction runs so the next instruction
+        // is actually saved in 'instruction_address'
+        cpu.add_interrupt_entry(cpu.instruction_address(), CpuMode::Supervisor);
         cpu.set_register_for_mode(LR, cpu.instruction_address() as u32, CpuMode::Supervisor);
         cpu.set_psr_for_mode(cpu.cpsr, CpuMode::Supervisor);
         cpu.set_register(PC, EXCEPTION_VECTOR_SWI as u32);

@@ -205,7 +205,7 @@ impl Ppu {
             }
             4 => display_mode_4(ram, &disp_control, bg_palettes, &mut self.next_frame),
             _ => {
-                error!("{:?}", self);
+                error!("{:?}", disp_control.bg_mode);
                 todo!();
             }
         }

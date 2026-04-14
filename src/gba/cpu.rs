@@ -5,7 +5,9 @@ use super::system::SystemMemory;
 use super::thumb::decode_as_thumb;
 use super::{is_signed, Conditional, CPSR_C, CPSR_N, CPSR_T, CPSR_V, CPSR_Z};
 use core::fmt;
-use tracing::{debug, error, trace};
+use std::collections::HashMap;
+use tracing::field::debug;
+use tracing::{debug, error, trace, info};
 
 pub const PC: usize = 15;
 pub const LR: usize = 14;
@@ -65,6 +67,8 @@ pub struct Cpu {
     // NOTE: Make this instruction_addr
     pub inst_addr: usize,
     cycles: u32,
+    /// The key is the instruction, and the value is the saved cpsr
+    interrupt_entries: HashMap<usize, CpuMode>
 }
 
 impl Default for Cpu {
@@ -147,6 +151,7 @@ impl Cpu {
             decode: 0x0,
             inst_addr: 0x0,
             cycles: init_cycles,
+            interrupt_entries: HashMap::new(),
         }
     }
 
@@ -349,6 +354,10 @@ impl Cpu {
         self.cpsr |= carry;
     }
 
+    pub fn add_interrupt_entry(&mut self, address: usize, mode: CpuMode) {
+        self.interrupt_entries.insert(address, mode);
+    }
+
     /// Sets the decode instruction prefetch operation, and bumps the PC register
     pub fn flush_pipeline(&mut self, mem: &SystemMemory, fetch_inst_addr: usize) {
         self.inst_addr = fetch_inst_addr;
@@ -445,6 +454,13 @@ impl Cpu {
         self.registers[PC] += if !self.is_thumb_mode() { 4 } else { 2 };
 
         self.run_instruction(ram, inst, i_addr);
+
+        if self.interrupt_entries.contains_key(&self.instruction_address()) {
+            let mode = self.interrupt_entries.remove(&self.instruction_address()).unwrap();
+            self.cpsr = self.get_psr_for_mode(mode);
+            // NOTE: Do I need to do this if cpsr is recovered?
+            // self.enable_irq();
+        }
     }
 
     fn run_instruction(&mut self, ram: &mut SystemMemory, inst: u32, i_addr: usize) {

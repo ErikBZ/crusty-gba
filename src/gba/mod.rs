@@ -1,12 +1,12 @@
 pub mod arm;
 pub mod cpu;
 pub mod debugger;
-mod dma;
-mod error;
-mod mapped_io;
 pub mod system;
 pub mod thumb;
 mod utils;
+mod dma;
+mod error;
+mod mapped_io;
 
 const EXCEPTION_VECTOR_RESET: usize = 0x0;
 const EXCEPTION_VECTOR_UNDF: usize = 0x4;
