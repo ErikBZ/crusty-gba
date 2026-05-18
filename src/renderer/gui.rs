@@ -3,8 +3,10 @@ use crate::gba::system::SystemMemory;
 use crate::ppu::Ppu;
 use std::time::Instant;
 use tracing::{event, Level};
-use tracing_subscriber::filter::LevelFilter;
-use tracing_subscriber::{filter, reload::Handle, Registry};
+use tracing_subscriber::filter::{LevelFilter, Targets};
+use tracing_subscriber::{EnvFilter, reload::Handle, Registry};
+use tracing_subscriber::layer::Layered;
+use tracing_subscriber::fmt::Layer;
 
 use pixels::{Pixels, SurfaceTexture};
 use winit::{
@@ -22,7 +24,7 @@ const HEIGHT: u32 = 160;
 pub fn run_gui(
     mut cpu: Cpu,
     mut memory: SystemMemory,
-    reload_handle: Handle<LevelFilter, Registry>,
+    reload_handle: Handle<Targets, Registry>,
 ) -> Result<(), Box<dyn std::error::Error>> {
     event!(Level::INFO, "Runing GUI");
     let event_loop = EventLoop::new().unwrap();
@@ -91,7 +93,9 @@ pub fn run_gui(
                 return;
             }
             if input.key_pressed(KeyCode::Space) {
-                let _ = reload_handle.modify(|filter| *filter = filter::LevelFilter::DEBUG);
+                let _ = reload_handle.modify(|filter| {
+                    *filter = Targets::default().with_target("crusty-gba", LevelFilter::DEBUG)
+                });
             }
             window.request_redraw();
         }

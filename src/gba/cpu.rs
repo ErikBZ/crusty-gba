@@ -464,6 +464,9 @@ impl Cpu {
     }
 
     fn run_instruction(&mut self, ram: &mut SystemMemory, inst: u32, i_addr: usize) {
+        if i_addr > 0x6000000 {
+            panic!()
+        }
         let op = if !self.is_thumb_mode() {
             let cond = Conditional::from(inst);
             if !cond.should_run(self.cpsr) {

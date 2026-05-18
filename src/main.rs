@@ -13,8 +13,8 @@ use gba::system::SystemMemory;
 use std::fs::File;
 use std::io::prelude::*;
 use tracing::{event, Level};
-use tracing_subscriber::filter::LevelFilter;
-use tracing_subscriber::{fmt, prelude::*, reload};
+use tracing_subscriber::filter::{LevelFilter, Targets};
+use tracing_subscriber::{fmt, prelude::*, reload, EnvFilter};
 
 use pixels::Error;
 
@@ -25,10 +25,14 @@ fn main() -> Result<(), Error> {
         None => LevelFilter::OFF,
     };
 
-    let (filter, reload_handle) = reload::Layer::new(filter);
+    let inner = Targets::default()
+        .with_target("wgpu", Level::WARN)
+        .with_target("crusty-gba", Level::TRACE);
+
+    let (filter, reload_handle) = reload::Layer::new(inner);
     tracing_subscriber::registry()
         .with(filter)
-        .with(fmt::Layer::default())
+        .with(fmt::layer())
         .init();
 
     let mut cpu = Cpu::default();
