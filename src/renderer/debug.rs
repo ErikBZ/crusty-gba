@@ -4,14 +4,17 @@ use crate::gba::system::SystemMemory;
 use crate::ppu::Ppu;
 use std::collections::HashSet;
 use tracing::{event, Level};
-use tracing_subscriber::filter::LevelFilter;
+use tracing_subscriber::EnvFilter;
+use tracing_subscriber::filter::{Directive, LevelFilter, Targets};
+use tracing_subscriber::layer::Layered;
+use tracing_subscriber::fmt::Layer;
 use tracing_subscriber::{reload::Handle, Registry};
 
 pub fn run_debug(
     mut cpu: Cpu,
     mut memory: SystemMemory,
     mut ppu: Ppu,
-    reload_handle: Handle<LevelFilter, Registry>,
+    reload_handle: Handle<Targets, Registry>,
 ) {
     event!(Level::INFO, "Running Debug session");
     use std::io;
@@ -82,7 +85,9 @@ pub fn run_debug(
             }
             DebuggerCommand::Quit => break,
             DebuggerCommand::LogLevel(lf) => {
-                let _ = reload_handle.modify(|filter| *filter = lf);
+                let _ = reload_handle.modify(|filter| {
+                    *filter = Targets::default().with_target("crusty_gba", lf)
+                });
             }
             DebuggerCommand::ReadMem(address) => match memory.read_word(address) {
                 Ok(d) => println!("{:x}: {:x}", address, d),
