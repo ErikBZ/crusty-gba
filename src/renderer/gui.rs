@@ -94,7 +94,7 @@ pub fn run_gui(
             }
             if input.key_pressed(KeyCode::Space) {
                 let _ = reload_handle.modify(|filter| {
-                    *filter = Targets::default().with_target("crusty-gba", LevelFilter::DEBUG)
+                    *filter = Targets::default().with_target("crusty_gba", LevelFilter::DEBUG)
                 });
             }
             window.request_redraw();

@@ -26,8 +26,7 @@ fn main() -> Result<(), Error> {
     };
 
     let inner = Targets::default()
-        .with_target("wgpu", Level::WARN)
-        .with_target("crusty-gba", Level::TRACE);
+        .with_target("crusty_gba", filter);
 
     let (filter, reload_handle) = reload::Layer::new(inner);
     tracing_subscriber::registry()

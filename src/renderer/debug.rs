@@ -86,7 +86,7 @@ pub fn run_debug(
             DebuggerCommand::Quit => break,
             DebuggerCommand::LogLevel(lf) => {
                 let _ = reload_handle.modify(|filter| {
-                    *filter = Targets::default().with_target("crusty-gba", lf)
+                    *filter = Targets::default().with_target("crusty_gba", lf)
                 });
             }
             DebuggerCommand::ReadMem(address) => match memory.read_word(address) {
