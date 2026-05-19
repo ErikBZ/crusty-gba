@@ -1,0 +1,5 @@
+[workspace]
+
+members = [
+  "crusty-gba"
+, "crusty_harness"]
