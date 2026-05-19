@@ -9,6 +9,7 @@ pub enum DebuggerCommand {
     Info,
     ReadMem(usize),
     WriteMem(u32, usize),
+    DumpMem(usize, usize),
     LogLevel(LevelFilter),
     Next,
     Quit,
@@ -28,6 +29,27 @@ impl fmt::Display for CommandParseError {
             Self::CommandNotRecognized(s) => write!(f, "Command not recognized: {s}"),
             Self::CommandMissingArguments(s) => write!(f, "Command missing arguements: {s}"),
         }
+    }
+}
+
+#[derive(PartialEq, Debug)]
+pub enum ContinueSubcommand {
+    Endless,
+    For(usize),
+}
+
+#[derive(PartialEq, Debug)]
+pub enum MemoryBlock {
+    Increase(usize),
+    Decrease(usize),
+    ToStart,
+    ToEnd
+}
+
+impl TryFrom<String> for MemoryBlock {
+    type Error = CommandParseError;
+    fn try_from(value: String) -> Result<Self, Self::Error> {
+        todo!() 
     }
 }
 
@@ -93,6 +115,9 @@ impl DebuggerCommand {
             "i" | "info" => DebuggerCommand::Info,
             "n" | "next" => DebuggerCommand::Next,
             "q" | "quit" => DebuggerCommand::Quit,
+            "du" | "dump" => {
+
+            }
             _ => return Err(CommandParseError::CommandNotRecognized(command.to_string())),
         };
 
@@ -121,12 +146,6 @@ fn parse_number(
         Err(_) => return Err(CommandParseError::CommandNotRecognized(cmd.to_string())),
     };
     Ok(point)
-}
-
-#[derive(PartialEq, Debug)]
-pub enum ContinueSubcommand {
-    Endless,
-    For(usize),
 }
 
 mod test {

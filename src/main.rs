@@ -51,6 +51,7 @@ fn main() -> Result<(), Error> {
     memory.copy_game_pak(read_file_into_u32(&mut game_rom));
 
     let ppu = Ppu::default();
+    // TODO: just use info!
     event!(Level::INFO, "Copied the stuff over");
 
     match args.render {
