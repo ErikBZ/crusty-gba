@@ -329,7 +329,8 @@ impl Operand {
     fn rhs(&self, cpu: &Cpu) -> u32 {
         match self {
             Self::Imm(_, y, _) => *y,
-            Self::ShiftWithReg(_, y, _) => cpu.get_register(*y),
+            // NOTE: Value from regs only uses the first byte
+            Self::ShiftWithReg(_, y, _) => cpu.get_register(*y) & 0xff,
             Self::ShiftImm(_, y, _) => *y,
         }
     }
@@ -927,6 +928,10 @@ impl Operation for BlockDataTransfer {
                 }
                 cpu.set_register(self.rn as usize, address as u32);
             }
+        }
+
+        if registers.contains(&(PC as u32)) {
+            cpu.flush_pipeline(mem, cpu.get_register(PC) as usize);
         }
 
         let entries = registers.len() as u32;

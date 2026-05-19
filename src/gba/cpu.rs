@@ -80,14 +80,14 @@ impl Default for Cpu {
 impl fmt::Display for Cpu {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         for i in (0..16).step_by(4) {
-            write!(f, "r{}\t{:#08x}\t", i, self.get_register(i))?;
-            write!(f, "r{}\t{:#08x}\t", i + 1, self.get_register(i + 1))?;
-            write!(f, "r{}\t{:#08x}\t", i + 2, self.get_register(i + 2))?;
-            writeln!(f, "r{}\t{:#08x}", i + 3, self.get_register(i + 3))?;
+            write!(f, "r{}\t{:#010x}\t", i, self.get_register(i))?;
+            write!(f, "r{}\t{:#010x}\t", i + 1, self.get_register(i + 1))?;
+            write!(f, "r{}\t{:#010x}\t", i + 2, self.get_register(i + 2))?;
+            writeln!(f, "r{}\t{:#010x}", i + 3, self.get_register(i + 3))?;
         }
         write!(
             f,
-            "cpsr: {:#8x}, cycles: {}, instruction address: {:#08x} ",
+            "cpsr: {:#010x}, cycles: {}, instruction address: {:#010x} ",
             self.cpsr,
             self.cycles,
             self.instruction_address()
@@ -110,10 +110,10 @@ impl fmt::Display for Cpu {
         let cond = Conditional::from(self.decode);
         if self.is_thumb_mode() {
             let op = decode_as_thumb(self.decode);
-            writeln!(f, "{:#04x} {:?} {:?}", self.decode, cond, op)
+            writeln!(f, "{:#06x} {:?} {:?}", self.decode, cond, op)
         } else {
             let op = decode_as_arm(self.decode);
-            writeln!(f, "{:#08x} {:?} {:?}", self.decode, cond, op)
+            writeln!(f, "{:#010x} {:?} {:?}", self.decode, cond, op)
         }
     }
 }
@@ -1276,5 +1276,25 @@ mod test {
         assert!(cpu.c_status());
         assert!(!cpu.v_status());
         assert_eq!(cpu.cycles, cycles);
+    }
+
+    #[test]
+    fn run_movs_r0_r0_lsl_r1() {
+        let mut ram = SystemMemory::test();
+        let mut cpu = Cpu {
+            registers: [1, 0x20, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+            cpsr: 0x6000001f,
+            ..Cpu::default()
+        };
+
+        cpu.run_instruction(&mut ram, 0xe1b00110, 0x0);
+
+        let registers = [0, 0x20, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0];
+
+        assert_eq!(cpu.registers, registers);
+        assert!(!cpu.n_status());
+        assert!(cpu.z_status());
+        assert!(cpu.c_status());
+        assert!(!cpu.v_status());
     }
 }

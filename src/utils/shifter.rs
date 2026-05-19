@@ -10,9 +10,7 @@ pub trait CpuShifter {
 }
 
 impl CpuShifter for Cpu {
-    // NOTE: checks for 32 are now unneeded since it is impossible to hit that branch
     fn shl_with_carry(&self, lhs: u32, rhs: u32) -> (u32, bool) {
-        let rhs = rhs % 32;
         match rhs {
             0 => (lhs, self.c_status()),
             1..=31 => (lhs << rhs, lhs.bit_is_high(32 - rhs)),
@@ -94,8 +92,8 @@ mod test {
     fn lsl_with_overflow_1() {
         let mut cpu = Cpu::default();
         cpu.set_v_status(true);
-        let (res, carry) = cpu.shl_with_carry(1, 3856);
-        assert_eq!(res, 65536);
+        let (res, carry) = cpu.shl_with_carry(1, 32);
+        assert_eq!(res, 0);
         assert!(!carry);
     }
 }
