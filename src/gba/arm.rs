@@ -407,7 +407,7 @@ impl Operation for MultiplyOp {
 
         cpu.set_register(self.rd as usize, res);
         // TODO: C is meaningless and V is unaffected. Update this to reflect this
-        cpu.update_cpsr(res, false, false);
+        cpu.update_cpsr(res, cpu.v_status(), cpu.c_status());
         // NOTE:
         //      MUL: 1S +(m)I
         //      MLA: 1S +(m+1)I
