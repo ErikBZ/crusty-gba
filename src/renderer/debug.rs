@@ -1,14 +1,12 @@
 use crate::gba::cpu::Cpu;
-use crate::gba::debugger::{ContinueSubcommand, DebuggerCommand};
+use crate::gba::debugger::{ContinueSubcommand, DebuggerCommand, MemoryBlock};
 use crate::gba::system::SystemMemory;
 use crate::ppu::Ppu;
+
 use std::collections::HashSet;
+use std::cmp::min;
 use tracing::{event, Level};
-use tracing_subscriber::EnvFilter;
-use tracing_subscriber::filter::{Directive, LevelFilter, Targets};
-use tracing_subscriber::layer::Layered;
-use tracing_subscriber::fmt::Layer;
-use tracing_subscriber::{reload::Handle, Registry};
+use tracing_subscriber::{reload::Handle, Registry, filter::Targets};
 
 pub fn run_debug(
     mut cpu: Cpu,
@@ -93,6 +91,45 @@ pub fn run_debug(
                 Ok(d) => println!("{:x}: {:x}", address, d),
                 Err(e) => println!("{}", e),
             },
+            DebuggerCommand::DumpMem(addr, block) => {
+                let mem_slice = match memory.slice_map(addr) {
+                    Ok(m) => m,
+                    Err(e) => {
+                        println!("{}", e);
+                        continue
+                    }
+                };
+
+                let start_idx = (addr & 0xffffff) >> 2;
+                if start_idx > mem_slice.len() {
+                    println!("Address is out of range of memory block");
+                    continue;
+                }
+
+                let range = match block {
+                    MemoryBlock::Increase(b) => {
+                        let end = min(start_idx + b / 4, mem_slice.len());
+                        (start_idx..end).step_by(4)
+                    },
+                    MemoryBlock::Decrease(b) => {
+                        let end = start_idx.saturating_sub(b / 4);
+                        (start_idx..end).step_by(4)
+                    },
+                    MemoryBlock::ToEnd => (start_idx..mem_slice.len()).step_by(4),
+                    MemoryBlock::ToStart => (0..start_idx).step_by(4)
+                };
+
+                for i in range {
+                    println!(
+                        "{:#010x}: {:#010x} {:#010x} {:#010x} {:#010x}",
+                        i << 2,
+                        mem_slice[i],
+                        mem_slice[i+1],
+                        mem_slice[i+2],
+                        mem_slice[i+3],
+                    );
+                }
+            }
             _ => (),
         }
     }
