@@ -285,6 +285,22 @@ impl SystemMemory {
         }
     }
 
+    pub fn slice_map(&self, address: usize) -> Result<&[u32], MemoryError> {
+        let mem_type = address >> 24 & 0xf;
+        match mem_type {
+            0x0 => Ok(self.system_rom.as_slice()),
+            0x2 => Ok(&self.ewram.as_slice()),
+            0x3 => Ok(&self.iwram.as_slice()),
+            0x4 => Ok(&self.io_ram.as_slice()),
+            0x5 => Ok(&self.pal_ram.as_slice()),
+            0x6 => Ok(&self.vram.as_slice()),
+            0x7 => Ok(&self.oam.as_slice()),
+            0x8..=0xd => Ok(&self.pak_rom.as_slice()),
+            0xe => Ok(&self.cart_ram.as_slice()),
+            _ => Err(MemoryError::MapNotFound(address)),
+        }
+    }
+
     fn memory_map_mut(&mut self, address: usize) -> Result<&mut Vec<u32>, MemoryError> {
         let mem_type = address >> 24 & 0xf;
         match mem_type {

@@ -9,6 +9,7 @@ pub enum DebuggerCommand {
     Info,
     ReadMem(usize),
     WriteMem(u32, usize),
+    DumpMem(usize, MemoryBlock),
     LogLevel(LevelFilter),
     Next,
     Quit,
@@ -27,6 +28,59 @@ impl fmt::Display for CommandParseError {
             Self::NoCommandGiven => write!(f, ""),
             Self::CommandNotRecognized(s) => write!(f, "Command not recognized: {s}"),
             Self::CommandMissingArguments(s) => write!(f, "Command missing arguements: {s}"),
+        }
+    }
+}
+
+#[derive(PartialEq, Debug)]
+pub enum ContinueSubcommand {
+    Endless,
+    For(usize),
+}
+
+#[derive(PartialEq, Debug)]
+pub enum MemoryBlock {
+    Increase(usize),
+    Decrease(usize),
+    ToStart,
+    ToEnd
+}
+
+impl TryFrom<&str> for MemoryBlock {
+    type Error = CommandParseError;
+    fn try_from(value: &str) -> Result<Self, Self::Error> {
+        if !value.starts_with("-") && !value.starts_with("+") {
+            return Err(
+                CommandParseError::CommandNotRecognized(
+                    "dump command argument string must include -/+ and an optional number".to_owned()
+                )
+            )
+        }
+
+        if value.len() == 1 {
+            if value.starts_with("-") {
+                return Ok(MemoryBlock::ToStart)
+            } else {
+                return Ok(MemoryBlock::ToEnd)
+            }
+        }
+
+        let number = &value[1..];
+        let number = match number.parse::<usize>() {
+            Ok(n) => n,
+            Err(e) => return Err(CommandParseError::CommandNotRecognized(e.to_string()))
+        };
+
+        if number % 4 != 0 {
+            return Err(CommandParseError::CommandNotRecognized(
+                format!("argument must be divisble by 4: {}", value),
+            ))
+        }
+
+        if value.starts_with("-") {
+            Ok(MemoryBlock::Decrease(number))
+        } else {
+            Ok(MemoryBlock::Increase(number))
         }
     }
 }
@@ -93,6 +147,17 @@ impl DebuggerCommand {
             "i" | "info" => DebuggerCommand::Info,
             "n" | "next" => DebuggerCommand::Next,
             "q" | "quit" => DebuggerCommand::Quit,
+            "du" | "dump" => {
+                let address = parse_number(&mut cmd_iter, command, 16)?;
+                if let Some(n) = cmd_iter.next() {
+                    let mb = MemoryBlock::try_from(n)?;
+                    return Ok(DebuggerCommand::DumpMem(address as usize, mb))
+                } else {
+                    return Err(CommandParseError::CommandNotRecognized(
+                        command.to_string()
+                    ))
+                }
+            }
             _ => return Err(CommandParseError::CommandNotRecognized(command.to_string())),
         };
 
@@ -121,12 +186,6 @@ fn parse_number(
         Err(_) => return Err(CommandParseError::CommandNotRecognized(cmd.to_string())),
     };
     Ok(point)
-}
-
-#[derive(PartialEq, Debug)]
-pub enum ContinueSubcommand {
-    Endless,
-    For(usize),
 }
 
 mod test {
@@ -158,5 +217,49 @@ mod test {
     fn test_parse_next() {
         let cmd = DebuggerCommand::parse("n");
         assert_eq!(cmd, Ok(DebuggerCommand::Next));
+    }
+
+    #[test]
+    fn test_parse_dump_1() {
+        let cmd = DebuggerCommand::parse("dump 3007FFF -32");
+        assert_eq!(
+            cmd,
+            Ok(DebuggerCommand::DumpMem(
+                0x3007fff, MemoryBlock::Decrease(32)
+            ))
+        );
+    }
+
+    #[test]
+    fn test_parse_dump_2() {
+        let cmd = DebuggerCommand::parse("dump 3000000 +63");
+        assert_eq!(
+            cmd,
+            Err(CommandParseError::CommandNotRecognized(
+                "argument must be divisble by 4: +63".to_owned()
+            ))
+        );
+    }
+
+    #[test]
+    fn test_parse_dump_3() {
+        let cmd = DebuggerCommand::parse("dump 3000000 +");
+        assert_eq!(
+            cmd,
+            Ok(DebuggerCommand::DumpMem(
+                0x3000000, MemoryBlock::ToEnd
+            ))
+        );
+    }
+
+    #[test]
+    fn test_parse_dump_4() {
+        let cmd = DebuggerCommand::parse("dump 3000000 -");
+        assert_eq!(
+            cmd,
+            Ok(DebuggerCommand::DumpMem(
+                0x3000000, MemoryBlock::ToStart
+            ))
+        );
     }
 }
