@@ -82,23 +82,23 @@ impl From<u32> for CpuMode {
 
 #[derive(PartialEq)]
 pub struct Cpu {
-    registers: [u32; 16],
+    pub registers: [u32; 16],
     // NOTE: General use banked regs, r8-r12
-    fiq_banked_gen_regs: [u32; 7],
+    pub fiq_banked_gen_regs: [u32; 7],
     // NOTE: Banked regs r13, r14 for all alt modes
-    svc_banked_regs: [u32; 2],
-    abt_banked_regs: [u32; 2],
-    irq_banked_regs: [u32; 2],
-    und_banked_regs: [u32; 2],
+    pub svc_banked_regs: [u32; 2],
+    pub abt_banked_regs: [u32; 2],
+    pub irq_banked_regs: [u32; 2],
+    pub und_banked_regs: [u32; 2],
     // TODO: Make this private
     pub cpsr: u32,
-    psr: [u32; 5],
+    pub psr: [u32; 5],
     pub decode: u32,
     // NOTE: Make this instruction_addr
     pub inst_addr: usize,
-    cycles: u32,
+    pub cycles: u32,
     /// The key is the instruction, and the value is the saved cpsr
-    interrupt_entries: HashMap<usize, CpuMode>
+    pub interrupt_entries: HashMap<usize, CpuMode>
 }
 
 impl Default for Cpu {
