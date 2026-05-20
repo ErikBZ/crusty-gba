@@ -3,6 +3,7 @@ mod gba;
 mod ppu;
 mod renderer;
 mod utils;
+mod memory;
 
 use crate::ppu::Ppu;
 use crate::renderer::{run_debug, run_gui, run_ratatui};

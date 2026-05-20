@@ -5,7 +5,7 @@ mod oam_attribute;
 mod window_control;
 
 use crate::utils::io_registers::{DISP_STAT, V_COUNT};
-use crate::{gba::system::MemoryError, utils::Bitable, SystemMemory};
+use crate::{memory::{MemoryError, Memory}, utils::Bitable, SystemMemory};
 use bg_control::{bg_control0, bg_control1, bg_control2, bg_control3, BgControl};
 use disp_control::{display_control, DisplayControl};
 use oam_attribute::{

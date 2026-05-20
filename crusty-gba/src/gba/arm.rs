@@ -4,10 +4,12 @@ use super::system::{read_cycles_per_32, read_cycles_per_8_16};
 use super::utils::calc_cycles_for_stm_ldm;
 use super::{bit_map_to_array, get_v_from_add, get_v_from_sub, Operation, SystemMemory};
 use super::{CPSR_C, CPSR_T};
+
 use crate::gba::cpu::CpuMode;
 use crate::gba::EXCEPTION_VECTOR_SWI;
 use crate::utils::shifter::CpuShifter;
 use crate::utils::Bitable;
+use crate::memory::Memory;
 use tracing::{warn, info};
 
 // TODO: currently all regs are u8 or u32 types, maybe they should be usizes

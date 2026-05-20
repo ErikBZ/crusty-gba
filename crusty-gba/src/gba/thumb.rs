@@ -8,6 +8,7 @@ use super::{
 };
 use crate::utils::shifter::CpuShifter;
 use crate::{Cpu, SystemMemory};
+use crate::memory::Memory;
 use tracing::warn;
 
 // TODO: There's some 'unreachable' blocks in Operation.

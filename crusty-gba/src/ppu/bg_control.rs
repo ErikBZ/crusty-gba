@@ -1,6 +1,7 @@
 use crate::utils::io_registers::{BG_CONTROL0, BG_CONTROL1, BG_CONTROL2, BG_CONTROL3};
 use crate::{
-    gba::system::{MemoryError, SystemMemory},
+    gba::system::SystemMemory,
+    memory::{MemoryError, Memory},
     utils::Bitable,
 };
 

@@ -1,6 +1,7 @@
 use crate::utils::io_registers::{INTERRUPT_ENABLE, INTERRUPT_MASTER_ENABLE, INTERRUPT_REQUEST};
 use crate::{
-    gba::system::{MemoryError, SystemMemory},
+    gba::system::SystemMemory,
+    memory::{MemoryError, Memory},
     utils::Bitable,
 };
 

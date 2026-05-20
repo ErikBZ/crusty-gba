@@ -1,4 +1,5 @@
 use crate::gba::{CPSR_FIQ, CPSR_IRQ};
+use crate::memory::Memory;
 
 use super::arm::decode_as_arm;
 use super::system::SystemMemory;
