@@ -460,7 +460,7 @@ impl Cpu {
         self.cpsr & CPSR_T == CPSR_T
     }
 
-    pub fn tick(&mut self, ram: &mut SystemMemory) {
+    pub fn tick(&mut self, ram: &mut impl Memory) {
         let inst = self.decode;
         let i_addr = self.inst_addr;
         self.inst_addr = self.pc();
@@ -493,7 +493,7 @@ impl Cpu {
         }
     }
 
-    fn run_instruction(&mut self, ram: &mut SystemMemory, inst: u32, i_addr: usize) {
+    fn run_instruction(&mut self, ram: &mut impl Memory, inst: u32, i_addr: usize) {
         let op = if !self.is_thumb_mode() {
             let cond = Conditional::from(inst);
             if !cond.should_run(self.cpsr) {
