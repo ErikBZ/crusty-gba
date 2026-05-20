@@ -2,6 +2,7 @@ use crate::gba::cpu::Cpu;
 use crate::gba::debugger::{ContinueSubcommand, DebuggerCommand, MemoryBlock};
 use crate::gba::system::SystemMemory;
 use crate::ppu::Ppu;
+use crate::memory::Memory;
 
 use std::collections::HashSet;
 use std::cmp::min;

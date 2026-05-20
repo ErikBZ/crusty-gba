@@ -1,6 +1,7 @@
 use crate::utils::io_registers::{DISP_CONTROL, DISP_STAT};
 use crate::{
-    gba::system::{MemoryError, SystemMemory},
+    gba::system::SystemMemory,
+    memory::{MemoryError, Memory},
     utils::Bitable,
 };
 

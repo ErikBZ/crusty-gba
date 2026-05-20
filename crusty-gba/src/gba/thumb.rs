@@ -8,72 +8,124 @@ use super::{
 };
 use crate::utils::shifter::CpuShifter;
 use crate::{Cpu, SystemMemory};
+use crate::memory::Memory;
 use tracing::warn;
 
+#[derive(Debug)]
+pub enum Thumb {
+    AddSubtractOp(AddSubtractOp),
+    MoveShiftedRegisterOp(MoveShiftedRegisterOp),
+    MathImmOp(MathImmOp),
+    ALUOp(ALUOp),
+    HiRegOp(HiRegOp),
+    PcRelativeLoadOp(PcRelativeLoadOp),
+    LoadStoreSignExOp(LoadStoreSignExOp),
+    LoadAddressOp(LoadAddressOp),
+    LoadStoreHalfWordOp(LoadStoreHalfWordOp),
+    LoadStoreRegOffsetOp(LoadStoreRegOffsetOp),
+    LoadStoreImmOffsetOp(LoadStoreImmOffsetOp),
+    SpRelativeLoadOp(SpRelativeLoadOp),
+    AddOffsetSPOp(AddOffsetSPOp),
+    PushPopRegOp(PushPopRegOp),
+    MultipleLoadStoreOp(MultipleLoadStoreOp),
+    SoftwareInterruptOp(SoftwareInterruptOp),
+    ConditionalBranchOp(ConditionalBranchOp),
+    UnconditionalBranchOp(UnconditionalBranchOp),
+    LongBranchWithLinkOp(LongBranchWithLinkOp),
+}
+
+impl Operation for Thumb {
+    fn run(&self, cpu: &mut super::cpu::Cpu, mem: &mut impl Memory) {
+        match self {
+            Self::AddSubtractOp(o) => o.run(cpu, mem),
+            Self::MoveShiftedRegisterOp(o) => o.run(cpu, mem),
+            Self::MathImmOp(o) => o.run(cpu, mem),
+            Self::ALUOp(o) => o.run(cpu, mem),
+            Self::HiRegOp(o) => o.run(cpu, mem),
+            Self::PcRelativeLoadOp(o) => o.run(cpu, mem),
+            Self::LoadStoreSignExOp(o) => o.run(cpu, mem),
+            Self::LoadAddressOp(o) => o.run(cpu, mem),
+            Self::LoadStoreHalfWordOp(o) => o.run(cpu, mem),
+            Self::LoadStoreRegOffsetOp(o) => o.run(cpu, mem),
+            Self::LoadStoreImmOffsetOp(o) => o.run(cpu, mem),
+            Self::SpRelativeLoadOp(o) => o.run(cpu, mem),
+            Self::AddOffsetSPOp(o) => o.run(cpu, mem),
+            Self::PushPopRegOp(o) => o.run(cpu, mem),
+            Self::MultipleLoadStoreOp(o) => o.run(cpu, mem),
+            Self::SoftwareInterruptOp(o) => o.run(cpu, mem),
+            Self::ConditionalBranchOp(o) => o.run(cpu, mem),
+            Self::UnconditionalBranchOp(o) => o.run(cpu, mem),
+            Self::LongBranchWithLinkOp(o) => o.run(cpu, mem),
+        }
+    }
+}
 // TODO: There's some 'unreachable' blocks in Operation.
 // They should be replaced with TryFrom's, so that there are no unreachable!
 // blocks in the run function of the Operations
+impl TryFrom<u32> for Thumb {
+    type Error = InstructionDecodeError;
 
-pub fn decode_as_thumb(value: u32) -> Result<Box<dyn Operation>, InstructionDecodeError> {
-    if value & 0xf800 == 0x1800 {
-        // AddSubtractOp
-        Ok(Box::new(AddSubtractOp::from(value)))
-    } else if value & 0xe000 == 0x0 {
-        // MoveShiftedRegisterOp
-        Ok(Box::new(MoveShiftedRegisterOp::from(value)))
-    } else if value & 0xe000 == 0x2000 {
-        // MathImmOp
-        Ok(Box::new(MathImmOp::from(value)))
-    } else if value & 0xfc00 == 0x4000 {
-        // ALUOp
-        Ok(Box::new(ALUOp::from(value)))
-    } else if value & 0xfc00 == 0x4400 {
-        // HiRegOp
-        Ok(Box::new(HiRegOp::from(value)))
-    } else if value & 0xf800 == 0x4800 {
-        // PcRelativeLoadOp
-        Ok(Box::new(PcRelativeLoadOp::from(value)))
-    } else if value & 0xf200 == 0x5000 {
-        // LoadStoreRegOffsetOp
-        Ok(Box::new(LoadStoreRegOffsetOp::from(value)))
-    } else if value & 0xf200 == 0x5200 {
-        // LoadStoreSignExOp
-        Ok(Box::new(LoadStoreSignExOp::from(value)))
-    } else if value & 0xe000 == 0x6000 {
-        // LoadStoreImmOffsetOp
-        Ok(Box::new(LoadStoreImmOffsetOp::from(value)))
-    } else if value & 0xf000 == 0x8000 {
-        // LoadStoreHalfWordOp
-        Ok(Box::new(LoadStoreHalfWordOp::from(value)))
-    } else if value & 0xf000 == 0x9000 {
-        // SpRelativeLoadOp
-        Ok(Box::new(SpRelativeLoadOp::from(value)))
-    } else if value & 0xf000 == 0xa000 {
-        // LoadAddressOp
-        Ok(Box::new(LoadAddressOp::from(value)))
-    } else if value & 0xff00 == 0xb000 {
-        // AddOffsetSPOp
-        Ok(Box::new(AddOffsetSPOp::from(value)))
-    } else if value & 0xf600 == 0xb400 {
-        // PushPopRegOp
-        Ok(Box::new(PushPopRegOp::from(value)))
-    } else if value & 0xf000 == 0xc000 {
-        // MultipleLoadStoreOp
-        Ok(Box::new(MultipleLoadStoreOp::from(value)))
-    } else if value & 0xff00 == 0xdf00 {
-        // ConditionalBranchOp
-        Ok(Box::new(SoftwareInterruptOp::from(value)))
-    } else if value & 0xf000 == 0xd000 {
-        // ConditionalBranchOp
-        ConditionalBranchOp::try_from(value).map(|v| Box::new(v) as Box<dyn Operation>)
-    } else if value & 0xf800 == 0xe000 {
-        // UnconditionalBranchOp
-        Ok(Box::new(UnconditionalBranchOp::from(value)))
-    } else if value & 0xf000 == 0xf000 {
-        // LongBranchWithLinkOp
-        Ok(Box::new(LongBranchWithLinkOp::from(value)))
-    } else {
-        Err(InstructionDecodeError::NoMatchingOperation(value))
+    fn try_from(value: u32) -> Result<Self, Self::Error> {
+         if value & 0xf800 == 0x1800 {
+            // AddSubtractOp
+            Ok(Self::AddSubtractOp(AddSubtractOp::from(value)))
+        } else if value & 0xe000 == 0x0 {
+            // MoveShiftedRegisterOp
+            Ok(Self::MoveShiftedRegisterOp(MoveShiftedRegisterOp::from(value)))
+        } else if value & 0xe000 == 0x2000 {
+            // MathImmOp
+            Ok(Self::MathImmOp(MathImmOp::from(value)))
+        } else if value & 0xfc00 == 0x4000 {
+            // ALUOp
+            Ok(Self::ALUOp(ALUOp::from(value)))
+        } else if value & 0xfc00 == 0x4400 {
+            // HiRegOp
+            Ok(Self::HiRegOp(HiRegOp::from(value)))
+        } else if value & 0xf800 == 0x4800 {
+            // PcRelativeLoadOp
+            Ok(Self::PcRelativeLoadOp(PcRelativeLoadOp::from(value)))
+        } else if value & 0xf200 == 0x5000 {
+            // LoadStoreRegOffsetOp
+            Ok(Self::LoadStoreRegOffsetOp(LoadStoreRegOffsetOp::from(value)))
+        } else if value & 0xf200 == 0x5200 {
+            // LoadStoreSignExOp
+            Ok(Self::LoadStoreSignExOp(LoadStoreSignExOp::from(value)))
+        } else if value & 0xe000 == 0x6000 {
+            // LoadStoreImmOffsetOp
+            Ok(Self::LoadStoreImmOffsetOp(LoadStoreImmOffsetOp::from(value)))
+        } else if value & 0xf000 == 0x8000 {
+            // LoadStoreHalfWordOp
+            Ok(Self::LoadStoreHalfWordOp(LoadStoreHalfWordOp::from(value)))
+        } else if value & 0xf000 == 0x9000 {
+            // SpRelativeLoadOp
+            Ok(Self::SpRelativeLoadOp(SpRelativeLoadOp::from(value)))
+        } else if value & 0xf000 == 0xa000 {
+            // LoadAddressOp
+            Ok(Self::LoadAddressOp(LoadAddressOp::from(value)))
+        } else if value & 0xff00 == 0xb000 {
+            // AddOffsetSPOp
+            Ok(Self::AddOffsetSPOp(AddOffsetSPOp::from(value)))
+        } else if value & 0xf600 == 0xb400 {
+            // PushPopRegOp
+            Ok(Self::PushPopRegOp(PushPopRegOp::from(value)))
+        } else if value & 0xf000 == 0xc000 {
+            // MultipleLoadStoreOp
+            Ok(Self::MultipleLoadStoreOp(MultipleLoadStoreOp::from(value)))
+        } else if value & 0xff00 == 0xdf00 {
+            // ConditionalBranchOp
+            Ok(Self::SoftwareInterruptOp(SoftwareInterruptOp::from(value)))
+        } else if value & 0xf000 == 0xd000 {
+            // ConditionalBranchOp
+            ConditionalBranchOp::try_from(value).map(|v| Self::ConditionalBranchOp(v))
+        } else if value & 0xf800 == 0xe000 {
+            // UnconditionalBranchOp
+            Ok(Self::UnconditionalBranchOp(UnconditionalBranchOp::from(value)))
+        } else if value & 0xf000 == 0xf000 {
+            // LongBranchWithLinkOp
+            Ok(Self::LongBranchWithLinkOp(LongBranchWithLinkOp::from(value)))
+        } else {
+            Err(InstructionDecodeError::NoMatchingOperation(value))
+        }
     }
 }
 
@@ -105,7 +157,7 @@ impl From<u32> for MoveShiftedRegisterOp {
 }
 
 impl Operation for MoveShiftedRegisterOp {
-    fn run(&self, cpu: &mut super::cpu::Cpu, _mem: &mut SystemMemory) {
+    fn run(&self, cpu: &mut super::cpu::Cpu, _mem: &mut impl Memory) {
         let rs = cpu.get_register(self.rs);
         let (res, c_carry) = match self.op {
             0 => cpu.shl_with_carry(rs, self.offset),
@@ -151,7 +203,7 @@ impl From<u32> for AddSubtractOp {
 
 impl Operation for AddSubtractOp {
     // TODO: PC is being tracked incorrectly. Gotta fix that
-    fn run(&self, cpu: &mut super::cpu::Cpu, _mem: &mut SystemMemory) {
+    fn run(&self, cpu: &mut super::cpu::Cpu, _mem: &mut impl Memory) {
         let offset = if self.i {
             self.offset
         } else {
@@ -199,7 +251,7 @@ impl From<u32> for MathImmOp {
 
 impl Operation for MathImmOp {
     // TODO: Improve this, looks too ugly
-    fn run(&self, cpu: &mut super::cpu::Cpu, _mem: &mut SystemMemory) {
+    fn run(&self, cpu: &mut super::cpu::Cpu, _mem: &mut impl Memory) {
         let rd = cpu.get_register(self.rd) as u64;
         let mut v_status = false;
 
@@ -321,7 +373,7 @@ impl From<u32> for ALUOp {
 impl Operation for ALUOp {
     // TODO: Too much casting into u64 and u32, gotta find a better solution
     // TODO: Refactor this for cleaner solution to V_STATUS and C_STATUS
-    fn run(&self, cpu: &mut Cpu, _mem: &mut SystemMemory) {
+    fn run(&self, cpu: &mut Cpu, _mem: &mut impl Memory) {
         let rd_value = cpu.get_register(self.rd) as u64;
         let rs_value = cpu.get_register(self.rs) as u64;
         let carry = ((cpu.cpsr & CPSR_C) >> 29) as u64;
@@ -461,7 +513,7 @@ impl From<u32> for HiRegOp {
 }
 
 impl Operation for HiRegOp {
-    fn run(&self, cpu: &mut Cpu, mem: &mut SystemMemory) {
+    fn run(&self, cpu: &mut Cpu, mem: &mut impl Memory) {
         let rd = cpu.get_register(self.rd);
         let rs = cpu.get_register(self.rs);
         // NOTE: h1 = 0, h2 = 0, op = 00 | 01 | 10 is undefined, and should not be used
@@ -548,7 +600,7 @@ impl From<u32> for PcRelativeLoadOp {
 }
 
 impl Operation for PcRelativeLoadOp {
-    fn run(&self, cpu: &mut Cpu, mem: &mut SystemMemory) {
+    fn run(&self, cpu: &mut Cpu, mem: &mut impl Memory) {
         // NOTE: The value of PC will always be 4 bytes greater, but bit 1 of PC will always be 0
         let offset = self.word << 2;
         let addr = (cpu.get_register(PC) + offset) as usize;
@@ -592,7 +644,7 @@ impl From<u32> for LoadStoreRegOffsetOp {
 }
 
 impl Operation for LoadStoreRegOffsetOp {
-    fn run(&self, cpu: &mut Cpu, mem: &mut SystemMemory) {
+    fn run(&self, cpu: &mut Cpu, mem: &mut impl Memory) {
         let ro_val = cpu.get_register(self.ro);
         let offset = get_abs_int_value(ro_val);
 
@@ -665,7 +717,7 @@ impl From<u32> for LoadStoreSignExOp {
 }
 
 impl Operation for LoadStoreSignExOp {
-    fn run(&self, cpu: &mut Cpu, mem: &mut SystemMemory) {
+    fn run(&self, cpu: &mut Cpu, mem: &mut impl Memory) {
         let addr = (cpu.get_register(self.rb) + cpu.get_register(self.ro)) as usize;
         if !self.h && !self.s {
             match mem.write_halfword(addr, cpu.get_register(self.rd)) {
@@ -721,7 +773,7 @@ impl From<u32> for LoadStoreImmOffsetOp {
 }
 
 impl Operation for LoadStoreImmOffsetOp {
-    fn run(&self, cpu: &mut Cpu, mem: &mut SystemMemory) {
+    fn run(&self, cpu: &mut Cpu, mem: &mut impl Memory) {
         let addr = (cpu.get_register(self.rb)
             + if self.b {
                 self.offset
@@ -786,7 +838,7 @@ impl From<u32> for LoadStoreHalfWordOp {
 }
 
 impl Operation for LoadStoreHalfWordOp {
-    fn run(&self, cpu: &mut Cpu, mem: &mut SystemMemory) {
+    fn run(&self, cpu: &mut Cpu, mem: &mut impl Memory) {
         let addr = (cpu.get_register(self.rb) + self.offset) as usize;
         if self.l {
             let block_from_mem = match mem.read_halfword(addr) {
@@ -831,7 +883,7 @@ impl From<u32> for SpRelativeLoadOp {
 }
 
 impl Operation for SpRelativeLoadOp {
-    fn run(&self, cpu: &mut Cpu, mem: &mut SystemMemory) {
+    fn run(&self, cpu: &mut Cpu, mem: &mut impl Memory) {
         let addr = (cpu.get_register(SP) + self.offset) as usize;
 
         if self.l {
@@ -877,7 +929,7 @@ impl From<u32> for LoadAddressOp {
 }
 
 impl Operation for LoadAddressOp {
-    fn run(&self, cpu: &mut Cpu, _mem: &mut SystemMemory) {
+    fn run(&self, cpu: &mut Cpu, _mem: &mut impl Memory) {
         let res = if self.sp {
             cpu.get_register(SP) + self.word
         } else {
@@ -914,7 +966,7 @@ impl From<u32> for AddOffsetSPOp {
 
 impl Operation for AddOffsetSPOp {
     // TODO: This may need to be updated
-    fn run(&self, cpu: &mut Cpu, _mem: &mut SystemMemory) {
+    fn run(&self, cpu: &mut Cpu, _mem: &mut impl Memory) {
         if self.s {
             cpu.set_register(SP, cpu.get_register(SP) - self.word);
         } else {
@@ -943,7 +995,7 @@ impl From<u32> for PushPopRegOp {
 }
 
 impl Operation for PushPopRegOp {
-    fn run(&self, cpu: &mut Cpu, mem: &mut SystemMemory) {
+    fn run(&self, cpu: &mut Cpu, mem: &mut impl Memory) {
         let mut registers = bit_map_to_array(self.rlist as u32);
         if self.r {
             registers.push(if self.l { PC as u32 } else { LR as u32 });
@@ -1028,7 +1080,7 @@ impl From<u32> for MultipleLoadStoreOp {
 }
 
 impl Operation for MultipleLoadStoreOp {
-    fn run(&self, cpu: &mut Cpu, mem: &mut SystemMemory) {
+    fn run(&self, cpu: &mut Cpu, mem: &mut impl Memory) {
         // TODO: use bit_map_to_array function here?
         let mut address = cpu.get_register(self.rb) as usize;
         for i in 0..8 {
@@ -1107,7 +1159,7 @@ impl TryFrom<u32> for ConditionalBranchOp {
 }
 
 impl Operation for ConditionalBranchOp {
-    fn run(&self, cpu: &mut Cpu, mem: &mut SystemMemory) {
+    fn run(&self, cpu: &mut Cpu, mem: &mut impl Memory) {
         if !self.cond.should_run(cpu.cpsr) {
             cpu.add_cycles(1);
             return;
@@ -1154,7 +1206,7 @@ impl From<u32> for SoftwareInterruptOp {
 }
 
 impl Operation for SoftwareInterruptOp {
-    fn run(&self, cpu: &mut Cpu, _mem: &mut SystemMemory) {
+    fn run(&self, cpu: &mut Cpu, _mem: &mut impl Memory) {
         println!("{:?}", cpu);
         println!("Cpu PC: {:x}", cpu.pc());
         // Move address of next instruction into LR, Copy CPSR to SPSR
@@ -1177,7 +1229,7 @@ impl From<u32> for UnconditionalBranchOp {
 }
 
 impl Operation for UnconditionalBranchOp {
-    fn run(&self, cpu: &mut Cpu, mem: &mut SystemMemory) {
+    fn run(&self, cpu: &mut Cpu, mem: &mut impl Memory) {
         let offset = if self.offset & (1 << 11) == (1 << 11) {
             (self.offset) | 0xfffff000
         } else {
@@ -1217,7 +1269,7 @@ impl From<u32> for LongBranchWithLinkOp {
 
 impl Operation for LongBranchWithLinkOp {
     // NOTE: The cycles for this command are split in 2
-    fn run(&self, cpu: &mut Cpu, mem: &mut SystemMemory) {
+    fn run(&self, cpu: &mut Cpu, mem: &mut impl Memory) {
         // !self.h runs first, the next addr MUST be another LongBranchWithLinkOp
         // with self.h == true
         if !self.h {
