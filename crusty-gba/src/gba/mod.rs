@@ -28,7 +28,7 @@ pub const CPSR_T: u32 = 0x20;
 pub const CPSR_FIQ: u32 = 0x40;
 pub const CPSR_IRQ: u32 = 0x80;
 
-use crate::SystemMemory;
+use crate::{SystemMemory, memory::Memory};
 
 // Operations can be ARM or Thumb instructions
 pub trait Operation: std::fmt::Debug {

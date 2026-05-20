@@ -11,6 +11,122 @@ use crate::{Cpu, SystemMemory};
 use crate::memory::Memory;
 use tracing::warn;
 
+#[derive(Debug)]
+pub enum Thumb {
+    AddSubtractOp(AddSubtractOp),
+    MoveShiftedRegisterOp(MoveShiftedRegisterOp),
+    MathImmOp(MathImmOp),
+    ALUOp(ALUOp),
+    HiRegOp(HiRegOp),
+    PcRelativeLoadOp(PcRelativeLoadOp),
+    LoadStoreSignExOp(LoadStoreSignExOp),
+    LoadAddressOp(LoadAddressOp),
+    LoadStoreHalfWordOp(LoadStoreHalfWordOp),
+    LoadStoreRegOffsetOp(LoadStoreRegOffsetOp),
+    LoadStoreImmOffsetOp(LoadStoreImmOffsetOp),
+    SpRelativeLoadOp(SpRelativeLoadOp),
+    AddOffsetSPOp(AddOffsetSPOp),
+    PushPopRegOp(PushPopRegOp),
+    MultipleLoadStoreOp(MultipleLoadStoreOp),
+    SoftwareInterruptOp(SoftwareInterruptOp),
+    ConditionalBranchOp(ConditionalBranchOp),
+    UnconditionalBranchOp(UnconditionalBranchOp),
+    LongBranchWithLinkOp(LongBranchWithLinkOp),
+}
+
+impl Operation for Thumb {
+    fn run(&self, cpu: &mut super::cpu::Cpu, mem: &mut SystemMemory) {
+        match self {
+            Self::AddSubtractOp(o) => o.run(cpu, mem),
+            Self::MoveShiftedRegisterOp(o) => o.run(cpu, mem),
+            Self::MathImmOp(o) => o.run(cpu, mem),
+            Self::ALUOp(o) => o.run(cpu, mem),
+            Self::HiRegOp(o) => o.run(cpu, mem),
+            Self::PcRelativeLoadOp(o) => o.run(cpu, mem),
+            Self::LoadStoreSignExOp(o) => o.run(cpu, mem),
+            Self::LoadAddressOp(o) => o.run(cpu, mem),
+            Self::LoadStoreHalfWordOp(o) => o.run(cpu, mem),
+            Self::LoadStoreRegOffsetOp(o) => o.run(cpu, mem),
+            Self::LoadStoreImmOffsetOp(o) => o.run(cpu, mem),
+            Self::SpRelativeLoadOp(o) => o.run(cpu, mem),
+            Self::AddOffsetSPOp(o) => o.run(cpu, mem),
+            Self::PushPopRegOp(o) => o.run(cpu, mem),
+            Self::MultipleLoadStoreOp(o) => o.run(cpu, mem),
+            Self::SoftwareInterruptOp(o) => o.run(cpu, mem),
+            Self::ConditionalBranchOp(o) => o.run(cpu, mem),
+            Self::UnconditionalBranchOp(o) => o.run(cpu, mem),
+            Self::LongBranchWithLinkOp(o) => o.run(cpu, mem),
+        }
+    }
+}
+
+impl TryFrom<u32> for Thumb {
+    type Error = InstructionDecodeError;
+
+    fn try_from(value: u32) -> Result<Self, Self::Error> {
+         if value & 0xf800 == 0x1800 {
+            // AddSubtractOp
+            Ok(Self::AddSubtractOp(AddSubtractOp::from(value)))
+        } else if value & 0xe000 == 0x0 {
+            // MoveShiftedRegisterOp
+            Ok(Self::MoveShiftedRegisterOp(MoveShiftedRegisterOp::from(value)))
+        } else if value & 0xe000 == 0x2000 {
+            // MathImmOp
+            Ok(Self::MathImmOp(MathImmOp::from(value)))
+        } else if value & 0xfc00 == 0x4000 {
+            // ALUOp
+            Ok(Self::ALUOp(ALUOp::from(value)))
+        } else if value & 0xfc00 == 0x4400 {
+            // HiRegOp
+            Ok(Self::HiRegOp(HiRegOp::from(value)))
+        } else if value & 0xf800 == 0x4800 {
+            // PcRelativeLoadOp
+            Ok(Self::PcRelativeLoadOp(PcRelativeLoadOp::from(value)))
+        } else if value & 0xf200 == 0x5000 {
+            // LoadStoreRegOffsetOp
+            Ok(Self::LoadStoreRegOffsetOp(LoadStoreRegOffsetOp::from(value)))
+        } else if value & 0xf200 == 0x5200 {
+            // LoadStoreSignExOp
+            Ok(Self::LoadStoreSignExOp(LoadStoreSignExOp::from(value)))
+        } else if value & 0xe000 == 0x6000 {
+            // LoadStoreImmOffsetOp
+            Ok(Self::LoadStoreImmOffsetOp(LoadStoreImmOffsetOp::from(value)))
+        } else if value & 0xf000 == 0x8000 {
+            // LoadStoreHalfWordOp
+            Ok(Self::LoadStoreHalfWordOp(LoadStoreHalfWordOp::from(value)))
+        } else if value & 0xf000 == 0x9000 {
+            // SpRelativeLoadOp
+            Ok(Self::SpRelativeLoadOp(SpRelativeLoadOp::from(value)))
+        } else if value & 0xf000 == 0xa000 {
+            // LoadAddressOp
+            Ok(Self::LoadAddressOp(LoadAddressOp::from(value)))
+        } else if value & 0xff00 == 0xb000 {
+            // AddOffsetSPOp
+            Ok(Self::AddOffsetSPOp(AddOffsetSPOp::from(value)))
+        } else if value & 0xf600 == 0xb400 {
+            // PushPopRegOp
+            Ok(Self::PushPopRegOp(PushPopRegOp::from(value)))
+        } else if value & 0xf000 == 0xc000 {
+            // MultipleLoadStoreOp
+            Ok(Self::MultipleLoadStoreOp(MultipleLoadStoreOp::from(value)))
+        } else if value & 0xff00 == 0xdf00 {
+            // ConditionalBranchOp
+            Ok(Self::SoftwareInterruptOp(SoftwareInterruptOp::from(value)))
+        } else if value & 0xf000 == 0xd000 {
+            // ConditionalBranchOp
+            ConditionalBranchOp::try_from(value).map(|v| Self::ConditionalBranchOp(v))
+        } else if value & 0xf800 == 0xe000 {
+            // UnconditionalBranchOp
+            Ok(Self::UnconditionalBranchOp(UnconditionalBranchOp::from(value)))
+        } else if value & 0xf000 == 0xf000 {
+            // LongBranchWithLinkOp
+            Ok(Self::LongBranchWithLinkOp(LongBranchWithLinkOp::from(value)))
+        } else {
+            Err(InstructionDecodeError::NoMatchingOperation(value))
+        }
+    }
+}
+
 // TODO: There's some 'unreachable' blocks in Operation.
 // They should be replaced with TryFrom's, so that there are no unreachable!
 // blocks in the run function of the Operations

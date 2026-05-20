@@ -1,7 +1,9 @@
-use crate::gba::{CPSR_FIQ, CPSR_IRQ};
+use crate::gba::error::InstructionDecodeError;
+use crate::gba::thumb::Thumb;
+use crate::gba::{CPSR_FIQ, CPSR_IRQ, Operation};
 use crate::memory::Memory;
 
-use super::arm::decode_as_arm;
+use super::arm::{decode_as_arm, Arm};
 use super::system::SystemMemory;
 use super::thumb::decode_as_thumb;
 use super::{is_signed, Conditional, CPSR_C, CPSR_N, CPSR_T, CPSR_V, CPSR_Z};
@@ -23,6 +25,34 @@ const GBA_INITIAL_STACK_POINTER: u32 = 0x3007F00;
 const GBA_INITIAL_PROGRAM_COUNTER: u32 = 0x8000000;
 const GBA_SVC_STACK_POINTER: u32 = 0x3007FE0;
 const GBA_IRQ_STACK_POINTER: u32 = 0x3007FA0;
+
+// TODO: Move all this stuff over to a cpu-core module
+#[derive(Debug)]
+pub enum Opcode {
+    Arm(Arm),
+    Thumb(Thumb)
+}
+
+impl Opcode {
+    fn arm(value: u32) -> Result<Self, InstructionDecodeError> {
+        let arm = Arm::try_from(value)?;
+        Ok(Self::Arm(arm))
+    }
+
+    fn thumb(value: u32) -> Result<Self, InstructionDecodeError> {
+        let thumb = Thumb::try_from(value)?;
+        Ok(Self::Thumb(thumb))
+    }
+}
+
+impl Operation for Opcode {
+    fn run(&self, cpu: &mut self::Cpu, mem: &mut SystemMemory) {
+        match self {
+            Self::Arm(o) => o.run(cpu, mem),
+            Self::Thumb(o) => o.run(cpu, mem),
+        }
+    }
+}
 
 // NOTE: I'm always re-initing this. Maybe it should just be a field in Cpu
 #[derive(Debug, PartialEq, Eq)]
@@ -110,10 +140,10 @@ impl fmt::Display for Cpu {
 
         let cond = Conditional::from(self.decode);
         if self.is_thumb_mode() {
-            let op = decode_as_thumb(self.decode);
+            let op = Thumb::try_from(self.decode);
             writeln!(f, "{:#06x} {:?} {:?}", self.decode, cond, op)
         } else {
-            let op = decode_as_arm(self.decode);
+            let op = Arm::try_from(self.decode);
             writeln!(f, "{:#010x} {:?} {:?}", self.decode, cond, op)
         }
     }
@@ -472,9 +502,9 @@ impl Cpu {
                 self.add_cycles(1);
                 return;
             }
-            decode_as_arm(inst)
+            Opcode::arm(inst)
         } else {
-            decode_as_thumb(inst)
+            Opcode::thumb(inst)
         };
 
         let op = match op {
@@ -505,6 +535,7 @@ mod test {
     #![allow(unused)]
     use super::{Cpu, PC, SP};
     use crate::SystemMemory;
+    use crate::memory::Memory;
 
     #[test]
     fn run_add_instruction() {

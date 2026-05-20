@@ -5,12 +5,90 @@ use super::utils::calc_cycles_for_stm_ldm;
 use super::{bit_map_to_array, get_v_from_add, get_v_from_sub, Operation, SystemMemory};
 use super::{CPSR_C, CPSR_T};
 
-use crate::gba::cpu::CpuMode;
+use crate::gba::cpu::{CpuMode, Opcode};
 use crate::gba::EXCEPTION_VECTOR_SWI;
 use crate::utils::shifter::CpuShifter;
 use crate::utils::Bitable;
 use crate::memory::Memory;
 use tracing::{warn, info};
+
+#[derive(Debug)]
+pub enum Arm {
+    MultiplyOp(MultiplyOp),
+    MultiplyLongOp(MultiplyLongOp),
+    SingleDataSwapOp(SingleDataSwapOp),
+    BranchExchangeOp(BranchExchangeOp),
+    BranchOp(BranchOp),
+    SoftwareInterruptOp(SoftwareInterruptOp),
+    SingleDataTfx(SingleDataTfx),
+    BlockDataTransfer(BlockDataTransfer),
+    CoprocessDataOp(CoprocessDataOp),
+    CoprocessRegTfx(CoprocessRegTfx),
+    CoprocessDataTfx(CoprocessDataTfx),
+    PsrTransferOp(PsrTransferOp),
+    HalfwordDataOp(HalfwordDataOp),
+    DataProcessingOp(DataProcessingOp),
+    UndefinedInstruction(UndefinedInstruction)
+}
+
+impl Operation for Arm {
+    fn run(&self, cpu: &mut super::cpu::Cpu, mem: &mut SystemMemory) {
+        match self {
+            Self::MultiplyOp(o) => o.run(cpu, mem),
+            Self::MultiplyLongOp(o) => o.run(cpu, mem),
+            Self::SingleDataSwapOp(o) => o.run(cpu, mem),
+            Self::BranchExchangeOp(o) => o.run(cpu, mem),
+            Self::BranchOp(o) => o.run(cpu, mem),
+            Self::SoftwareInterruptOp(o) => o.run(cpu, mem),
+            Self::SingleDataTfx(o) => o.run(cpu, mem),
+            Self::BlockDataTransfer(o) => o.run(cpu, mem),
+            Self::CoprocessDataOp(o) => o.run(cpu, mem),
+            Self::CoprocessRegTfx(o) => o.run(cpu, mem),
+            Self::CoprocessDataTfx(o) => o.run(cpu, mem),
+            Self::PsrTransferOp(o) => o.run(cpu, mem),
+            Self::HalfwordDataOp(o) => o.run(cpu, mem),
+            Self::DataProcessingOp(o) => o.run(cpu, mem),
+            Self::UndefinedInstruction(o) => o.run(cpu, mem),
+        }
+    }
+}
+
+impl TryFrom<u32> for Arm {
+    type Error = InstructionDecodeError;
+    fn try_from(value: u32) -> Result<Self, Self::Error> {
+         if is_multiply(value) {
+            Ok(Self::MultiplyOp(MultiplyOp::from(value)))
+        } else if is_multiply_long(value) {
+            Ok(Self::MultiplyLongOp(MultiplyLongOp::from(value)))
+        } else if is_single_data_swap(value) {
+            Ok(Self::SingleDataSwapOp(SingleDataSwapOp::from(value)))
+        } else if is_branch_and_exchange(value) {
+            Ok(Self::BranchExchangeOp(BranchExchangeOp::from(value)))
+        } else if is_branch(value) {
+            Ok(Self::BranchOp(BranchOp::from(value)))
+        } else if is_software_interrupt(value) {
+            Ok(Self::SoftwareInterruptOp(SoftwareInterruptOp::from(value)))
+        } else if is_single_data_tfx(value) {
+            Ok(Self::SingleDataTfx(SingleDataTfx::from(value)))
+        } else if is_block_data_tfx(value) {
+            Ok(Self::BlockDataTransfer(BlockDataTransfer::from(value)))
+        } else if is_coprocessor_data_op(value) {
+            Ok(Self::CoprocessDataOp(CoprocessDataOp::from(value)))
+        } else if is_coprocessor_data_tfx(value) {
+            Ok(Self::CoprocessDataTfx(CoprocessDataTfx::from(value)))
+        } else if is_coprocessor_reg_tfx(value) {
+            Ok(Self::CoprocessRegTfx(CoprocessRegTfx::from(value)))
+        } else if is_psr_transfer(value) {
+            Ok(Self::PsrTransferOp(PsrTransferOp::from(value)))
+        } else if is_halfword_data_tfx_imm(value) || is_halfword_data_tfx_reg(value) {
+            Ok(Self::HalfwordDataOp(HalfwordDataOp::from(value)))
+        } else if is_data_processing(value) {
+            Ok(Self::DataProcessingOp(DataProcessingOp::from(value)))
+        } else {
+            Ok(Self::UndefinedInstruction(UndefinedInstruction))
+        }
+    }
+}
 
 // TODO: currently all regs are u8 or u32 types, maybe they should be usizes
 pub fn decode_as_arm(inst: u32) -> Result<Box<dyn Operation>, InstructionDecodeError> {
