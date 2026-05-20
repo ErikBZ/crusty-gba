@@ -3,9 +3,8 @@ use crate::gba::thumb::Thumb;
 use crate::gba::{CPSR_FIQ, CPSR_IRQ, Operation};
 use crate::memory::Memory;
 
-use super::arm::{decode_as_arm, Arm};
+use super::arm::Arm;
 use super::system::SystemMemory;
-use super::thumb::decode_as_thumb;
 use super::{is_signed, Conditional, CPSR_C, CPSR_N, CPSR_T, CPSR_V, CPSR_Z};
 use core::fmt;
 use std::collections::HashMap;
@@ -46,7 +45,7 @@ impl Opcode {
 }
 
 impl Operation for Opcode {
-    fn run(&self, cpu: &mut self::Cpu, mem: &mut SystemMemory) {
+    fn run(&self, cpu: &mut self::Cpu, mem: &mut impl Memory) {
         match self {
             Self::Arm(o) => o.run(cpu, mem),
             Self::Thumb(o) => o.run(cpu, mem),
@@ -390,7 +389,7 @@ impl Cpu {
     }
 
     /// Sets the decode instruction prefetch operation, and bumps the PC register
-    pub fn flush_pipeline(&mut self, mem: &SystemMemory, fetch_inst_addr: usize) {
+    pub fn flush_pipeline(&mut self, mem: &impl Memory, fetch_inst_addr: usize) {
         self.inst_addr = fetch_inst_addr;
         let inst = match mem.read_word(fetch_inst_addr) {
             Ok(i) => i,

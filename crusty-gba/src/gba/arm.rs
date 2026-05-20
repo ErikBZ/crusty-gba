@@ -32,7 +32,7 @@ pub enum Arm {
 }
 
 impl Operation for Arm {
-    fn run(&self, cpu: &mut super::cpu::Cpu, mem: &mut SystemMemory) {
+    fn run(&self, cpu: &mut super::cpu::Cpu, mem: &mut impl Memory) {
         match self {
             Self::MultiplyOp(o) => o.run(cpu, mem),
             Self::MultiplyLongOp(o) => o.run(cpu, mem),
@@ -90,47 +90,12 @@ impl TryFrom<u32> for Arm {
     }
 }
 
-// TODO: currently all regs are u8 or u32 types, maybe they should be usizes
-pub fn decode_as_arm(inst: u32) -> Result<Box<dyn Operation>, InstructionDecodeError> {
-    if is_multiply(inst) {
-        Ok(Box::new(MultiplyOp::from(inst)))
-    } else if is_multiply_long(inst) {
-        Ok(Box::new(MultiplyLongOp::from(inst)))
-    } else if is_single_data_swap(inst) {
-        Ok(Box::new(SingleDataSwapOp::from(inst)))
-    } else if is_branch_and_exchange(inst) {
-        Ok(Box::new(BranchExchangeOp::from(inst)))
-    } else if is_branch(inst) {
-        Ok(Box::new(BranchOp::from(inst)))
-    } else if is_software_interrupt(inst) {
-        Ok(Box::new(SoftwareInterruptOp::from(inst)))
-    } else if is_single_data_tfx(inst) {
-        Ok(Box::new(SingleDataTfx::from(inst)))
-    } else if is_block_data_tfx(inst) {
-        Ok(Box::new(BlockDataTransfer::from(inst)))
-    } else if is_coprocessor_data_op(inst) {
-        Ok(Box::new(CoprocessDataOp::from(inst)))
-    } else if is_coprocessor_data_tfx(inst) {
-        Ok(Box::new(CoprocessDataTfx::from(inst)))
-    } else if is_coprocessor_reg_tfx(inst) {
-        Ok(Box::new(CoprocessRegTfx::from(inst)))
-    } else if is_psr_transfer(inst) {
-        Ok(Box::new(PsrTransferOp::from(inst)))
-    } else if is_halfword_data_tfx_imm(inst) || is_halfword_data_tfx_reg(inst) {
-        Ok(Box::new(HalfwordDataOp::from(inst)))
-    } else if is_data_processing(inst) {
-        Ok(Box::new(DataProcessingOp::from(inst)))
-    } else {
-        Ok(Box::new(UndefinedInstruction))
-    }
-}
-
 #[derive(Debug)]
 struct UndefinedInstruction;
 impl Operation for UndefinedInstruction {
     // TODO: Implement. Take undef trap
     // TODO: Track Cycles 2S + 1I + 1N
-    fn run(&self, _cpu: &mut Cpu, _mem: &mut SystemMemory) {
+    fn run(&self, _cpu: &mut Cpu, _mem: &mut impl Memory) {
         todo!()
 
     }
@@ -144,7 +109,7 @@ struct SoftwareInterruptOp {
 impl Operation for SoftwareInterruptOp {
     // TODO: Implement
     // TODO: Track Cycles 2S + 1N
-    fn run(&self, cpu: &mut Cpu, mem: &mut SystemMemory) {
+    fn run(&self, cpu: &mut Cpu, mem: &mut impl Memory) {
         // The PC is updated before this instruction runs so the next instruction
         // is actually saved in 'instruction_address'
         cpu.add_interrupt_entry(cpu.instruction_address(), CpuMode::Supervisor);
@@ -236,7 +201,7 @@ impl From<u32> for DataProcessingOp {
 }
 
 impl Operation for DataProcessingOp {
-    fn run(&self, cpu: &mut Cpu, _mem: &mut SystemMemory) {
+    fn run(&self, cpu: &mut Cpu, _mem: &mut impl Memory) {
         let (op2, c_out) = self.operand.apply(cpu);
         // NOTE: check the operand type. Imm is 0, Reg is 1
         let cycle = 1;
@@ -476,7 +441,7 @@ pub struct MultiplyOp {
 }
 
 impl Operation for MultiplyOp {
-    fn run(&self, cpu: &mut Cpu, _mem: &mut SystemMemory) {
+    fn run(&self, cpu: &mut Cpu, _mem: &mut impl Memory) {
         let rn_value = cpu.get_register(self.rn as usize);
         let rs_value = cpu.get_register(self.rs as usize);
         let rm_value = cpu.get_register(self.rm as usize);
@@ -546,7 +511,7 @@ pub struct MultiplyLongOp {
 impl Operation for MultiplyLongOp {
     // TODO: Implement
     // TODO: Track Cycles
-    fn run(&self, _cpu: &mut Cpu, _mem: &mut SystemMemory) {
+    fn run(&self, _cpu: &mut Cpu, _mem: &mut impl Memory) {
         todo!()
     }
 }
@@ -575,9 +540,9 @@ pub struct SingleDataSwapOp {
 
 impl Operation for SingleDataSwapOp {
     // TODO: Propogate Error for ABORT signals
-    fn run(&self, cpu: &mut Cpu, mem: &mut SystemMemory) {
+    fn run(&self, cpu: &mut Cpu, mem: &mut impl Memory) {
         let address = cpu.get_register(self.rn as usize) as usize;
-        match mem.read_from_mem(address) {
+        match mem.read_word(address) {
             Ok(n) => cpu.set_register(self.rd as usize, n),
             Err(e) => warn!("{}", e),
         }
@@ -619,7 +584,7 @@ pub struct BranchExchangeOp {
 }
 
 impl Operation for BranchExchangeOp {
-    fn run(&self, cpu: &mut Cpu, mem: &mut SystemMemory) {
+    fn run(&self, cpu: &mut Cpu, mem: &mut impl Memory) {
         let mut addr = cpu.get_register(self.rn as usize);
         cpu.update_thumb(addr & 1 == 1);
         addr &= !1;
@@ -669,7 +634,7 @@ pub struct BranchOp {
 }
 
 impl Operation for BranchOp {
-    fn run(&self, cpu: &mut Cpu, mem: &mut SystemMemory) {
+    fn run(&self, cpu: &mut Cpu, mem: &mut impl Memory) {
         let offset = self.get_offset();
         let addr = cpu.get_register(PC).wrapping_add(offset);
 
@@ -678,7 +643,7 @@ impl Operation for BranchOp {
             cpu.set_register(LR, cpu.get_register(PC) - 4);
         }
 
-        cpu.decode = match mem.read_from_mem(addr as usize) {
+        cpu.decode = match mem.read_word(addr as usize) {
             Ok(n) => n,
             Err(e) => {
                 warn!("{}", e);
@@ -727,7 +692,7 @@ pub struct HalfwordRegOffset {
 }
 
 impl Operation for HalfwordRegOffset {
-    fn run(&self, cpu: &mut Cpu, mem: &mut SystemMemory) {
+    fn run(&self, cpu: &mut Cpu, mem: &mut impl Memory) {
         let offset = cpu.get_register(self.rm as usize);
         let mut address = cpu.get_register(self.rn as usize);
 
@@ -747,7 +712,7 @@ impl Operation for HalfwordRegOffset {
 
         if self.l {
             cpu.add_cycles(cycles_per_entry + 3);
-            let res = match mem.read_from_mem(address as usize) {
+            let res = match mem.read_word(address as usize) {
                 Ok(n) => n,
                 Err(e) => {
                     //TODO: Better error handling
@@ -859,7 +824,7 @@ impl DataTfxOperand {
 }
 
 impl Operation for SingleDataTfx {
-    fn run(&self, cpu: &mut Cpu, mem: &mut SystemMemory) {
+    fn run(&self, cpu: &mut Cpu, mem: &mut impl Memory) {
         // TODO: add write back check somewhere
         // NOTE: IDK if c_out is gonna get set in this op?
         let (offset, c_out) = self.operand.apply(cpu);
@@ -963,7 +928,7 @@ pub struct BlockDataTransfer {
 }
 
 impl Operation for BlockDataTransfer {
-    fn run(&self, cpu: &mut Cpu, mem: &mut SystemMemory) {
+    fn run(&self, cpu: &mut Cpu, mem: &mut impl Memory) {
         // TODO: Take into consideration the S flag
         // TODO: Propogate the mem error to signify ABORT signal
         // When rn is 13 then we are doing stack ops, otherwise no
@@ -983,7 +948,7 @@ impl Operation for BlockDataTransfer {
             let reg = if !self.u { registers.len() - i - 1 } else { i };
 
             if self.l {
-                let res = match mem.read_from_mem(address) {
+                let res = match mem.read_word(address) {
                     Ok(b) => b,
                     Err(e) => {
                         warn!("{}", e);
@@ -1054,7 +1019,7 @@ pub struct CoprocessDataTfx {
 }
 
 impl Operation for CoprocessDataTfx {
-    fn run(&self, _cpu: &mut Cpu, _mem: &mut SystemMemory) {
+    fn run(&self, _cpu: &mut Cpu, _mem: &mut impl Memory) {
         todo!()
     }
 }
@@ -1086,7 +1051,7 @@ pub struct CoprocessDataOp {
 }
 
 impl Operation for CoprocessDataOp {
-    fn run(&self, _cpu: &mut Cpu, _mem: &mut SystemMemory) {
+    fn run(&self, _cpu: &mut Cpu, _mem: &mut impl Memory) {
         todo!()
     }
 }
@@ -1116,7 +1081,7 @@ pub struct CoprocessRegTfx {
 }
 
 impl Operation for CoprocessRegTfx {
-    fn run(&self, _cpu: &mut Cpu, _mem: &mut SystemMemory) {
+    fn run(&self, _cpu: &mut Cpu, _mem: &mut impl Memory) {
         todo!()
     }
 }
@@ -1154,7 +1119,7 @@ enum PsrTransferType {
 }
 
 impl Operation for PsrTransferOp {
-    fn run(&self, cpu: &mut Cpu, _mem: &mut SystemMemory) {
+    fn run(&self, cpu: &mut Cpu, _mem: &mut impl Memory) {
         // TODO: change htis to if to remove a nest
         match self.op {
             PsrTransferType::MSR => {
@@ -1238,7 +1203,7 @@ pub struct HalfwordDataOp {
 }
 
 impl Operation for HalfwordDataOp {
-    fn run(&self, cpu: &mut Cpu, mem: &mut SystemMemory) {
+    fn run(&self, cpu: &mut Cpu, mem: &mut impl Memory) {
         let offset = match self.mode {
             AddressingMode3::Reg(m) => cpu.get_register(m as usize),
             AddressingMode3::Imm(byte_offset) => byte_offset as u32,
@@ -1260,7 +1225,7 @@ impl Operation for HalfwordDataOp {
         let cycles_per_entry = read_cycles_per_8_16(address as usize);
 
         if self.l {
-            let res = match mem.read_from_mem(address as usize) {
+            let res = match mem.read_word(address as usize) {
                 Ok(n) => n,
                 Err(e) => {
                     //TODO: Better error handling

@@ -101,10 +101,6 @@ impl Memory for SystemMemory {
     // TODO: Makes this only borrow
     fn read_word(&self, address: usize) -> Result<u32, MemoryError> {
         let res = self.read_from_mem(address)?;
-        if address == 0x4000006 {
-            info!("{:X}", res);
-        }
-
         Ok(res)
     }
 
