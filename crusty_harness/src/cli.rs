@@ -1,4 +1,6 @@
 use clap::Parser;
+use tracing::Level;
+use crusty::cli::LogLevel;
 
 #[derive(Parser)]
 #[command(version, about, long_about = None)]
@@ -18,4 +20,10 @@ pub struct Cli {
     /// The test to run from the suite. Requires --file
     #[arg(short, long, requires = "file")]
     pub index: Option<usize>,
+
+    #[arg(short, long)]
+    pub log_level: Option<LogLevel>,
+
+    #[arg(short, long, default_value = "out.json")]
+    pub out_file: String,
 }

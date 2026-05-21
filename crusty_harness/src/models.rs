@@ -1,4 +1,5 @@
 use std::collections::HashMap;
+use tracing::error;
 
 use crusty::{Cpu, memory::Memory, memory::MemoryError};
 use serde::{Deserialize, Serialize};
@@ -18,7 +19,7 @@ pub struct Test {
 }
 
 pub async fn run_test(t: Test, idx: usize) -> Result<(u32, usize), (bool, usize)> {
-    if t.opcode & 0x1 == 1 {
+    if t.opcode & 0x1 == 1 || t.opcode & 0x2 == 2 {
         Err((false, idx))
     } else {
         Ok((t.opcode, idx))
@@ -89,7 +90,7 @@ impl TestMemory {
             if t.kind == 1 || t.kind == 0 {
                 let addr_key = t.addr;
                 if x.memory.contains_key(&addr_key) {
-                    println!("Memory already has this item!")
+                    error!("Memory already has this item!")
                 }
 
                 if t.size == 4 {
@@ -99,7 +100,7 @@ impl TestMemory {
                 } else if t.size == 1 {
                     let _ = x.write_byte(t.addr, t.data);
                 } else {
-                    println!("Size was not 4, 2, or 1");
+                    error!("Size was not 4, 2, or 1");
                 };
             }
         }
@@ -117,7 +118,7 @@ impl TestMemory {
                 } else if t.size == 1 {
                     let _ = self.write_byte(t.addr, t.data);
                 } else {
-                    println!("Size was not 4, 2, or 1");
+                    error!("Size was not 4, 2, or 1");
                 };
             }
         }
