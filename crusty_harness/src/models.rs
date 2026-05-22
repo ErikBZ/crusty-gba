@@ -30,6 +30,7 @@ pub async fn run_test(t: Test, idx: usize) -> Result<(), (usize, TestError)> {
     initial_cpu.tick(&mut mem);
     // NOTE: Not checking cycles. Come back to this to actually check this properly
     final_cpu.cycles = initial_cpu.cycles;
+    trace!("Initial:\n{}", initial_cpu);
 
     if initial_cpu == final_cpu {
         debug!("Test {} Passed!", idx);
@@ -37,9 +38,9 @@ pub async fn run_test(t: Test, idx: usize) -> Result<(), (usize, TestError)> {
     } else {
         debug!("Test {} Failed!", idx);
         debug!("Opcode: {}, Instruction: {:?}", t.opcode, Opcode::arm(t.opcode));
-        trace!("Expected: \n{}\nActual: \n{}", initial_cpu, final_cpu);
+        trace!("Expected: \n{}\nActual: \n{}", final_cpu, initial_cpu);
         let te = TestError::new(t.opcode);
-        Err((idx, te.apply_differences(final_cpu, initial_cpu)))
+        Err((idx, te.apply_differences(initial_cpu, final_cpu)))
     }
 }
 

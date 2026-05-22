@@ -96,7 +96,7 @@ impl TestError {
         }
 
         if expected.instruction_address() != actual.instruction_address() {
-            self.add_cpsr_difference(Difference { actual: expected.inst_addr as u32, expected: actual.inst_addr as u32 });
+            self.add_cpsr_difference(Difference { actual: actual.inst_addr as u32, expected: expected.inst_addr as u32 });
         }
 
         for (idx, (a, e)) in zip(actual.registers, expected.registers).enumerate() {

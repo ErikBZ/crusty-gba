@@ -1328,4 +1328,25 @@ mod test {
         assert!(cpu.c_status());
         assert!(!cpu.v_status());
     }
+
+    #[test]
+    fn run_adc_ror_r2_r5() {
+        let mut ram = SystemMemory::test();
+        let mut cpu = Cpu {
+            registers: [0, 0, 0x71f81fca, 0, 0, 0x6ca1febb, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+            cpsr: 0x900000d1,
+            ..Cpu::default()
+        };
+
+        cpu.run_instruction(&mut ram, 11688552, 0x0);
+
+        let registers = [0, 0, 0x71f81fca, 0, 0, 0xc2e550e9, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0];
+
+        assert_eq!(cpu.registers, registers);
+        assert_eq!(cpu.cpsr, 0x200000d1);
+        assert!(cpu.n_status());
+        assert!(!cpu.z_status());
+        assert!(!cpu.c_status());
+        assert!(cpu.v_status());
+    }
 }
