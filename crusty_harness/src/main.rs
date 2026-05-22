@@ -48,6 +48,10 @@ async fn main() {
             }
         };
 
+        let mut passed: usize = 0;
+        let mut failed: usize = 0;
+        let mut skipped: usize = 0;
+
         for entry in entries {
             let path = match entry {
                 Ok(f) => f,
@@ -65,7 +69,7 @@ async fn main() {
                 }
             };
 
-            info!("Running test on path: {}", file);
+            info!("Grabbing test suite from tile: {}", file);
             let tests = match deserialize_test(file) {
                 Ok(tests) => tests,
                 Err(e) => {
@@ -73,14 +77,21 @@ async fn main() {
                     continue
                 }
             };
+            info!("Running test on path: {}", file);
             let res = run_tests(tests, args.number_of_threads, file.to_owned()).await;
+            info!("Test Results: Passed: {}, Failed: {}, Total: {}, Skipped: {}", res.passed, res.failed, res.total, res.skipped);
+            passed += res.passed;
+            failed += res.failed;
+            skipped += res.skipped;
             results.push(res);
         }
 
-        info!("{:?}", results);
         let j = serde_json::to_string_pretty(&results).expect("Couldn't write output json");
         output.write_all(j.as_bytes()).expect("Cannot write to file");
+
+        info!("Total Tests Run {}: Passed: {}, Failed {} Skipped: {}", passed + failed, passed, failed, skipped);
     } else if let Some(f) = args.file {
+        info!("Grabbing test suite from tile: {}", f);
         let tests = match deserialize_test(&f) {
             Ok(v) => v,
             Err(e) => {
@@ -88,6 +99,7 @@ async fn main() {
                 process::exit(1);
             }
         };
+        info!("Running test suite");
         if let Some(i) = args.index {
             let test = match tests.into_iter().nth(i) {
                 Some(t) => t,
@@ -103,7 +115,7 @@ async fn main() {
             output.write_all(j.as_bytes()).expect("Cannot write to file");
         } else {
             let res = run_tests(tests, args.number_of_threads, f).await;
-            info!("Test Results: {:?}", res);
+            info!("Test Results: Passed: {}, Failed: {}, Total: {} Skipped: {}", res.passed, res.failed, res.total, res.skipped);
 
             let j = serde_json::to_string_pretty(&res).expect("Couldn't write output json");
             output.write_all(j.as_bytes()).expect("Cannot write to file");
@@ -132,8 +144,12 @@ async fn run_tests(tests: Vec<Test>, threads: usize, path: String) -> SuiteRepor
             for task in curr_threds {
                 let res = task.await;
                 match res {
-                    Ok(_) => report.add_success(),
-                    Err(_) => report.add_failed(),
+                    Ok(Ok(_)) => report.add_success(),
+                    Ok(Err((idx, e))) => report.add_failed(idx, e),
+                    Err(e) => {
+                        report.add_skipped();
+                        error!("Issue running test: {}", e)
+                    }
                 }
             }
             curr_threds = vec![];
@@ -144,8 +160,12 @@ async fn run_tests(tests: Vec<Test>, threads: usize, path: String) -> SuiteRepor
     for task in curr_threds {
         let res = task.await;
         match res {
-            Ok(_) => report.add_success(),
-            Err(_) => report.add_failed(),
+            Ok(Ok(_)) => report.add_success(),
+            Ok(Err((idx, e))) => report.add_failed(idx, e),
+            Err(e) => {
+                report.add_skipped();
+                error!("Issue running test: {}", e)
+            }
         }
     }
 

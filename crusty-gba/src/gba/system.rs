@@ -82,9 +82,6 @@ impl Default for SystemMemory {
 impl Memory for SystemMemory {
     fn write_word(&mut self, address: usize, block: u32) -> Result<(), MemoryError> {
         self.write_with_mask(address, block, WORD)?;
-        if address == 0x4000006 {
-            info!("{:X}", block);
-        }
         Ok(())
     }
 

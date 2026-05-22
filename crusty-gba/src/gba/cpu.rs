@@ -33,12 +33,12 @@ pub enum Opcode {
 }
 
 impl Opcode {
-    fn arm(value: u32) -> Result<Self, InstructionDecodeError> {
+    pub fn arm(value: u32) -> Result<Self, InstructionDecodeError> {
         let arm = Arm::try_from(value)?;
         Ok(Self::Arm(arm))
     }
 
-    fn thumb(value: u32) -> Result<Self, InstructionDecodeError> {
+    pub fn thumb(value: u32) -> Result<Self, InstructionDecodeError> {
         let thumb = Thumb::try_from(value)?;
         Ok(Self::Thumb(thumb))
     }

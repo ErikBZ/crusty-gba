@@ -1,8 +1,10 @@
 use std::collections::HashMap;
-use tracing::error;
+use tracing::{error, debug, trace};
 
-use crusty::{Cpu, memory::Memory, memory::MemoryError};
+use crusty::{Cpu, gba::cpu::Opcode, memory::{Memory, MemoryError}};
 use serde::{Deserialize, Serialize};
+
+use crate::report::TestError;
 
 const WORD: u32 = 0xffffffff;
 const HALFWORD: u32 = 0xffff;
@@ -15,14 +17,29 @@ pub struct Test {
     end: CpuState,
     transactions: Vec<Transaction>,
     opcode: u32,
-    base_addr: u32,
+    base_addr: usize,
 }
 
-pub async fn run_test(t: Test, idx: usize) -> Result<(u32, usize), (bool, usize)> {
-    if t.opcode & 0x1 == 1 || t.opcode & 0x2 == 2 {
-        Err((false, idx))
+pub async fn run_test(t: Test, idx: usize) -> Result<(), (usize, TestError)> {
+    let mut initial_cpu = Cpu::from(t.initial);
+    let mut final_cpu = Cpu::from(t.end);
+    let mut mem = TestMemory::new(t.transactions);
+
+    initial_cpu.inst_addr = t.base_addr;
+    initial_cpu.decode = t.opcode;
+    initial_cpu.tick(&mut mem);
+    // NOTE: Not checking cycles. Come back to this to actually check this properly
+    final_cpu.cycles = initial_cpu.cycles;
+
+    if initial_cpu == final_cpu {
+        debug!("Test {} Passed!", idx);
+        Ok(())
     } else {
-        Ok((t.opcode, idx))
+        debug!("Test {} Failed!", idx);
+        debug!("Opcode: {}, Instruction: {:?}", t.opcode, Opcode::arm(t.opcode));
+        trace!("Expected: \n{}\nActual: \n{}", initial_cpu, final_cpu);
+        let te = TestError::new(t.opcode);
+        Err((idx, te.apply_differences(final_cpu, initial_cpu)))
     }
 }
 

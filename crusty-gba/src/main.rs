@@ -15,7 +15,7 @@ use std::fs::File;
 use std::io::prelude::*;
 use tracing::{event, Level};
 use tracing_subscriber::filter::{LevelFilter, Targets};
-use tracing_subscriber::{fmt, prelude::*, reload, EnvFilter};
+use tracing_subscriber::{fmt, prelude::*, reload};
 
 use pixels::Error;
 
