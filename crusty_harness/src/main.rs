@@ -108,7 +108,8 @@ async fn main() {
                     process::exit(1);
                 }
             };
-            let res = run_test(test, i).await;
+            let is_thumb = f.contains("thumb");
+            let res = run_test(test, i, is_thumb).await;
             info!("Test Result: {:?}", res);
 
             let j = serde_json::to_string_pretty(&res).expect("Couldn't write output json");
@@ -132,12 +133,13 @@ fn deserialize_test(path: &str) -> Result<Vec<Test>, serde_json::Error> {
 
 async fn run_tests(tests: Vec<Test>, threads: usize, path: String) -> SuiteReport {
     let mut curr_threds = vec![];
+    let is_thumb = path.contains("thumb");
     let mut report = SuiteReport::new(path);
 
     for (i, t) in tests.into_iter().enumerate() {
         curr_threds.push(
             tokio::spawn(
-                run_test(t, i)
+                run_test(t, i, is_thumb)
             )
         );
         if curr_threds.len() >= threads {

@@ -20,13 +20,14 @@ pub struct Test {
     base_addr: usize,
 }
 
-pub async fn run_test(t: Test, idx: usize) -> Result<(), (usize, TestError)> {
+pub async fn run_test(t: Test, idx: usize, is_thumb: bool) -> Result<(), (usize, TestError)> {
     let mut initial_cpu = Cpu::from(t.initial);
     let mut final_cpu = Cpu::from(t.end);
     let mut mem = TestMemory::new(t.transactions);
 
     initial_cpu.inst_addr = t.base_addr;
     initial_cpu.decode = t.opcode;
+    initial_cpu.update_thumb(is_thumb);
     initial_cpu.tick(&mut mem);
     // NOTE: Not checking cycles. Come back to this to actually check this properly
     final_cpu.cycles = initial_cpu.cycles;
