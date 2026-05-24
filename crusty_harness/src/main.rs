@@ -46,6 +46,10 @@ async fn main() {
 
     if let Some(p) = args.path {
         let mut results = vec![];
+        let mut passed: usize = 0;
+        let mut failed: usize = 0;
+        let mut skipped: usize = 0;
+
         let entries = match glob(&format!("{}/*.json", p)) {
             Ok(g) => g,
             Err(e) => {
@@ -53,10 +57,6 @@ async fn main() {
                 process::exit(1)
             }
         };
-
-        let mut passed: usize = 0;
-        let mut failed: usize = 0;
-        let mut skipped: usize = 0;
 
         for entry in entries {
             let path = match entry {
