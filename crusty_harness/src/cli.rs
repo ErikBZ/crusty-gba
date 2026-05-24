@@ -17,7 +17,7 @@ pub struct Cli {
     #[arg(short, long)]
     pub file: Option<String>,
 
-    /// The test to run from the suite. Requires --file
+    /// The test to run from the suite. Requires --file. Sets log level for the crusty to `Trace`
     #[arg(short, long, requires = "file")]
     pub index: Option<usize>,
 

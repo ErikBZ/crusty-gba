@@ -25,6 +25,12 @@ async fn main() {
     let filter = Targets::default()
         .with_target("crusty_harness", log_level);
 
+    let filter = if args.index.is_some() {
+        filter.with_target("crusty", LevelFilter::TRACE)
+    } else {
+        filter
+    };
+
     tracing_subscriber::registry()
         .with(filter)
         .with(fmt::layer())
