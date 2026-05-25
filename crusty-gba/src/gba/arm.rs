@@ -10,7 +10,7 @@ use crate::gba::EXCEPTION_VECTOR_SWI;
 use crate::utils::shifter::CpuShifter;
 use crate::utils::Bitable;
 use crate::memory::Memory;
-use tracing::{warn, info};
+use tracing::{warn, info, trace};
 
 #[derive(Debug)]
 pub enum Arm {

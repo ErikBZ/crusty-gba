@@ -115,6 +115,7 @@ pub fn is_signed(num: u32) -> bool {
     num & 1 << 31 == 1 << 31
 }
 
+#[deprecated]
 pub fn get_v_from_add(o1: u64, o2: u64, res: u64) -> bool {
     let o1_sign = (o1 >> 31) & 1 == 1;
     let o2_sign = (o2 >> 31) & 1 == 1;
@@ -131,6 +132,7 @@ pub fn get_v_from_sub(o1: u64, o2: u64, res: u64) -> bool {
 }
 
 // TODO: There is an overlfow_add and overflow_sub maybe check those
+#[deprecated]
 pub fn add_nums(o1: u32, o2: u32, carry: bool) -> (u64, bool) {
     let lhs = o1 as u64;
     let rhs = o2 as u64;

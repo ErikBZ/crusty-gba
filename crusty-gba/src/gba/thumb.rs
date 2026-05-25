@@ -522,7 +522,12 @@ impl Operation for HiRegOp {
         }
 
         match self.op {
-            0b00 => cpu.set_register(self.rd, rd + rs),
+            0b00 => {
+                let (res, v_status) = rd.overflowing_add(rs);
+                // NOTE: Is it true that if an addition overflows, then it must carry?
+                cpu.update_cpsr(res, v_status, v_status);
+                cpu.set_register(self.rd, res)
+            },
             0b01 => {
                 let (res, v_status) = subtract_nums(rd, rs, false);
                 let c_status = (res >> 32) & 1 == 1;
