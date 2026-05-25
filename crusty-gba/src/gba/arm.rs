@@ -9,8 +9,7 @@ use crate::gba::EXCEPTION_VECTOR_SWI;
 use crate::utils::shifter::CpuShifter;
 use crate::utils::{ArmCalculations, BYTE, Bitable, HALFWORD};
 use crate::memory::Memory;
-use tracing::{warn, trace};
-use tracing_subscriber::registry::Data;
+use tracing::{warn, info, trace};
 
 #[derive(Debug, PartialEq)]
 pub enum Arm {
