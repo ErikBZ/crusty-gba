@@ -1,5 +1,12 @@
 [workspace]
+resolver = "3"
 
 members = [
-  "crusty-gba"
-, "crusty_harness"]
+  "crusty-gba",
+  "crusty_harness"
+]
+
+[workspace.dependencies]
+clap = { version = "4.5.20", features = ["derive"] }
+tracing = "0.1.40"
+tracing-subscriber = "0.3.23"

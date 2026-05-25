@@ -33,12 +33,12 @@ pub enum Opcode {
 }
 
 impl Opcode {
-    fn arm(value: u32) -> Result<Self, InstructionDecodeError> {
+    pub fn arm(value: u32) -> Result<Self, InstructionDecodeError> {
         let arm = Arm::try_from(value)?;
         Ok(Self::Arm(arm))
     }
 
-    fn thumb(value: u32) -> Result<Self, InstructionDecodeError> {
+    pub fn thumb(value: u32) -> Result<Self, InstructionDecodeError> {
         let thumb = Thumb::try_from(value)?;
         Ok(Self::Thumb(thumb))
     }
@@ -82,23 +82,23 @@ impl From<u32> for CpuMode {
 
 #[derive(PartialEq)]
 pub struct Cpu {
-    registers: [u32; 16],
+    pub registers: [u32; 16],
     // NOTE: General use banked regs, r8-r12
-    fiq_banked_gen_regs: [u32; 7],
+    pub fiq_banked_gen_regs: [u32; 7],
     // NOTE: Banked regs r13, r14 for all alt modes
-    svc_banked_regs: [u32; 2],
-    abt_banked_regs: [u32; 2],
-    irq_banked_regs: [u32; 2],
-    und_banked_regs: [u32; 2],
+    pub svc_banked_regs: [u32; 2],
+    pub abt_banked_regs: [u32; 2],
+    pub irq_banked_regs: [u32; 2],
+    pub und_banked_regs: [u32; 2],
     // TODO: Make this private
     pub cpsr: u32,
-    psr: [u32; 5],
+    pub psr: [u32; 5],
     pub decode: u32,
     // NOTE: Make this instruction_addr
     pub inst_addr: usize,
-    cycles: u32,
+    pub cycles: u32,
     /// The key is the instruction, and the value is the saved cpsr
-    interrupt_entries: HashMap<usize, CpuMode>
+    pub interrupt_entries: HashMap<usize, CpuMode>
 }
 
 impl Default for Cpu {
@@ -1327,5 +1327,26 @@ mod test {
         assert!(cpu.z_status());
         assert!(cpu.c_status());
         assert!(!cpu.v_status());
+    }
+
+    #[test]
+    fn run_adc_ror_r2_r5() {
+        let mut ram = SystemMemory::test();
+        let mut cpu = Cpu {
+            registers: [0, 0, 0x71f81fca, 0, 0, 0x6ca1febb, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+            cpsr: 0x900000d1,
+            ..Cpu::default()
+        };
+
+        cpu.run_instruction(&mut ram, 11688552, 0x0);
+
+        let registers = [0, 0, 0x71f81fca, 0, 0, 0xc2e550e9, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0];
+
+        assert_eq!(cpu.registers, registers);
+        assert_eq!(cpu.cpsr, 0x200000d1);
+        assert!(cpu.n_status());
+        assert!(!cpu.z_status());
+        assert!(!cpu.c_status());
+        assert!(cpu.v_status());
     }
 }

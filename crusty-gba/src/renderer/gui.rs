@@ -4,9 +4,7 @@ use crate::ppu::Ppu;
 use std::time::Instant;
 use tracing::{event, Level};
 use tracing_subscriber::filter::{LevelFilter, Targets};
-use tracing_subscriber::{EnvFilter, reload::Handle, Registry};
-use tracing_subscriber::layer::Layered;
-use tracing_subscriber::fmt::Layer;
+use tracing_subscriber::{reload::Handle, Registry};
 
 use pixels::{Pixels, SurfaceTexture};
 use winit::{

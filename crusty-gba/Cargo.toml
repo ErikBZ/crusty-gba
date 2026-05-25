@@ -14,7 +14,7 @@ path = "src/main.rs"
 [dependencies]
 strum = "0.26.3"
 strum_macros = "0.26.4"
-clap = { version = "4.5.20", features = ["derive"] }
+clap = { workspace = true }
 pixels = "0.16.0"
 winit = "0.29.15"
 winit_input_helper = "0.15"
@@ -22,6 +22,6 @@ game-loop = { version = "=1.1.0", features = ["winit"] }
 byteorder = "1"
 getrandom = "0.2"
 randomize = "3"
-tracing = "0.1.40"
-tracing-subscriber = { version = "0.3.23", features=["env-filter"] }
+tracing = { workspace = true }
+tracing-subscriber = { workspace = true }
 ratatui = "0.29.0"

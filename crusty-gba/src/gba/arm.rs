@@ -97,7 +97,6 @@ impl Operation for UndefinedInstruction {
     // TODO: Track Cycles 2S + 1I + 1N
     fn run(&self, _cpu: &mut Cpu, _mem: &mut impl Memory) {
         todo!()
-
     }
 }
 
