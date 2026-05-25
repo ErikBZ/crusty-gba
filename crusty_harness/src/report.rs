@@ -3,6 +3,7 @@ use std::iter::zip;
 
 use crusty::Cpu;
 use serde::Serialize;
+use serde::de::Expected;
 use tracing::trace;
 
 use crate::models::TestMemory;
@@ -92,7 +93,7 @@ impl TestError {
 
     pub fn apply_differences(mut self, expected: Cpu, actual: Cpu) -> Self {
         if expected.cpsr != actual.cpsr {
-            self.add_cpsr_difference(Difference { actual: expected.cpsr, expected: actual.cpsr });
+            self.add_cpsr_difference(Difference { actual: actual.cpsr, expected: expected.cpsr });
         }
 
         if expected.instruction_address() != actual.instruction_address() {
@@ -228,7 +229,7 @@ pub struct Difference {
 }
 
 impl Difference {
-    pub fn new(expected: u32, actual: u32) -> Self {
+    pub fn new(actual: u32, expected: u32) -> Self {
         Self { actual, expected }
     }
 }
