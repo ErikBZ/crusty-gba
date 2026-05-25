@@ -364,6 +364,7 @@ impl Cpu {
         self.set_cpsr_mode(mode);
     }
 
+    /// Res, Overflow, Carry
     pub fn update_cpsr(&mut self, res: u32, v: bool, c: bool) {
         let zero = if res == 0 { CPSR_Z } else { 0 };
 
@@ -461,6 +462,7 @@ impl Cpu {
     }
 
     pub fn tick(&mut self, ram: &mut impl Memory) {
+        // NOTE: Refactor now that PC updates after an instruction runs
         let inst = self.decode;
         let i_addr = self.inst_addr;
         self.inst_addr = self.pc();

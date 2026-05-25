@@ -7,6 +7,7 @@ use super::{
     is_signed, subtract_nums, Conditional, Operation, CPSR_C, CPSR_T,
 };
 use crate::utils::shifter::CpuShifter;
+use crate::utils::ArmCalculations;
 use crate::{Cpu, SystemMemory};
 use crate::memory::Memory;
 use tracing::{warn, trace};
@@ -512,6 +513,15 @@ impl From<u32> for HiRegOp {
     }
 }
 
+fn when_operand_is_pc(res: u32, is_pc: bool) -> u32 {
+    if is_pc {
+        let (n, _) = res.overflowing_add(4);
+        n & !1
+    } else {
+        res
+    }
+}
+
 impl Operation for HiRegOp {
     fn run(&self, cpu: &mut Cpu, mem: &mut impl Memory) {
         let rd = cpu.get_register(self.rd);
@@ -523,16 +533,21 @@ impl Operation for HiRegOp {
 
         match self.op {
             0b00 => {
-                let (res, _) = rd.overflowing_add(rs);
+                // Maybe change this to overflowing_add if the CPSR doesn't matter to make this
+                // faster?
+                let (res, _, _) = rd.arm_add(rs);
+                // let res = when_operand_is_pc(res, self.rs == PC || self.rd == PC);
                 cpu.set_register(self.rd, res)
             },
             0b01 => {
-                let (res, overflow) = rd.overflowing_sub(rs);
-                rd.overflowing_sub_signed(rhs)
-                let c_status = (res >> 32) & 1 == 1;
-                cpu.update_cpsr(res, v_status, overflow);
+                // NOTE: CHECK THIS
+                let (res, carry, overflow) = rd.arm_sub(rs);
+                cpu.update_cpsr(res, overflow, carry);
             }
-            0b10 => cpu.set_register(self.rd, rs),
+            0b10 => {
+                let val = when_operand_is_pc(rs, self.rd == PC);
+                cpu.set_register(self.rd, val)
+            },
             0b11 => {
                 let mut addr = cpu.get_register(self.rs);
                 cpu.update_thumb(addr & 1 == 1);

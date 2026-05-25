@@ -46,7 +46,7 @@ pub async fn run_test(t: Test, idx: usize, is_thumb: bool) -> Result<(), (usize,
 }
 
 #[derive(Debug, Deserialize)]
-pub struct CpuState {
+struct CpuState {
     #[serde(rename="R")]
     registers: [u32; 16],
     #[serde(rename="R_fiq")]
