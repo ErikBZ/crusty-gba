@@ -1,5 +1,6 @@
 pub mod io_registers;
 pub mod shifter;
+mod math;
 
 // Returns true if the bit at x is 1
 /// Use u32.bit_is_high instead

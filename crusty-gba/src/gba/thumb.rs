@@ -9,7 +9,7 @@ use super::{
 use crate::utils::shifter::CpuShifter;
 use crate::{Cpu, SystemMemory};
 use crate::memory::Memory;
-use tracing::warn;
+use tracing::{warn, trace};
 
 #[derive(Debug)]
 pub enum Thumb {
@@ -523,15 +523,14 @@ impl Operation for HiRegOp {
 
         match self.op {
             0b00 => {
-                let (res, v_status) = rd.overflowing_add(rs);
-                // NOTE: Is it true that if an addition overflows, then it must carry?
-                cpu.update_cpsr(res, v_status, v_status);
+                let (res, _) = rd.overflowing_add(rs);
                 cpu.set_register(self.rd, res)
             },
             0b01 => {
-                let (res, v_status) = subtract_nums(rd, rs, false);
+                let (res, overflow) = rd.overflowing_sub(rs);
+                rd.overflowing_sub_signed(rhs)
                 let c_status = (res >> 32) & 1 == 1;
-                cpu.update_cpsr((res & 0xffffffff) as u32, v_status, c_status);
+                cpu.update_cpsr(res, v_status, overflow);
             }
             0b10 => cpu.set_register(self.rd, rs),
             0b11 => {
