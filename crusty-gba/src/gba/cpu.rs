@@ -26,7 +26,7 @@ const GBA_SVC_STACK_POINTER: u32 = 0x3007FE0;
 const GBA_IRQ_STACK_POINTER: u32 = 0x3007FA0;
 
 // TODO: Move all this stuff over to a cpu-core module
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 pub enum Opcode {
     Arm(Arm),
     Thumb(Thumb)
@@ -93,9 +93,11 @@ pub struct Cpu {
     // TODO: Make this private
     pub cpsr: u32,
     pub psr: [u32; 5],
+    // should be the data
+    pub fetch: u32,
     pub decode: u32,
-    // NOTE: Make this instruction_addr
-    pub inst_addr: usize,
+    // // NOTE: Make this instruction_addr
+    // pub inst_addr: usize,
     pub cycles: u32,
     /// The key is the instruction, and the value is the saved cpsr
     pub interrupt_entries: HashMap<usize, CpuMode>
@@ -140,10 +142,10 @@ impl fmt::Display for Cpu {
         let cond = Conditional::from(self.decode);
         if self.is_thumb_mode() {
             let op = Thumb::try_from(self.decode);
-            writeln!(f, "{:#06x} {:?} {:?}", self.decode, cond, op)
+            writeln!(f, "{:#06x} {:?} {:?}, fetch: {:#06x}", self.decode, cond, op, self.fetch)
         } else {
             let op = Arm::try_from(self.decode);
-            writeln!(f, "{:#010x} {:?} {:?}", self.decode, cond, op)
+            writeln!(f, "{:#010x} {:?} {:?}, fetch: {:#10x}", self.decode, cond, op, self.fetch)
         }
     }
 }
@@ -159,7 +161,6 @@ impl fmt::Debug for Cpu {
         write!(f, "und: {:X?}, ", self.und_banked_regs)?;
         write!(f, "psr: {:X?}, ", self.psr)?;
         write!(f, "decode: {:X?}, ", self.decode)?;
-        write!(f, "addr: {:X?}, ", self.inst_addr)?;
         write!(f, "cycles: {:X?}, ", self.cycles)?;
         write!(f, "cpsr: {:08x}", self.cpsr)
     }
@@ -178,8 +179,8 @@ impl Cpu {
             und_banked_regs: [initial_sp, 0],
             psr: [0x1f, 0, 0, 0, 0],
             cpsr: 0x1f,
+            fetch: 0x0,
             decode: 0x0,
-            inst_addr: 0x0,
             cycles: init_cycles,
             interrupt_entries: HashMap::new(),
         }
@@ -207,7 +208,6 @@ impl Cpu {
 
         self.cpsr = 0x1f;
         self.decode = 0;
-        self.inst_addr = 0;
         self.cycles = 0;
     }
 
@@ -232,7 +232,11 @@ impl Cpu {
     }
 
     pub fn instruction_address(&self) -> usize {
-        self.inst_addr
+        if self.is_thumb_mode() {
+            self.pc().saturating_sub(4)
+        } else {
+            self.pc().saturating_sub(8)
+        }
     }
 
     pub fn add_cycles(&mut self, cycles: u32) {
@@ -391,21 +395,27 @@ impl Cpu {
 
     /// Sets the decode instruction prefetch operation, and bumps the PC register
     pub fn flush_pipeline(&mut self, mem: &impl Memory, fetch_inst_addr: usize) {
-        self.inst_addr = fetch_inst_addr;
-        let inst = match mem.read_word(fetch_inst_addr) {
-            Ok(i) => i,
-            Err(_) => {
-                error!("Could not read instruction at: {}", fetch_inst_addr);
-                0
-            }
-        };
-
-        self.decode = inst;
+        // NOTE: Def wrong. Will be removed after testing most likely
         let next_pc = if self.is_thumb_mode() {
             fetch_inst_addr + 2
         } else {
             fetch_inst_addr + 4
         };
+
+        let decode = mem.read_word(fetch_inst_addr);
+        let fetch = mem.read_word(next_pc);
+
+        let (d, f) = match (decode, fetch) {
+            (Ok(d), Ok(f)) => (d, f),
+            _ => {
+                error!("Could not read instruction at: {}", fetch_inst_addr);
+                (0, 0)
+            }
+        };
+
+        self.decode = d;
+        self.fetch = f;
+
         self.set_register(PC, next_pc as u32)
     }
 
@@ -464,15 +474,14 @@ impl Cpu {
     pub fn tick(&mut self, ram: &mut impl Memory) {
         // NOTE: Refactor now that PC updates after an instruction runs
         let inst = self.decode;
-        let i_addr = self.inst_addr;
-        self.inst_addr = self.pc();
         let next_inst = if self.is_thumb_mode() {
             ram.read_halfword(self.pc())
         } else {
             ram.read_word(self.pc())
         };
 
-        self.decode = match next_inst {
+        self.decode = self.fetch;
+        self.fetch = match next_inst {
             Ok(i) => i,
             Err(e) => {
                 error!("{}", e);
@@ -480,12 +489,7 @@ impl Cpu {
                 panic!()
             }
         };
-
-        // NOTE: I think this has to happen after run
-        // that's why the reg is always 8 ahead, and not just 4 ahead
-        self.registers[PC] += if !self.is_thumb_mode() { 4 } else { 2 };
-
-        self.run_instruction(ram, inst, i_addr);
+        self.run_instruction(ram, inst, self.instruction_address());
 
         if self.interrupt_entries.contains_key(&self.instruction_address()) {
             let mode = self.interrupt_entries.remove(&self.instruction_address()).unwrap();
@@ -493,6 +497,10 @@ impl Cpu {
             // NOTE: Do I need to do this if cpsr is recovered?
             // self.enable_irq();
         }
+
+        // NOTE: I think this has to happen after run
+        // that's why the reg is always 8 ahead, and not just 4 ahead
+        self.registers[PC] += if !self.is_thumb_mode() { 4 } else { 2 };
     }
 
     fn run_instruction(&mut self, ram: &mut impl Memory, inst: u32, i_addr: usize) {

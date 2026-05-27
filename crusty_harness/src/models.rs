@@ -24,9 +24,8 @@ pub async fn run_test(t: Test, idx: usize, is_thumb: bool) -> Result<(), (usize,
     let mut initial_cpu = Cpu::from(t.initial);
     let mut final_cpu = Cpu::from(t.end);
     let mut mem = TestMemory::new(t.transactions);
+    trace!("{:x?}", mem);
 
-    initial_cpu.inst_addr = t.base_addr;
-    initial_cpu.decode = t.opcode;
     initial_cpu.update_thumb(is_thumb);
     trace!("Initial:\n{}", initial_cpu);
 
@@ -63,7 +62,7 @@ struct CpuState {
     cpsr: u32,
     #[serde(rename="SPSR")]
     spsr: [u32; 5],
-    pipeline: [usize; 2],
+    pipeline: [u32; 2],
     access: u32,
 }
 
@@ -78,7 +77,8 @@ impl From<CpuState> for Cpu {
             und_banked_regs: value.r_und,
             cpsr: value.cpsr,
             psr: value.spsr,
-            inst_addr: value.pipeline[0],
+            decode: value.pipeline[0],
+            fetch: value.pipeline[1],
             cycles: 0,
             ..Default::default()
         }
@@ -144,10 +144,11 @@ impl TestMemory {
     }
 
     fn write_with_mask(&mut self, address: usize, block: u32, mask: u32) -> Result<(), crusty::memory::MemoryError> {
-        let i = (address & 0xffffff) >> 2;
+        let i = address >> 2;
         let shift = (address & 0x3) * 8;
         let old_data = self.read_word(address)?;
         let new_data = (old_data & !(mask << shift)) | ((block & mask) << shift);
+        trace!("Mapping addr: {:#010x} to {:#010x} in memory struct", address, i);
 
         self.memory.entry(i)
             .and_modify(|k| *k = new_data)
@@ -175,6 +176,7 @@ impl Memory for TestMemory {
     fn read_word(&self, address: usize) -> Result<u32, MemoryError> {
         let addr_key = address >> 2;
         let data = *self.memory.get(&addr_key).unwrap_or(&0);
+        trace!("Reading {:#010x} from addr {:#010x} ({:#010x})", data, addr_key, address);
         Ok(data)
     }
 

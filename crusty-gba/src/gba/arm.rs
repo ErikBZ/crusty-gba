@@ -12,7 +12,7 @@ use crate::utils::Bitable;
 use crate::memory::Memory;
 use tracing::{warn, info, trace};
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 pub enum Arm {
     MultiplyOp(MultiplyOp),
     MultiplyLongOp(MultiplyLongOp),
@@ -90,7 +90,7 @@ impl TryFrom<u32> for Arm {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 struct UndefinedInstruction;
 impl Operation for UndefinedInstruction {
     // TODO: Implement. Take undef trap
@@ -100,7 +100,7 @@ impl Operation for UndefinedInstruction {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 struct SoftwareInterruptOp {
     comment: usize
 }
@@ -244,7 +244,7 @@ impl Operation for DataProcessingOp {
                 v_status = get_v_from_add(rn_value, operand2, res);
                 res
             }
-            // TODO: Ccheck v_staus here:
+            // TODO: Check v_staus here:
             DataProcessingType::Sbc => {
                 // Note: 2s complementing
                 let rhs = !op2 as u64;
@@ -263,6 +263,7 @@ impl Operation for DataProcessingOp {
             DataProcessingType::Bic => rn_value & !operand2,
             DataProcessingType::Mvn => !operand2,
         };
+
         let c_out = if self.is_logical_operation() {
             c_out
         } else {
@@ -587,7 +588,7 @@ impl Operation for BranchExchangeOp {
         let mut addr = cpu.get_register(self.rn as usize);
         cpu.update_thumb(addr & 1 == 1);
         addr &= !1;
-        // Pipeline flush
+        // NOTE: FLUSH_PIPELINE
         cpu.decode = if cpu.is_thumb_mode() {
             match mem.read_halfword(addr as usize) {
                 Ok(n) => n,
@@ -606,7 +607,6 @@ impl Operation for BranchExchangeOp {
             }
         };
 
-        cpu.inst_addr = addr as usize;
         if cpu.cpsr & CPSR_T == CPSR_T {
             cpu.set_register(PC, addr + 2);
         } else {
@@ -634,24 +634,24 @@ pub struct BranchOp {
 
 impl Operation for BranchOp {
     fn run(&self, cpu: &mut Cpu, mem: &mut impl Memory) {
-        let offset = self.get_offset();
-        let addr = cpu.get_register(PC).wrapping_add(offset);
+        let addr = cpu.get_register(PC).wrapping_add(self.offset);
+        trace!("New calculated address: {:#010x} using offset: {:#010x}", addr, self.offset);
+        if self.offset & 0x08000000 == 0x08000000 {
+            trace!("Offset as i32: {}", self.offset as i32)
+        }
 
         if self.l {
             // NOTE: LR has to be the current decode
             cpu.set_register(LR, cpu.get_register(PC) - 4);
         }
 
-        cpu.decode = match mem.read_word(addr as usize) {
-            Ok(n) => n,
-            Err(e) => {
-                warn!("{}", e);
-                0
-            }
-        };
-        cpu.inst_addr = addr as usize;
+        cpu.flush_pipeline(mem, addr as usize);
 
-        cpu.set_register(PC, addr + 4);
+        trace!("decode addr: {:#010x}, decode: {:#010x}", cpu.get_register(PC) - 4, cpu.decode);
+        trace!("fetch addr: {:#010x}, fetch: {:#010x}", cpu.get_register(PC), cpu.fetch);
+
+        // Why am i doing this?
+        // cpu.set_register(PC, addr + 4);
         // NOTE: 2S + 1N
         cpu.add_cycles(3);
     }
@@ -659,20 +659,10 @@ impl Operation for BranchOp {
 
 impl From<u32> for BranchOp {
     fn from(inst: u32) -> Self {
+        let extend = if inst & (1 << 23) == (1 << 23) {0xfc000000} else {0};
         Self {
             l: (inst >> 24 & 0x1) == 0x1,
-            offset: (inst & 0xffffff) as u32,
-        }
-    }
-}
-
-impl BranchOp {
-    pub fn get_offset(&self) -> u32 {
-        // offset is shifted left by 2, and then sign extended to 32 bits
-        if self.offset & (1 << 23) == (1 << 23) {
-            (self.offset << 2) | 0xffc00000
-        } else {
-            self.offset << 2
+            offset: ((inst & 0xffffff) << 2) | extend
         }
     }
 }

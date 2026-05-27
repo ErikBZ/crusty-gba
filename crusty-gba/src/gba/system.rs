@@ -14,10 +14,6 @@ const INTERNAL_DMA_CONTROL_1: usize = 0x0000c6;
 const INTERNAL_DMA_CONTROL_2: usize = 0x0000d2;
 const INTERNAL_DMA_CONTROL_3: usize = 0x0000de;
 
-fn address_shift(addr: usize) -> usize {
-    (addr & 0xffffff) >> 2
-}
-
 pub fn read_cycles_per_8_16(address: usize) -> u32 {
     let mem_type = address >> 24 & 0xf;
     match mem_type {
@@ -25,7 +21,7 @@ pub fn read_cycles_per_8_16(address: usize) -> u32 {
         0x2 => 3,
         0x5 | 0x6 => 1,
         // Might be differnet
-        0x8 | 0x9 | 0xa | 0xb | 0xc | 0xd => 5,
+        0x8..=0xd => 5,
         0xe => 5,
         _ => 1,
     }
@@ -37,7 +33,7 @@ pub fn read_cycles_per_32(address: usize) -> u32 {
         0x2 => 6,
         0x5 | 0x6 => 2,
         // Might be differnet in certain cases?
-        0x8 | 0x9 | 0xa | 0xb | 0xc | 0xd => 8,
+        0x8..=0xd => 8,
         0xe => panic!(),
         _ => 1,
     }
@@ -186,6 +182,7 @@ impl SystemMemory {
         block: u32,
         mask: u32,
     ) -> Result<(), MemoryError> {
+        // NOTE: the first byte is lopped off because of the memory mapping
         let i = (address & 0xffffff) >> 2;
         let shift = (address & 0x3) * 8;
 

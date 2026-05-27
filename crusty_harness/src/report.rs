@@ -56,6 +56,10 @@ pub struct TestError {
     #[serde(skip_serializing_if = "Option::is_none")]
     register: Option<HashMap<usize, Difference>>,
     #[serde(skip_serializing_if = "Option::is_none")]
+    decode: Option<Difference>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    fetch: Option<Difference>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     fiq: Option<HashMap<usize, Difference>>,
     #[serde(skip_serializing_if = "Option::is_none")]
     svc: Option<HashMap<usize, Difference>>,
@@ -80,6 +84,8 @@ impl TestError {
             opcode,
             instruction_address: None,
             register: None,
+            decode: None,
+            fetch: None,
             fiq: None,
             svc: None,
             abt: None,
@@ -98,8 +104,20 @@ impl TestError {
 
         if expected.instruction_address() != actual.instruction_address() {
             self.instruction_address = Some(
-                Difference { actual: actual.inst_addr as u32, expected: expected.inst_addr as u32 }
+                Difference { actual: actual.instruction_address() as u32, expected: expected.instruction_address() as u32 }
             );
+        }
+
+        if expected.fetch != actual.fetch {
+            self.fetch = Some(
+                Difference { actual: actual.fetch, expected: expected.fetch }
+            )
+        }
+
+        if expected.decode != actual.decode {
+            self.decode = Some(
+                Difference { actual: actual.decode, expected: expected.decode }
+            )
         }
 
         for (idx, (a, e)) in zip(actual.registers, expected.registers).enumerate() {

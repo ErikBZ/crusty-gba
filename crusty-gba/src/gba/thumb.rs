@@ -12,7 +12,7 @@ use crate::{Cpu, SystemMemory};
 use crate::memory::Memory;
 use tracing::{warn, trace};
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 pub enum Thumb {
     AddSubtractOp(AddSubtractOp),
     MoveShiftedRegisterOp(MoveShiftedRegisterOp),
@@ -559,7 +559,7 @@ impl Operation for HiRegOp {
                     mem.read_word(addr as usize)
                 };
 
-                // Pipeline flush
+                // NOTE: Pipeline flush
                 // NOTE: This is a required read, so maybe panic/log or something?
                 cpu.decode = match next_inst {
                     Ok(n) => n,
@@ -571,7 +571,6 @@ impl Operation for HiRegOp {
                         0
                     }
                 };
-                cpu.inst_addr = addr as usize;
 
                 if cpu.cpsr & CPSR_T == CPSR_T {
                     cpu.set_register(PC, addr + 2);
@@ -1198,11 +1197,11 @@ impl Operation for ConditionalBranchOp {
             cpu.get_register(PC) + offset_abs
         };
 
+        // NOTE: FLUSH_PIPELINE
         cpu.decode = match mem.read_halfword(addr as usize) {
             Ok(n) => n,
             Err(_) => 0,
         };
-        cpu.inst_addr = addr as usize;
 
         cpu.set_register(PC, addr + 2);
         // NOTE: 3S + 1N
@@ -1263,7 +1262,7 @@ impl Operation for UnconditionalBranchOp {
                 0
             }
         };
-        cpu.inst_addr = addr as usize;
+        // NOTE: FLUSH_PIPELINE
 
         cpu.set_register(PC, addr + 2);
         // NOTE: 2S + 1N
@@ -1315,7 +1314,7 @@ impl Operation for LongBranchWithLinkOp {
                     0
                 }
             };
-            cpu.inst_addr = res as usize;
+            // NOTE: FLUSH_PIPELINE
 
             cpu.set_register(PC, cpu.get_register(PC) + 2);
             // NOTE: 3S + 1N
