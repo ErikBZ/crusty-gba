@@ -116,7 +116,7 @@ async fn main() {
             };
             let is_thumb = f.contains("thumb");
             let res = run_test(test, i, is_thumb).await;
-            info!("Test Result: {:?}", res);
+            info!("Test Result: {:x?}", res);
 
             let j = serde_json::to_string_pretty(&res).expect("Couldn't write output json");
             output.write_all(j.as_bytes()).expect("Cannot write to file");

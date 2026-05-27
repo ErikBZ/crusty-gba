@@ -32,13 +32,17 @@ pub async fn run_test(t: Test, idx: usize, is_thumb: bool) -> Result<(), (usize,
     initial_cpu.tick(&mut mem);
     // NOTE: Not checking cycles. Come back to this to actually check this properly
     final_cpu.cycles = initial_cpu.cycles;
+    // NOTE: We only for our implementation of the CPU. Will probably be removed
+    for (k, v) in initial_cpu.interrupt_entries.iter() {
+        final_cpu.interrupt_entries.insert(*k, *v);
+    }
 
     if initial_cpu == final_cpu {
         debug!("Test {} Passed!", idx);
         Ok(())
     } else {
         debug!("Test {} Failed!", idx);
-        trace!("Expected: \n{}\nActual: \n{}", final_cpu, initial_cpu);
+        trace!("Expected: \n{:?}\nActual: \n{:?}", final_cpu, initial_cpu);
         let te = TestError::new(t.opcode);
         Err((idx, te.apply_differences(final_cpu, initial_cpu)))
     }
@@ -184,14 +188,16 @@ impl Memory for TestMemory {
         let shift = address & 0b10;
         let data = self.read_word(address)?;
         let res = data >> (shift as u32 * 8);
-        Ok(res)       
+        trace!("Halword read returning {:x} after shift {}", res, shift);
+        Ok(res & HALFWORD)
     }
 
     fn read_byte(&self, address: usize) -> Result<u32, MemoryError> {
         let shift = address & 0b11;
         let data = self.read_word(address)?;
         let res = data >> (shift as u32 * 8);
-        Ok(res)
+        trace!("Byte read returning {:x} after shift of {}", res, shift);
+        Ok(res & BYTE)
     }
 
     fn read_byte_sign_ex(&self, address: usize) -> Result<u32, MemoryError> {

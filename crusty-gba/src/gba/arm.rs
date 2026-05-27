@@ -112,7 +112,10 @@ impl Operation for SoftwareInterruptOp {
         // The PC is updated before this instruction runs so the next instruction
         // is actually saved in 'instruction_address'
         cpu.add_interrupt_entry(cpu.instruction_address(), CpuMode::Supervisor);
-        cpu.set_register_for_mode(LR, cpu.instruction_address() as u32, CpuMode::Supervisor);
+
+        let addr_to_return_to = cpu.instruction_address().wrapping_add(4) as u32;
+        cpu.set_register_for_mode(LR, addr_to_return_to, CpuMode::Supervisor);
+
         cpu.set_psr_for_mode(cpu.cpsr, CpuMode::Supervisor);
         cpu.set_register(PC, EXCEPTION_VECTOR_SWI as u32);
         cpu.flush_pipeline(mem, EXCEPTION_VECTOR_SWI);
@@ -580,38 +583,17 @@ impl From<u32> for SingleDataSwapOp {
 
 #[derive(Debug, PartialEq)]
 pub struct BranchExchangeOp {
-    rn: u8,
+    rn: usize,
 }
 
 impl Operation for BranchExchangeOp {
     fn run(&self, cpu: &mut Cpu, mem: &mut impl Memory) {
-        let mut addr = cpu.get_register(self.rn as usize);
+        let mut addr = cpu.get_register(self.rn);
+        trace!("r{}: {:x}", self.rn, addr);
         cpu.update_thumb(addr & 1 == 1);
+        trace!("Thumb mode after update: {}", cpu.is_thumb_mode());
         addr &= !1;
-        // NOTE: FLUSH_PIPELINE
-        cpu.decode = if cpu.is_thumb_mode() {
-            match mem.read_halfword(addr as usize) {
-                Ok(n) => n,
-                Err(e) => {
-                    warn!("{}", e);
-                    0
-                }
-            }
-        } else {
-            match mem.read_word(addr as usize) {
-                Ok(n) => n,
-                Err(e) => {
-                    warn!("{}", e);
-                    0
-                }
-            }
-        };
-
-        if cpu.cpsr & CPSR_T == CPSR_T {
-            cpu.set_register(PC, addr + 2);
-        } else {
-            cpu.set_register(PC, addr + 4);
-        }
+        cpu.flush_pipeline(mem, addr as usize);
 
         // NOTE: 2S + 1N
         cpu.add_cycles(3);
@@ -621,7 +603,7 @@ impl Operation for BranchExchangeOp {
 impl From<u32> for BranchExchangeOp {
     fn from(inst: u32) -> Self {
         Self {
-            rn: (inst & 0xf) as u8,
+            rn: (inst & 0xf) as usize,
         }
     }
 }

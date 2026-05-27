@@ -54,7 +54,7 @@ impl Operation for Opcode {
 }
 
 // NOTE: I'm always re-initing this. Maybe it should just be a field in Cpu
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug, PartialEq, Eq, Copy, Clone)]
 pub enum CpuMode {
     System,
     User,
@@ -80,7 +80,7 @@ impl From<u32> for CpuMode {
     }
 }
 
-#[derive(PartialEq)]
+#[derive(PartialEq, Debug)]
 pub struct Cpu {
     pub registers: [u32; 16],
     // NOTE: General use banked regs, r8-r12
@@ -150,21 +150,21 @@ impl fmt::Display for Cpu {
     }
 }
 
-// To speed up debugging we'll be printing just the `registers` field
-impl fmt::Debug for Cpu {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "gen: {:X?}, ", self.registers)?;
-        write!(f, "fiq: {:X?}, ", self.fiq_banked_gen_regs)?;
-        write!(f, "svc: {:X?}, ", self.svc_banked_regs)?;
-        write!(f, "abt: {:X?}, ", self.abt_banked_regs)?;
-        write!(f, "irq: {:X?}, ", self.irq_banked_regs)?;
-        write!(f, "und: {:X?}, ", self.und_banked_regs)?;
-        write!(f, "psr: {:X?}, ", self.psr)?;
-        write!(f, "decode: {:X?}, ", self.decode)?;
-        write!(f, "cycles: {:X?}, ", self.cycles)?;
-        write!(f, "cpsr: {:08x}", self.cpsr)
-    }
-}
+// // To speed up debugging we'll be printing just the `registers` field
+// impl fmt::Debug for Cpu {
+//     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+//         write!(f, "gen: {:X?}, ", self.registers)?;
+//         write!(f, "fiq: {:X?}, ", self.fiq_banked_gen_regs)?;
+//         write!(f, "svc: {:X?}, ", self.svc_banked_regs)?;
+//         write!(f, "abt: {:X?}, ", self.abt_banked_regs)?;
+//         write!(f, "irq: {:X?}, ", self.irq_banked_regs)?;
+//         write!(f, "und: {:X?}, ", self.und_banked_regs)?;
+//         write!(f, "psr: {:X?}, ", self.psr)?;
+//         write!(f, "decode: {:X?}, ", self.decode)?;
+//         write!(f, "cycles: {:X?}, ", self.cycles)?;
+//         write!(f, "cpsr: {:08x}", self.cpsr)
+//     }
+// }
 
 impl Cpu {
     pub fn new(initial_pc: u32, initial_sp: u32, init_cycles: u32) -> Self {
@@ -402,19 +402,26 @@ impl Cpu {
             fetch_inst_addr + 4
         };
 
-        let decode = mem.read_word(fetch_inst_addr);
-        let fetch = mem.read_word(next_pc);
+        trace!("Reading decode and fetch from: ({:x}, {:x})", fetch_inst_addr, next_pc);
+        let (decode, fetch) = if self.is_thumb_mode() {
+            (mem.read_halfword(fetch_inst_addr),
+            mem.read_halfword(next_pc))
+        } else {
+            (mem.read_word(fetch_inst_addr),
+            mem.read_word(next_pc))
+        };
 
-        let (d, f) = match (decode, fetch) {
+        let (decode, fetch) = match (decode, fetch) {
             (Ok(d), Ok(f)) => (d, f),
             _ => {
                 error!("Could not read instruction at: {}", fetch_inst_addr);
                 (0, 0)
             }
         };
+        trace!("decode and fetch: ({:x}, {:x})", decode, fetch);
 
-        self.decode = d;
-        self.fetch = f;
+        self.decode = decode;
+        self.fetch = fetch;
 
         self.set_register(PC, next_pc as u32)
     }
@@ -500,7 +507,9 @@ impl Cpu {
 
         // NOTE: I think this has to happen after run
         // that's why the reg is always 8 ahead, and not just 4 ahead
-        self.registers[PC] += if !self.is_thumb_mode() { 4 } else { 2 };
+        self.registers[PC] = self.registers[PC].wrapping_add(
+            if !self.is_thumb_mode() { 4 } else { 2 }
+        );
     }
 
     fn run_instruction(&mut self, ram: &mut impl Memory, inst: u32, i_addr: usize) {
