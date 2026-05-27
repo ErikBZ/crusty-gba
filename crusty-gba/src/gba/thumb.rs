@@ -1225,8 +1225,6 @@ impl From<u32> for SoftwareInterruptOp {
 
 impl Operation for SoftwareInterruptOp {
     fn run(&self, cpu: &mut Cpu, _mem: &mut impl Memory) {
-        println!("{:?}", cpu);
-        println!("Cpu PC: {:x}", cpu.pc());
         // Move address of next instruction into LR, Copy CPSR to SPSR
         // Load SWI Vector Address into PC, swith to ARM mode, enter SVC
         // todo!()

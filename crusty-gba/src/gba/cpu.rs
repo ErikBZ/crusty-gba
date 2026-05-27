@@ -315,7 +315,7 @@ impl Cpu {
 
     pub fn set_psr_for_mode(&mut self, value: u32, mode: CpuMode) {
         match mode {
-            CpuMode::User | CpuMode::System => println!("Can't set SPSR in User and System mode"),
+            CpuMode::User | CpuMode::System => debug!("Can't set SPSR in User and System mode"),
             CpuMode::Fiq => self.psr[0] = value,
             CpuMode::Supervisor => self.psr[1] = value,
             CpuMode::Irq => self.psr[2] = value,
@@ -520,9 +520,6 @@ impl Cpu {
             Ok(op) => op,
             Err(e) => {
                 error!("{}", e);
-                println!("Dumping Cpu stats: ");
-                println!("{}", self);
-                println!("{:X?}", self);
                 panic!()
             }
         };
