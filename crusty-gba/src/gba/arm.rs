@@ -1183,9 +1183,9 @@ impl Operation for HalfwordDataOp {
 
         if self.p {
             if self.u {
-                address += offset;
+                address = address.wrapping_add(offset);
             } else {
-                address -= offset;
+                address = address.wrapping_sub(offset);
             }
 
             if self.w {
@@ -1254,9 +1254,9 @@ impl Operation for HalfwordDataOp {
 
         if !self.p {
             if self.u {
-                address += offset;
+                address = address.wrapping_add(offset);
             } else {
-                address -= offset;
+                address = address.wrapping_sub(offset);
             }
             cpu.set_register(self.rn as usize, address);
         }

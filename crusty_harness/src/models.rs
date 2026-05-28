@@ -23,7 +23,7 @@ pub struct Test {
 pub async fn run_test(t: Test, idx: usize, is_thumb: bool) -> Result<(), (usize, TestError)> {
     let mut initial_cpu = Cpu::from(t.initial);
     let mut final_cpu = Cpu::from(t.end);
-    let mut mem = TestMemory::new(t.transactions);
+    let mut mem = TestMemory::new(&t.transactions);
     trace!("{:x?}", mem);
 
     initial_cpu.update_thumb(is_thumb);
@@ -37,14 +37,17 @@ pub async fn run_test(t: Test, idx: usize, is_thumb: bool) -> Result<(), (usize,
         final_cpu.interrupt_entries.insert(*k, *v);
     }
 
-    if initial_cpu == final_cpu {
+    let mut final_mem = TestMemory::new(&t.transactions);
+    final_mem.apply_write_transactions(&t.transactions);
+
+    if initial_cpu == final_cpu && mem == final_mem {
         debug!("Test {} Passed!", idx);
         Ok(())
     } else {
         debug!("Test {} Failed!", idx);
         trace!("Expected: \n{:?}\nActual: \n{:?}", final_cpu, initial_cpu);
         let te = TestError::new(t.opcode);
-        Err((idx, te.apply_differences(final_cpu, initial_cpu)))
+        Err((idx, te.apply_differences(final_cpu, initial_cpu, mem, final_mem)))
     }
 }
 
@@ -99,13 +102,13 @@ pub struct Transaction {
     access: u32,
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, PartialEq)]
 pub struct TestMemory {
-    memory: HashMap<usize, u32>
+    pub memory: HashMap<usize, u32>
 }
 
 impl TestMemory {
-    pub fn new(transactions: Vec<Transaction>) -> TestMemory {
+    pub fn new(transactions: &Vec<Transaction>) -> TestMemory {
         let mut x = Self {
             memory: HashMap::new()
         };
@@ -131,7 +134,7 @@ impl TestMemory {
     }
 
     // NOTE: I don't actually know is this is how things are suppose to get checked
-    pub fn apply_write_transactions(&mut self, transactions: Vec<Transaction>) {
+    pub fn apply_write_transactions(&mut self, transactions: &Vec<Transaction>) {
         for t in transactions {
             if t.kind == 2 {
                 if t.size == 4 {
