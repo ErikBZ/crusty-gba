@@ -1,8 +1,8 @@
 pub trait ArmCalculations {
     fn arm_add(self, rhs: u32) -> (u32, bool, bool);
     fn arm_sub(self, rhs: u32) -> (u32, bool, bool);
-    fn arm_sub_carry(self, rhs: u32) -> (u32, bool, bool);
-    fn arm_add_carry(self, rhs: u32) -> (u32, bool, bool);
+    fn arm_sub_carry(self, rhs: u32, carry_in: bool) -> (u32, bool, bool);
+    fn arm_add_carry(self, rhs: u32, carry_in: bool) -> (u32, bool, bool);
 }
 
 /// res, c, v
@@ -26,14 +26,21 @@ impl ArmCalculations for u32 {
         (res, carry | i_carry, v)
     }
 
-    fn arm_sub_carry(self, rhs: u32) -> (u32, bool, bool) {
+    fn arm_add_carry(self, rhs: u32, carry_in: bool) -> (u32, bool, bool) {
         let (intermediate, intermediate_carry) = self.overflowing_add(rhs);
-        let (res, carry, overflow) = intermediate.arm_add(1);
-        (res, carry | intermediate_carry, overflow)
+        let carry_in = if carry_in {1} else {0};
+        let (res, carry_out, overflow) = intermediate.arm_add(carry_in);
+        (res, carry_out | intermediate_carry, overflow)
     }
 
-    fn arm_add_carry(self, rhs: u32) -> (u32, bool, bool) {
-        todo!()
+    fn arm_sub_carry(self, rhs: u32, carry_in: bool) -> (u32, bool, bool) {
+        let (intermediate, i_carry) = self.overflowing_add(!rhs);
+        let carry = if carry_in {1} else {0};
+        let (res, carry, _) = intermediate.arm_add(carry);
+
+        // Checks for overflow when subtracting
+        let v = ((self^ rhs) & (self ^ res)) >= 0x80000000;
+        (res, carry | i_carry, v)
     }
 }
 

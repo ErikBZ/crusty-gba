@@ -8,7 +8,7 @@ use super::{CPSR_C, CPSR_T};
 use crate::gba::cpu::{CpuMode, Opcode};
 use crate::gba::EXCEPTION_VECTOR_SWI;
 use crate::utils::shifter::CpuShifter;
-use crate::utils::Bitable;
+use crate::utils::{ArmCalculations, Bitable};
 use crate::memory::Memory;
 use tracing::{warn, info, trace};
 
@@ -204,75 +204,52 @@ impl From<u32> for DataProcessingOp {
 
 impl Operation for DataProcessingOp {
     fn run(&self, cpu: &mut Cpu, _mem: &mut impl Memory) {
-        let (op2, c_out) = self.operand.apply(cpu);
+        let (rhs, mut carry_out) = self.operand.apply(cpu);
         // NOTE: check the operand type. Imm is 0, Reg is 1
         let cycle = 1;
         let mut cycles = 1;
-        let rn_value = cpu.get_register(self.rn as usize) as u64;
-
         cycles += cycle;
+
+        let lhs = cpu.get_register(self.rn as usize);
+
 
         if self.rd as usize == PC {
             cycles += 1;
         }
-
-        let operand2 = op2 as u64;
-        let carry = ((cpu.cpsr & CPSR_C) >> 29) as u64;
         let mut v_status = false;
 
-        let res = match self.opcode {
-            DataProcessingType::And | DataProcessingType::Tst => rn_value & operand2,
-            DataProcessingType::Eor | DataProcessingType::Teq => (rn_value ^ operand2) & 0xffffffff,
-            DataProcessingType::Sub | DataProcessingType::Cmp => {
-                // Note: 2s complementing
-                let rhs = !op2 as u64;
-                let res = rn_value + rhs + 1;
-                v_status = get_v_from_sub(rn_value, operand2, res);
-                res
-            }
-            DataProcessingType::Rsb => {
-                // Note: 2s complementing
-                let rhs = !cpu.get_register(self.rn as usize) as u64;
-                let res = operand2 + rhs + 1;
-                v_status = get_v_from_sub(operand2, rn_value, res);
-                res
-            }
-            DataProcessingType::Add | DataProcessingType::Cmn => {
-                let res = rn_value + operand2;
-                v_status = get_v_from_add(rn_value, operand2, res);
-                res
-            }
-            DataProcessingType::Adc => {
-                let res = rn_value + operand2 + carry;
-                v_status = get_v_from_add(rn_value, operand2, res);
-                res
-            }
-            // TODO: Check v_staus here:
-            DataProcessingType::Sbc => {
-                // Note: 2s complementing
-                let rhs = !op2 as u64;
-                let res = rn_value + rhs + carry;
-                v_status = get_v_from_sub(rn_value, operand2, res);
-                res
-            }
-            DataProcessingType::Rsc => {
-                let rhs = !cpu.get_register(self.rn as usize) as u64;
-                let res = operand2 + rhs + carry;
-                v_status = get_v_from_sub(operand2, rn_value, res);
-                res
-            }
-            DataProcessingType::Orr => rn_value | operand2,
-            DataProcessingType::Mov => operand2,
-            DataProcessingType::Bic => rn_value & !operand2,
-            DataProcessingType::Mvn => !operand2,
-        };
+        // NOTE: Take into consideration lhs/rhs as PC here
 
-        let c_out = if self.is_logical_operation() {
-            c_out
-        } else {
-            res.bit_is_high(32)
+        let res = match self.opcode {
+            DataProcessingType::Orr => lhs | rhs,
+            DataProcessingType::Mov => rhs,
+            DataProcessingType::Bic => lhs & !rhs,
+            DataProcessingType::Mvn => !rhs,
+            DataProcessingType::And | DataProcessingType::Tst => lhs & rhs,
+            DataProcessingType::Eor | DataProcessingType::Teq => lhs ^ rhs,
+            DataProcessingType::Sub | DataProcessingType::Cmp | DataProcessingType::Rsb |
+            DataProcessingType::Add | DataProcessingType::Cmn | DataProcessingType::Adc |
+            DataProcessingType::Sbc | DataProcessingType::Rsc => {
+                let (res, c, v) = if matches!(self.opcode, DataProcessingType::Sub | DataProcessingType::Cmp) {
+                    lhs.arm_sub(rhs)
+                } else if matches!(self.opcode, DataProcessingType::Add | DataProcessingType::Cmn) {
+                    lhs.arm_add(rhs)
+                } else if matches!(self.opcode, DataProcessingType::Rsb) {
+                    rhs.arm_sub(lhs)
+                } else if matches!(self.opcode, DataProcessingType::Adc) {
+                    lhs.arm_add_carry(rhs, cpu.c_status())
+                } else if matches!(self.opcode, DataProcessingType::Rsc) {
+                    rhs.arm_sub_carry(lhs, cpu.c_status())
+                } else if matches!(self.opcode, DataProcessingType::Sbc) {
+                    lhs.arm_sub_carry(rhs, cpu.c_status())
+                } else {
+                    unreachable!()
+                };
+                v_status |= v;
+                carry_out |= c;
+                res
+            }
         };
-        let res: u32 = (res & 0xffffffff) as u32;
 
         if !(self.opcode == DataProcessingType::Cmp
             || self.opcode == DataProcessingType::Tst
@@ -297,7 +274,7 @@ impl Operation for DataProcessingOp {
         }
 
         if self.s {
-            cpu.update_cpsr(res, v_status, c_out);
+            cpu.update_cpsr(res, v_status, carry_out);
         }
         cpu.add_cycles(cycles);
     }
