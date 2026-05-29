@@ -45,7 +45,7 @@ pub async fn run_test(t: Test, idx: usize, is_thumb: bool) -> Result<(), (usize,
         Ok(())
     } else {
         debug!("Test {} Failed!", idx);
-        trace!("Expected: \n{:?}\nActual: \n{:?}", final_cpu, initial_cpu);
+        trace!("Expected: \n{}\nActual: \n{}", final_cpu, initial_cpu);
         let te = TestError::new(t.opcode);
         Err((idx, te.apply_differences(final_cpu, initial_cpu, mem, final_mem)))
     }

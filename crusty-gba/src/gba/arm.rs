@@ -145,8 +145,8 @@ pub enum AddressingMode3 {
 pub struct DataProcessingOp {
     pub s: bool,
     pub i: bool,
-    pub rn: u8,
-    pub rd: u8,
+    pub rn: usize,
+    pub rd: usize,
     operand: Operand,
     opcode: DataProcessingType,
 }
@@ -194,8 +194,8 @@ impl From<u32> for DataProcessingOp {
         DataProcessingOp {
             i: (inst >> 25 & 0x1) == 0x1,
             s: (inst >> 20 & 0x1) == 0x1,
-            rd: (inst >> 12 & 0xf) as u8,
-            rn: (inst >> 16 & 0xf) as u8,
+            rd: (inst >> 12 & 0xf) as usize,
+            rn: (inst >> 16 & 0xf) as usize,
             operand: Operand::from(inst),
             opcode,
         }
@@ -205,15 +205,16 @@ impl From<u32> for DataProcessingOp {
 impl Operation for DataProcessingOp {
     fn run(&self, cpu: &mut Cpu, _mem: &mut impl Memory) {
         let (rhs, mut carry_out) = self.operand.apply(cpu);
+        trace!("Using rhs value as: {:x}", rhs);
         // NOTE: check the operand type. Imm is 0, Reg is 1
         let cycle = 1;
         let mut cycles = 1;
         cycles += cycle;
 
-        let lhs = cpu.get_register(self.rn as usize);
+        let lhs = cpu.get_register(self.rn);
 
 
-        if self.rd as usize == PC {
+        if self.rd == PC {
             cycles += 1;
         }
         let mut v_status = false;
@@ -231,20 +232,27 @@ impl Operation for DataProcessingOp {
             DataProcessingType::Add | DataProcessingType::Cmn | DataProcessingType::Adc |
             DataProcessingType::Sbc | DataProcessingType::Rsc => {
                 let (res, c, v) = if matches!(self.opcode, DataProcessingType::Sub | DataProcessingType::Cmp) {
+                    trace!("lhs({lhs:x}) - rhs({rhs:x})");
                     lhs.arm_sub(rhs)
                 } else if matches!(self.opcode, DataProcessingType::Add | DataProcessingType::Cmn) {
+                    trace!("lhs({lhs:x}) + rhs({lhs:x})");
                     lhs.arm_add(rhs)
                 } else if matches!(self.opcode, DataProcessingType::Rsb) {
+                    trace!("rhs({rhs:x}) - lhs({lhs:x})");
                     rhs.arm_sub(lhs)
                 } else if matches!(self.opcode, DataProcessingType::Adc) {
+                    trace!("lhs({lhs:x}) + rhs({rhs:x}) + carry({})", cpu.c_status());
                     lhs.arm_add_carry(rhs, cpu.c_status())
                 } else if matches!(self.opcode, DataProcessingType::Rsc) {
+                    trace!("rhs({rhs:x}) - lhs({lhs:x}) - carry({})", cpu.c_status());
                     rhs.arm_sub_carry(lhs, cpu.c_status())
                 } else if matches!(self.opcode, DataProcessingType::Sbc) {
+                    trace!("lhs({lhs:x}) - rhs({rhs:x}) - carry({})", cpu.c_status());
                     lhs.arm_sub_carry(rhs, cpu.c_status())
                 } else {
                     unreachable!()
                 };
+                trace!("{:x}", res);
                 v_status |= v;
                 carry_out |= c;
                 res
@@ -256,7 +264,7 @@ impl Operation for DataProcessingOp {
             || self.opcode == DataProcessingType::Teq
             || self.opcode == DataProcessingType::Cmn)
         {
-            cpu.set_register(self.rd as usize, res);
+            cpu.set_register(self.rd, res);
         }
 
         if matches!(
