@@ -46,6 +46,7 @@ pub async fn run_test(t: Test, idx: usize, is_thumb: bool) -> Result<(), (usize,
     } else {
         debug!("Test {} Failed!", idx);
         trace!("Expected: \n{}\nActual: \n{}", final_cpu, initial_cpu);
+        trace!("Expected: \n{:x?}\nActual: \n{:x?}", final_mem, mem);
         let te = TestError::new(t.opcode);
         Err((idx, te.apply_differences(final_cpu, initial_cpu, mem, final_mem)))
     }
@@ -155,7 +156,6 @@ impl TestMemory {
         let shift = (address & 0x3) * 8;
         let old_data = self.read_word(address)?;
         let new_data = (old_data & !(mask << shift)) | ((block & mask) << shift);
-        trace!("Mapping addr: {:#010x} to {:#010x} in memory struct", address, i);
 
         self.memory.entry(i)
             .and_modify(|k| *k = new_data)
@@ -183,7 +183,6 @@ impl Memory for TestMemory {
     fn read_word(&self, address: usize) -> Result<u32, MemoryError> {
         let addr_key = address >> 2;
         let data = *self.memory.get(&addr_key).unwrap_or(&0);
-        trace!("Reading {:#010x} from addr {:#010x} ({:#010x})", data, addr_key, address);
         Ok(data)
     }
 
@@ -191,7 +190,6 @@ impl Memory for TestMemory {
         let shift = address & 0b10;
         let data = self.read_word(address)?;
         let res = data >> (shift as u32 * 8);
-        trace!("Halword read returning {:x} after shift {}", res, shift);
         Ok(res & HALFWORD)
     }
 
@@ -199,7 +197,6 @@ impl Memory for TestMemory {
         let shift = address & 0b11;
         let data = self.read_word(address)?;
         let res = data >> (shift as u32 * 8);
-        trace!("Byte read returning {:x} after shift of {}", res, shift);
         Ok(res & BYTE)
     }
 

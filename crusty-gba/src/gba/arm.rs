@@ -378,6 +378,7 @@ impl Operand {
     /// Returns (value, cycles, carry_out)
     //NOTE: The assembler will convert LSR #0, ROR #0, ASR #0 to LSL #0,
     //      so I shouldn't have to do anything
+    //      I can probably just consume this
     fn apply(&self, cpu: &Cpu) -> (u32, bool) {
         let lhs = self.lhs(cpu);
         // LSR #32
@@ -521,34 +522,40 @@ impl From<u32> for MultiplyLongOp {
 #[derive(Debug, PartialEq)]
 pub struct SingleDataSwapOp {
     b: bool,
-    rn: u8,
-    rd: u8,
-    rm: u8,
+    rn: usize,
+    rd: usize,
+    rm: usize,
 }
 
 impl Operation for SingleDataSwapOp {
     // TODO: Propogate Error for ABORT signals
     fn run(&self, cpu: &mut Cpu, mem: &mut impl Memory) {
-        let address = cpu.get_register(self.rn as usize) as usize;
-        match mem.read_word(address) {
-            Ok(n) => cpu.set_register(self.rd as usize, n),
+        let address = cpu.get_register(self.rn) as usize;
+        let out_data = cpu.get_register(self.rm);
+        trace!("Reading from {} with value: {:x}", self.rm, out_data);
+        let in_data = if self.b {
+            mem.read_byte(address)
+        } else {
+            mem.read_word(address)
+        };
+
+        trace!("Saving {:x?} to register: {}", in_data, self.rd);
+        match in_data {
+            Ok(d) => cpu.set_register(self.rd, d),
             Err(e) => warn!("{}", e),
         }
 
-        let data = cpu.get_register(self.rm as usize);
-        let cycles = if self.b {
-            match mem.write_byte(address, data) {
-                Ok(_) => (),
-                Err(e) => warn!("{}", e),
-            };
-            read_cycles_per_8_16(address)
+        trace!("Writing {:x} to address: {:x}", out_data, address);
+        let (res, cycles) = if self.b {
+            (mem.write_byte(address, out_data), read_cycles_per_8_16(address))
         } else {
-            match mem.write_word(address, data) {
-                Ok(_) => (),
-                Err(e) => warn!("{}", e),
-            };
-            read_cycles_per_32(address)
+            (mem.write_word(address, out_data), read_cycles_per_32(address))
         };
+
+        match res {
+            Ok(_) => (),
+            Err(e) => warn!("{}", e)
+        }
 
         // TODO: 1S + 2N + 1I
         cpu.add_cycles(cycles + 3);
@@ -559,9 +566,9 @@ impl From<u32> for SingleDataSwapOp {
     fn from(inst: u32) -> Self {
         Self {
             b: (inst >> 22 & 0x1) == 0x1,
-            rn: (inst >> 16 & 0xf) as u8,
-            rd: (inst >> 12 & 0xf) as u8,
-            rm: (inst & 0xf) as u8,
+            rn: (inst >> 16 & 0xf) as usize,
+            rd: (inst >> 12 & 0xf) as usize,
+            rm: (inst & 0xf) as usize,
         }
     }
 }
@@ -746,8 +753,8 @@ pub struct SingleDataTfx {
     pub b: bool,
     pub w: bool,
     pub l: bool,
-    pub rn: u8,
-    pub rd: u8,
+    pub rn: usize,
+    pub rd: usize,
     operand: DataTfxOperand,
 }
 
@@ -784,16 +791,16 @@ impl Operation for SingleDataTfx {
         // TODO: add write back check somewhere
         // NOTE: IDK if c_out is gonna get set in this op?
         let (offset, c_out) = self.operand.apply(cpu);
-        let mut tfx_add = cpu.get_register(self.rn as usize);
+        let mut tfx_add = cpu.get_register(self.rn);
 
         if self.p {
             if self.u {
-                tfx_add += offset;
+                tfx_add = tfx_add.wrapping_add(offset);
             } else {
-                tfx_add -= offset;
+                tfx_add = tfx_add.wrapping_sub(offset);
             }
             if self.w {
-                cpu.set_register(self.rn as usize, tfx_add);
+                cpu.set_register(self.rn, tfx_add);
             }
         }
 
@@ -815,8 +822,8 @@ impl Operation for SingleDataTfx {
                     panic!()
                 }
             };
-            cpu.set_register(self.rd as usize, res);
-            if self.rd as usize == PC {
+            cpu.set_register(self.rd, res);
+            if self.rd== PC {
                 // NOTE: 2S + 2N + 1I
                 cpu.add_cycles(cycles + 4);
             } else {
@@ -827,10 +834,10 @@ impl Operation for SingleDataTfx {
             // NOTE: 2N
             let res = if self.b {
                 cycles += read_cycles_per_8_16(tfx_add as usize);
-                mem.write_byte(tfx_add as usize, cpu.get_register(self.rd as usize))
+                mem.write_byte(tfx_add as usize, cpu.get_register(self.rd))
             } else {
                 cycles += read_cycles_per_32(tfx_add as usize);
-                mem.write_word(tfx_add as usize, cpu.get_register(self.rd as usize))
+                mem.write_word(tfx_add as usize, cpu.get_register(self.rd))
             };
 
             cpu.add_cycles(cycles + 1);
@@ -847,11 +854,11 @@ impl Operation for SingleDataTfx {
         // for LDR
         if !self.p {
             if self.u {
-                tfx_add += offset;
+                tfx_add = tfx_add.wrapping_add(offset);
             } else {
-                tfx_add -= offset;
+                tfx_add = tfx_add.wrapping_sub(offset);
             }
-            cpu.set_register(self.rn as usize, tfx_add);
+            cpu.set_register(self.rn, tfx_add);
         }
     }
 }
@@ -865,8 +872,8 @@ impl From<u32> for SingleDataTfx {
             b: (inst >> 22 & 1) == 1,
             w: (inst >> 21 & 1) == 1,
             l: (inst >> 20 & 1) == 1,
-            rn: (inst >> 16 & 0xf) as u8,
-            rd: (inst >> 12 & 0xf) as u8,
+            rn: (inst >> 16 & 0xf) as usize,
+            rd: (inst >> 12 & 0xf) as usize,
             operand: DataTfxOperand::from(inst),
         }
     }

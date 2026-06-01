@@ -34,7 +34,7 @@ pub fn read_cycles_per_32(address: usize) -> u32 {
         0x5 | 0x6 => 2,
         // Might be differnet in certain cases?
         0x8..=0xd => 8,
-        0xe => panic!(),
+        0xe => 0,
         _ => 1,
     }
 }
