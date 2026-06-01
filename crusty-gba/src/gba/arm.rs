@@ -423,24 +423,24 @@ pub struct MultiplyOp {
     // whether operation should accumulate
     a: bool,
     s: bool,
-    rd: u8,
-    rn: u8,
-    rs: u8,
-    rm: u8,
+    rd: usize,
+    rn: usize,
+    rs: usize,
+    rm: usize,
 }
 
 impl Operation for MultiplyOp {
     fn run(&self, cpu: &mut Cpu, _mem: &mut impl Memory) {
-        let rn_value = cpu.get_register(self.rn as usize);
-        let rs_value = cpu.get_register(self.rs as usize);
-        let rm_value = cpu.get_register(self.rm as usize);
+        let rn_value = cpu.get_register(self.rn);
+        let rs_value = cpu.get_register(self.rs);
+        let rm_value = cpu.get_register(self.rm);
 
         let mut res = rm_value.wrapping_mul(rs_value);
         if self.a {
-            res += rn_value;
+            res = res.wrapping_add(rn_value);
         }
 
-        cpu.set_register(self.rd as usize, res);
+        cpu.set_register(self.rd, res);
         // TODO: C is meaningless and V is unaffected. Update this to reflect this
         cpu.update_cpsr(res, cpu.v_status(), cpu.c_status());
         // NOTE:
@@ -476,10 +476,10 @@ impl From<u32> for MultiplyOp {
         Self {
             a: (inst >> 21 & 0x1) == 0x1,
             s: (inst >> 20 & 0x1) == 0x1,
-            rd: (inst >> 16 & 0xf) as u8,
-            rn: (inst >> 12 & 0xf) as u8,
-            rs: (inst >> 8 & 0xf) as u8,
-            rm: (inst & 0xf) as u8,
+            rd: (inst >> 16 & 0xf) as usize,
+            rn: (inst >> 12 & 0xf) as usize,
+            rs: (inst >> 8 & 0xf) as usize,
+            rm: (inst & 0xf) as usize,
         }
     }
 }
