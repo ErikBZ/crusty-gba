@@ -255,7 +255,7 @@ impl Cpu {
     // TODO: Do reverse for set_register
     pub fn get_register(&self, rn: usize) -> u32 {
         let mode = CpuMode::from(self.cpsr);
-        if rn == 15 || (rn < 13 && !((mode == CpuMode::Fiq) && rn > 8)) {
+        if rn == 15 || (rn < 13 && !((mode == CpuMode::Fiq) && rn > 7)) {
             return self.registers[rn];
         }
 
@@ -271,7 +271,8 @@ impl Cpu {
 
     pub fn set_register(&mut self, rn: usize, value: u32) {
         let mode = CpuMode::from(self.cpsr);
-        if rn == 15 || (rn < 13 && !((mode == CpuMode::Fiq) && rn > 8)) {
+        trace!("Writing {:x} to register {:x}. In mode {:?}", rn, value, mode);
+        if rn == 15 || (rn < 13 && !((mode == CpuMode::Fiq) && rn > 7)) {
             return self.registers[rn] = value;
         }
 

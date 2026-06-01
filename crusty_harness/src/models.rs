@@ -195,6 +195,7 @@ impl Memory for TestMemory {
 
     fn read_byte(&self, address: usize) -> Result<u32, MemoryError> {
         let shift = address & 0b11;
+        trace!("Shift: {:x}", shift);
         let data = self.read_word(address)?;
         let res = data >> (shift as u32 * 8);
         Ok(res & BYTE)

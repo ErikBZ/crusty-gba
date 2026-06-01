@@ -8,7 +8,7 @@ use super::{CPSR_C, CPSR_T};
 use crate::gba::cpu::{CpuMode, Opcode};
 use crate::gba::EXCEPTION_VECTOR_SWI;
 use crate::utils::shifter::CpuShifter;
-use crate::utils::{ArmCalculations, Bitable};
+use crate::utils::{ArmCalculations, BYTE, Bitable, HALFWORD};
 use crate::memory::Memory;
 use tracing::{warn, info, trace};
 
@@ -1161,8 +1161,8 @@ pub struct HalfwordDataOp {
     l: bool,
     s: bool,
     h: bool,
-    rn: u8,
-    rd: u8,
+    rn: usize,
+    rd: usize,
 }
 
 impl Operation for HalfwordDataOp {
@@ -1170,8 +1170,8 @@ impl Operation for HalfwordDataOp {
         let offset = match self.mode {
             AddressingMode3::Reg(m) => cpu.get_register(m as usize),
             AddressingMode3::Imm(byte_offset) => byte_offset as u32,
-        };
-        let mut address = cpu.get_register(self.rn as usize);
+        } as usize;
+        let mut address = cpu.get_register(self.rn) as usize;
 
         if self.p {
             if self.u {
@@ -1181,48 +1181,38 @@ impl Operation for HalfwordDataOp {
             }
 
             if self.w {
-                cpu.set_register(self.rn as usize, address);
+                cpu.set_register(self.rn, address as u32);
             }
         }
 
-        let cycles_per_entry = read_cycles_per_8_16(address as usize);
+        let cycles_per_entry = read_cycles_per_8_16(address);
 
         if self.l {
-            let res = match mem.read_word(address as usize) {
-                Ok(n) => n,
+            let data = if self.h {
+                mem.read_halfword(address)
+            } else {
+                mem.read_byte(address)
+            };
+
+            let mut data = match data {
+                Ok(d) => d,
                 Err(e) => {
-                    //TODO: Better error handling
                     warn!("{}", e);
                     0
                 }
             };
+            trace!("Read data: {:x} from address: {:x}", data, address);
 
-            let value: u32 = match (self.h, self.s) {
-                // TODO: Take into consideration the Endianess
-                // LDRB handled by SingleDataTfx
-                (false, false) => unreachable!(),
-                // LDRSB
-                (false, true) => {
-                    if res & 0x80 == 0x80 {
-                        res | 0xffffff00
-                    } else {
-                        res & 0xff
-                    }
+            if self.s && (data & 0x80 == 0x80 || data & 0x8000 == 0x8000) {
+                if self.h {
+                    data |= !HALFWORD
+                } else {
+                    data |= !BYTE
                 }
-                // LDRH
-                (true, false) => res & 0xffff,
-                // LDRSH
-                (true, true) => {
-                    if res & 0x8000 == 0x8000 {
-                        res | 0xffff0000
-                    } else {
-                        res & 0xffff
-                    }
-                }
-            };
+            }
 
-            cpu.set_register(self.rd as usize, value);
-            if self.rd as usize == PC {
+            cpu.set_register(self.rd, data);
+            if self.rd == PC {
                 // NOTE: 2I + 2N 1I
                 cpu.add_cycles(cycles_per_entry + 4);
             } else {
@@ -1234,11 +1224,12 @@ impl Operation for HalfwordDataOp {
                 unreachable!();
             };
             // STRH
-            match mem.write_halfword(address as usize, cpu.get_register(self.rd as usize)) {
+            if self.rd == PC {
+                address = address.wrapping_add(12);
+            }
+            match mem.write_halfword(address, cpu.get_register(self.rd)) {
                 Ok(_) => (),
-                Err(e) => {
-                    warn!("{}", e);
-                }
+                Err(e) => warn!("{}", e),
             }
             // NOTE: 2N
             cpu.add_cycles(cycles_per_entry + 1);
@@ -1250,7 +1241,7 @@ impl Operation for HalfwordDataOp {
             } else {
                 address = address.wrapping_sub(offset);
             }
-            cpu.set_register(self.rn as usize, address);
+            cpu.set_register(self.rn, address as u32);
         }
     }
 }
@@ -1258,7 +1249,7 @@ impl Operation for HalfwordDataOp {
 impl From<u32> for HalfwordDataOp {
     fn from(inst: u32) -> Self {
         let p = (inst >> 24 & 1) == 1;
-        let byte_offset = ((inst & 0xf) | (inst >> 4 & 0xf0)) as u8;
+        let byte_offset = ((inst & 0xf) | ((inst >> 4) & 0xf0)) as u8;
         let rm = (inst & 0xf) as u8;
 
         // oh don't need post and pre
@@ -1275,8 +1266,8 @@ impl From<u32> for HalfwordDataOp {
             l: (inst >> 20 & 1) == 1,
             s: (inst >> 6 & 1) == 1,
             h: (inst >> 5 & 1) == 1,
-            rn: (inst >> 16 & 0xf) as u8,
-            rd: (inst >> 12 & 0xf) as u8,
+            rn: (inst >> 16 & 0xf) as usize,
+            rd: (inst >> 12 & 0xf) as usize,
             mode,
         }
     }

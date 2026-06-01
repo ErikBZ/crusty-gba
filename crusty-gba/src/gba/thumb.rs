@@ -6,11 +6,13 @@ use super::{
     add_nums, bit_map_to_array, count_cycles, get_abs_int_value, get_v_from_add, get_v_from_sub,
     is_signed, subtract_nums, Conditional, Operation, CPSR_C, CPSR_T,
 };
+use crate::gba::EXCEPTION_VECTOR_SWI;
+use crate::gba::cpu::CpuMode;
 use crate::utils::shifter::CpuShifter;
 use crate::utils::ArmCalculations;
 use crate::{Cpu, SystemMemory};
 use crate::memory::Memory;
-use tracing::{warn, trace};
+use tracing::{warn, trace, error};
 
 #[derive(Debug, PartialEq)]
 pub enum Thumb {
@@ -528,7 +530,9 @@ impl Operation for HiRegOp {
         let rs = cpu.get_register(self.rs);
         // NOTE: h1 = 0, h2 = 0, op = 00 | 01 | 10 is undefined, and should not be used
         if self.op != 0b11 && !(self.h1 || self.h2) {
-            unreachable!();
+            error!("Operation is invalid");
+            return;
+            // unreachable!();
         }
 
         match self.op {
@@ -663,14 +667,9 @@ impl From<u32> for LoadStoreRegOffsetOp {
 
 impl Operation for LoadStoreRegOffsetOp {
     fn run(&self, cpu: &mut Cpu, mem: &mut impl Memory) {
-        let ro_val = cpu.get_register(self.ro);
-        let offset = get_abs_int_value(ro_val);
-
-        let addr = if is_signed(ro_val) {
-            (cpu.get_register(self.rb) - offset) as usize
-        } else {
-            (cpu.get_register(self.rb) + offset) as usize
-        };
+        let offset = cpu.get_register(self.ro) as usize;
+        let base = cpu.get_register(self.rb) as usize;
+        let addr = base.wrapping_add(offset);
 
         if self.l {
             let block = if self.b {
@@ -688,7 +687,6 @@ impl Operation for LoadStoreRegOffsetOp {
             };
             cpu.set_register(self.rd, data);
         } else {
-            // TODO: Rewrite with let x if, and match on the result x
             let res = if self.b {
                 mem.write_byte(addr, cpu.get_register(self.rd))
             } else {
@@ -697,9 +695,7 @@ impl Operation for LoadStoreRegOffsetOp {
 
             match res {
                 Ok(_) => (),
-                Err(e) => {
-                    warn!("{}", e)
-                }
+                Err(e) => warn!("{}", e)
             }
         }
 
@@ -736,13 +732,14 @@ impl From<u32> for LoadStoreSignExOp {
 
 impl Operation for LoadStoreSignExOp {
     fn run(&self, cpu: &mut Cpu, mem: &mut impl Memory) {
-        let addr = (cpu.get_register(self.rb) + cpu.get_register(self.ro)) as usize;
+        let base = cpu.get_register(self.rb) as usize;
+        let offset = cpu.get_register(self.ro) as usize;
+        let addr = base.wrapping_add(offset);
+
         if !self.h && !self.s {
             match mem.write_halfword(addr, cpu.get_register(self.rd)) {
                 Ok(_) => (),
-                Err(e) => {
-                    warn!("{}", e)
-                }
+                Err(e) => warn!("{}", e),
             }
         } else {
             let data = if self.h && !self.s {
@@ -1196,14 +1193,8 @@ impl Operation for ConditionalBranchOp {
         } else {
             cpu.get_register(PC) + offset_abs
         };
+        cpu.flush_pipeline(mem, addr as usize);
 
-        // NOTE: FLUSH_PIPELINE
-        cpu.decode = match mem.read_halfword(addr as usize) {
-            Ok(n) => n,
-            Err(_) => 0,
-        };
-
-        cpu.set_register(PC, addr + 2);
         // NOTE: 3S + 1N
         cpu.add_cycles(3)
     }
@@ -1224,10 +1215,21 @@ impl From<u32> for SoftwareInterruptOp {
 }
 
 impl Operation for SoftwareInterruptOp {
-    fn run(&self, cpu: &mut Cpu, _mem: &mut impl Memory) {
-        // Move address of next instruction into LR, Copy CPSR to SPSR
-        // Load SWI Vector Address into PC, swith to ARM mode, enter SVC
-        // todo!()
+    fn run(&self, cpu: &mut Cpu, mem: &mut impl Memory) {
+        // The PC is updated before this instruction runs so the next instruction
+        // is actually saved in 'instruction_address'
+        cpu.add_interrupt_entry(cpu.instruction_address(), CpuMode::Supervisor);
+
+        let addr_to_return_to = cpu.instruction_address().wrapping_add(2) as u32;
+        cpu.set_register_for_mode(LR, addr_to_return_to, CpuMode::Supervisor);
+
+        cpu.set_psr_for_mode(cpu.cpsr, CpuMode::Supervisor);
+        cpu.set_register(PC, EXCEPTION_VECTOR_SWI as u32);
+        cpu.update_thumb(false);
+        cpu.flush_pipeline(mem, EXCEPTION_VECTOR_SWI);
+        // Irq always disabled during a SWI
+        cpu.disable_irq();
+        cpu.set_cpsr_mode(CpuMode::Supervisor);
     }
 }
 
@@ -1251,18 +1253,9 @@ impl Operation for UnconditionalBranchOp {
         } else {
             self.offset
         };
-        let addr = cpu.get_register(PC).wrapping_add(offset);
+        let addr = cpu.get_register(PC).wrapping_add(offset) as usize;
+        cpu.flush_pipeline(mem, addr);
 
-        cpu.decode = match mem.read_halfword(addr as usize) {
-            Ok(n) => n,
-            Err(e) => {
-                warn!("{}", e);
-                0
-            }
-        };
-        // NOTE: FLUSH_PIPELINE
-
-        cpu.set_register(PC, addr + 2);
         // NOTE: 2S + 1N
         cpu.add_cycles(3);
     }
@@ -1301,20 +1294,22 @@ impl Operation for LongBranchWithLinkOp {
             cpu.add_cycles(1)
         } else {
             let temp = (cpu.get_register(PC) - 2) | 1;
-            let res = cpu.get_register(LR).wrapping_add(self.offset << 1);
-            cpu.set_register(PC, res);
             cpu.set_register(LR, temp);
 
-            cpu.decode = match mem.read_halfword(cpu.get_register(PC) as usize) {
-                Ok(n) => n,
-                Err(e) => {
-                    warn!("{}", e);
-                    0
-                }
-            };
-            // NOTE: FLUSH_PIPELINE
-
-            cpu.set_register(PC, cpu.get_register(PC) + 2);
+            let res = cpu.get_register(LR).wrapping_add(self.offset << 1) as usize;
+            cpu.flush_pipeline(mem, res);
+            // cpu.set_register(PC, res);
+            //
+            // cpu.decode = match mem.read_halfword(cpu.get_register(PC) as usize) {
+            //     Ok(n) => n,
+            //     Err(e) => {
+            //         warn!("{}", e);
+            //         0
+            //     }
+            // };
+            // // NOTE: FLUSH_PIPELINE
+            //
+            // cpu.set_register(PC, cpu.get_register(PC) + 2);
             // NOTE: 3S + 1N
             cpu.add_cycles(3);
         }

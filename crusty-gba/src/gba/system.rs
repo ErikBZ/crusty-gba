@@ -3,11 +3,7 @@ use tracing::{info, trace};
 
 use crate::memory::{Memory, MemoryError};
 use super::dma::DmaControl;
-
-const KILOBYTE: usize = 1024;
-const WORD: u32 = 0xffffffff;
-const HALFWORD: u32 = 0xffff;
-const BYTE: u32 = 0xff;
+use crate::utils::{WORD, HALFWORD, BYTE, KILOBYTE};
 
 const INTERNAL_DMA_CONTROL_0: usize = 0x0000ba;
 const INTERNAL_DMA_CONTROL_1: usize = 0x0000c6;
