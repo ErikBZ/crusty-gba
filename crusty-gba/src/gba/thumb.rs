@@ -515,15 +515,6 @@ impl From<u32> for HiRegOp {
     }
 }
 
-fn when_operand_is_pc(res: u32, is_pc: bool) -> u32 {
-    if is_pc {
-        let (n, _) = res.overflowing_add(4);
-        n & !1
-    } else {
-        res
-    }
-}
-
 impl Operation for HiRegOp {
     fn run(&self, cpu: &mut Cpu, mem: &mut impl Memory) {
         let rd = cpu.get_register(self.rd);
@@ -549,38 +540,14 @@ impl Operation for HiRegOp {
                 cpu.update_cpsr(res, overflow, carry);
             }
             0b10 => {
-                let val = when_operand_is_pc(rs, self.rd == PC);
+                let val = if self.rd == PC { rs.wrapping_add(4) } else { rs };
                 cpu.set_register(self.rd, val)
             },
             0b11 => {
-                let mut addr = cpu.get_register(self.rs);
+                let mut addr = cpu.get_register(self.rs) as usize;
                 cpu.update_thumb(addr & 1 == 1);
                 addr &= !1;
-
-                let next_inst = if cpu.is_thumb_mode() {
-                    mem.read_halfword(addr as usize)
-                } else {
-                    mem.read_word(addr as usize)
-                };
-
-                // NOTE: Pipeline flush
-                // NOTE: This is a required read, so maybe panic/log or something?
-                cpu.decode = match next_inst {
-                    Ok(n) => n,
-                    Err(e) => {
-                        warn!(
-                            "Error reading from memory while decoding instruction: {}",
-                            e
-                        );
-                        0
-                    }
-                };
-
-                if cpu.cpsr & CPSR_T == CPSR_T {
-                    cpu.set_register(PC, addr + 2);
-                } else {
-                    cpu.set_register(PC, addr + 4);
-                }
+                cpu.flush_pipeline(mem, addr);
             }
             _ => unreachable!(),
         }
@@ -1294,22 +1261,13 @@ impl Operation for LongBranchWithLinkOp {
             cpu.add_cycles(1)
         } else {
             let temp = (cpu.get_register(PC) - 2) | 1;
-            cpu.set_register(LR, temp);
+            let mut res = cpu.get_register(LR).wrapping_add(self.offset << 1) as usize;
 
-            let res = cpu.get_register(LR).wrapping_add(self.offset << 1) as usize;
+            // Making sure we're halfword aligned
+            res &= !1;
+            cpu.set_register(LR, temp);
             cpu.flush_pipeline(mem, res);
-            // cpu.set_register(PC, res);
-            //
-            // cpu.decode = match mem.read_halfword(cpu.get_register(PC) as usize) {
-            //     Ok(n) => n,
-            //     Err(e) => {
-            //         warn!("{}", e);
-            //         0
-            //     }
-            // };
-            // // NOTE: FLUSH_PIPELINE
-            //
-            // cpu.set_register(PC, cpu.get_register(PC) + 2);
+
             // NOTE: 3S + 1N
             cpu.add_cycles(3);
         }

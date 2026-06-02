@@ -13,7 +13,8 @@ impl ArmCalculations for u32 {
         let lhs_sign = self >= 0x80000000;
         let rhs_sign = rhs >= 0x80000000;
         let res_sign = res >= 0x80000000;
-        let overflow = (lhs_sign && rhs_sign) || lhs_sign != res_sign;
+        let carry = (lhs_sign && rhs_sign) || lhs_sign != res_sign;
+        let overflow = (self ^ res) & (rhs ^ res) & 0x80000000 != 0;
         (res, carry, overflow)
     }
 

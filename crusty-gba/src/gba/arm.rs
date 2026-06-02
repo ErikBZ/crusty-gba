@@ -2,15 +2,14 @@ use super::cpu::{Cpu, LR, PC};
 use super::error::InstructionDecodeError;
 use super::system::{read_cycles_per_32, read_cycles_per_8_16};
 use super::utils::calc_cycles_for_stm_ldm;
-use super::{bit_map_to_array, get_v_from_add, get_v_from_sub, Operation, SystemMemory};
-use super::{CPSR_C, CPSR_T};
+use super::{bit_map_to_array, Operation};
 
-use crate::gba::cpu::{CpuMode, Opcode};
+use crate::gba::cpu::CpuMode;
 use crate::gba::EXCEPTION_VECTOR_SWI;
 use crate::utils::shifter::CpuShifter;
 use crate::utils::{ArmCalculations, BYTE, Bitable, HALFWORD};
 use crate::memory::Memory;
-use tracing::{warn, info, trace};
+use tracing::{warn, trace};
 
 #[derive(Debug, PartialEq)]
 pub enum Arm {
@@ -205,7 +204,7 @@ impl From<u32> for DataProcessingOp {
 impl Operation for DataProcessingOp {
     fn run(&self, cpu: &mut Cpu, _mem: &mut impl Memory) {
         let (rhs, mut carry_out) = self.operand.apply(cpu);
-        trace!("Using rhs value as: {:x}", rhs);
+        trace!("Using rhs value as: {:x}, carry: {}", rhs, carry_out);
         // NOTE: check the operand type. Imm is 0, Reg is 1
         let cycle = 1;
         let mut cycles = 1;
@@ -221,6 +220,7 @@ impl Operation for DataProcessingOp {
 
         // NOTE: Take into consideration lhs/rhs as PC here
 
+        trace!("lhs({lhs:x}), rhs({rhs:x})");
         let res = match self.opcode {
             DataProcessingType::Orr => lhs | rhs,
             DataProcessingType::Mov => rhs,
@@ -232,32 +232,26 @@ impl Operation for DataProcessingOp {
             DataProcessingType::Add | DataProcessingType::Cmn | DataProcessingType::Adc |
             DataProcessingType::Sbc | DataProcessingType::Rsc => {
                 let (res, c, v) = if matches!(self.opcode, DataProcessingType::Sub | DataProcessingType::Cmp) {
-                    trace!("lhs({lhs:x}) - rhs({rhs:x})");
                     lhs.arm_sub(rhs)
                 } else if matches!(self.opcode, DataProcessingType::Add | DataProcessingType::Cmn) {
-                    trace!("lhs({lhs:x}) + rhs({lhs:x})");
                     lhs.arm_add(rhs)
                 } else if matches!(self.opcode, DataProcessingType::Rsb) {
-                    trace!("rhs({rhs:x}) - lhs({lhs:x})");
                     rhs.arm_sub(lhs)
                 } else if matches!(self.opcode, DataProcessingType::Adc) {
-                    trace!("lhs({lhs:x}) + rhs({rhs:x}) + carry({})", cpu.c_status());
                     lhs.arm_add_carry(rhs, cpu.c_status())
                 } else if matches!(self.opcode, DataProcessingType::Rsc) {
-                    trace!("rhs({rhs:x}) - lhs({lhs:x}) - carry({})", cpu.c_status());
                     rhs.arm_sub_carry(lhs, cpu.c_status())
                 } else if matches!(self.opcode, DataProcessingType::Sbc) {
-                    trace!("lhs({lhs:x}) - rhs({rhs:x}) - carry({})", cpu.c_status());
                     lhs.arm_sub_carry(rhs, cpu.c_status())
                 } else {
                     unreachable!()
                 };
-                trace!("{:x}", res);
                 v_status |= v;
-                carry_out |= c;
-                res
+                carry_out = c;
+                if self.rd == PC { res + 4 } else { res }
             }
         };
+        trace!("{:x}", res);
 
         if !(self.opcode == DataProcessingType::Cmp
             || self.opcode == DataProcessingType::Tst
