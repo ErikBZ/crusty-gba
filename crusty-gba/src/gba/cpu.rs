@@ -294,7 +294,13 @@ impl Cpu {
     // corresponding spsr for other modes
     pub fn get_psr(&self) -> u32 {
         let mode = CpuMode::from(self.cpsr);
-        self.get_psr_for_mode(mode)
+        let res = self.get_psr_for_mode(mode);
+        trace!("Getting PSR from mode {:?} value: {:x}", mode, res);
+        res
+    }
+
+    pub fn get_mode(&self) -> CpuMode {
+        CpuMode::from(self.cpsr)
     }
 
     pub fn get_psr_for_mode(&self, mode: CpuMode) -> u32 {
@@ -302,8 +308,8 @@ impl Cpu {
             CpuMode::User | CpuMode::System => self.cpsr,
             CpuMode::Fiq => self.psr[0],
             CpuMode::Supervisor => self.psr[1],
-            CpuMode::Irq => self.psr[2],
-            CpuMode::Abort => self.psr[3],
+            CpuMode::Abort => self.psr[2],
+            CpuMode::Irq => self.psr[3],
             CpuMode::Undefined => self.psr[4],
         }
     }
@@ -319,10 +325,15 @@ impl Cpu {
             CpuMode::User | CpuMode::System => debug!("Can't set SPSR in User and System mode"),
             CpuMode::Fiq => self.psr[0] = value,
             CpuMode::Supervisor => self.psr[1] = value,
-            CpuMode::Irq => self.psr[2] = value,
-            CpuMode::Abort => self.psr[3] = value,
+            CpuMode::Abort => self.psr[2] = value,
+            CpuMode::Irq => self.psr[3] = value,
             CpuMode::Undefined => self.psr[4] = value,
         }
+    }
+
+    pub fn set_cpsr(&mut self, spsr: u32) {
+        trace!("Setting cpsr to: {:x}", spsr);
+        self.cpsr = spsr;
     }
 
     pub fn set_cpsr_mode(&mut self, mode: CpuMode) {

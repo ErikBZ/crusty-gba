@@ -1,3 +1,4 @@
+use tracing::trace;
 pub trait ArmCalculations {
     fn arm_add(self, rhs: u32) -> (u32, bool, bool);
     fn arm_sub(self, rhs: u32) -> (u32, bool, bool);
@@ -9,12 +10,12 @@ pub trait ArmCalculations {
 impl ArmCalculations for u32 {
     // NOTE: Comeback to this and simplify it like arm_sub
     fn arm_add(self, rhs: u32) -> (u32, bool, bool) {
-        let (res, carry) = self.overflowing_add(rhs);
+        let res = self.wrapping_add(rhs);
         let lhs_sign = self >= 0x80000000;
         let rhs_sign = rhs >= 0x80000000;
         let res_sign = res >= 0x80000000;
-        let carry = (lhs_sign && rhs_sign) || lhs_sign != res_sign;
-        let overflow = (self ^ res) & (rhs ^ res) & 0x80000000 != 0;
+        let carry = (lhs_sign && rhs_sign) || ((lhs_sign ^ rhs_sign) && !res_sign);
+        let overflow = ((self ^ res) & (rhs ^ res)) & 0x80000000 != 0;
         (res, carry, overflow)
     }
 
@@ -28,10 +29,15 @@ impl ArmCalculations for u32 {
     }
 
     fn arm_add_carry(self, rhs: u32, carry_in: bool) -> (u32, bool, bool) {
-        let (intermediate, intermediate_carry) = self.overflowing_add(rhs);
+        let r = self.wrapping_add(rhs);
         let carry_in = if carry_in {1} else {0};
-        let (res, carry_out, overflow) = intermediate.arm_add(carry_in);
-        (res, carry_out | intermediate_carry, overflow)
+        let res = r.wrapping_add(carry_in);
+        let lhs_sign = self >= 0x80000000;
+        let rhs_sign = rhs >= 0x80000000;
+        let res_sign = res >= 0x80000000;
+        let carry = (lhs_sign && rhs_sign) || ((lhs_sign ^ rhs_sign) && !res_sign);
+        let overflow = ((self ^ res) & (rhs ^ res)) & 0x80000000 != 0;
+        (res, carry, overflow)
     }
 
     fn arm_sub_carry(self, rhs: u32, carry_in: bool) -> (u32, bool, bool) {

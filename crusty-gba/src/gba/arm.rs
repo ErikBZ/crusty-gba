@@ -10,6 +10,7 @@ use crate::utils::shifter::CpuShifter;
 use crate::utils::{ArmCalculations, BYTE, Bitable, HALFWORD};
 use crate::memory::Memory;
 use tracing::{warn, trace};
+use tracing_subscriber::registry::Data;
 
 #[derive(Debug, PartialEq)]
 pub enum Arm {
@@ -202,7 +203,7 @@ impl From<u32> for DataProcessingOp {
 }
 
 impl Operation for DataProcessingOp {
-    fn run(&self, cpu: &mut Cpu, _mem: &mut impl Memory) {
+    fn run(&self, cpu: &mut Cpu, mem: &mut impl Memory) {
         let (rhs, mut carry_out) = self.operand.apply(cpu);
         trace!("Using rhs value as: {:x}, carry: {}", rhs, carry_out);
         // NOTE: check the operand type. Imm is 0, Reg is 1
@@ -248,16 +249,16 @@ impl Operation for DataProcessingOp {
                 };
                 v_status |= v;
                 carry_out = c;
-                if self.rd == PC { res + 4 } else { res }
+                res
             }
         };
-        trace!("{:x}", res);
+        trace!("{:x} c_out: {}, v_out: {}", res, carry_out, v_status);
 
-        if !(self.opcode == DataProcessingType::Cmp
-            || self.opcode == DataProcessingType::Tst
-            || self.opcode == DataProcessingType::Teq
-            || self.opcode == DataProcessingType::Cmn)
-        {
+        if !matches!(self.opcode, DataProcessingType::Cmp
+            | DataProcessingType::Tst
+            | DataProcessingType::Teq
+            | DataProcessingType::Cmn
+        ) {
             cpu.set_register(self.rd, res);
         }
 
@@ -278,6 +279,29 @@ impl Operation for DataProcessingOp {
         if self.s {
             cpu.update_cpsr(res, v_status, carry_out);
         }
+
+        if self.rd == PC {
+            if matches!(
+                self.opcode,
+                DataProcessingType::Add
+                    | DataProcessingType::Sub
+                    | DataProcessingType::Adc
+                    | DataProcessingType::Rsb
+                    | DataProcessingType::Rsc
+                    | DataProcessingType::Sbc
+            ) {
+                cpu.flush_pipeline(mem, cpu.pc());
+            }
+
+            if !(CpuMode::User == cpu.get_mode() && matches!(
+                self.opcode,
+                DataProcessingType::Teq | DataProcessingType::Tst
+                    | DataProcessingType::Cmp | DataProcessingType::Cmn
+            )) {
+                cpu.set_cpsr(cpu.get_psr());
+            }
+        } 
+
         cpu.add_cycles(cycles);
     }
 }
