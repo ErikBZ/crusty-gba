@@ -262,6 +262,7 @@ impl Operation for DataProcessingOp {
             cpu.set_register(self.rd, res);
         }
 
+        // NOTE: I wonder if i even need this now
         if matches!(
             self.opcode,
             DataProcessingType::And
@@ -281,19 +282,17 @@ impl Operation for DataProcessingOp {
         }
 
         if self.rd == PC {
-            if matches!(
+            if !matches!(
                 self.opcode,
-                DataProcessingType::Add
-                    | DataProcessingType::Sub
-                    | DataProcessingType::Adc
-                    | DataProcessingType::Rsb
-                    | DataProcessingType::Rsc
-                    | DataProcessingType::Sbc
+                DataProcessingType::Cmp
+                    | DataProcessingType::Tst
+                    | DataProcessingType::Teq
+                    | DataProcessingType::Cmn
             ) {
                 cpu.flush_pipeline(mem, cpu.pc());
             }
 
-            if !(CpuMode::User == cpu.get_mode() && matches!(
+            if self.s && !(CpuMode::User == cpu.get_mode() && matches!(
                 self.opcode,
                 DataProcessingType::Teq | DataProcessingType::Tst
                     | DataProcessingType::Cmp | DataProcessingType::Cmn
