@@ -913,6 +913,7 @@ impl Operation for BlockDataTransfer {
         // TODO: Propogate the mem error to signify ABORT signal
         // When rn is 13 then we are doing stack ops, otherwise no
         let mut address = cpu.get_register(self.rn) as usize;
+        let mut rn_address = 0;
         let mut registers = self.registers.clone();
         let step: isize = if self.u {
             4
@@ -944,7 +945,13 @@ impl Operation for BlockDataTransfer {
                 }
                 // cpu.set_register(*register, res);
             } else {
-                let data = cpu.get_register(*register);
+                if *register == self.rn {
+                    rn_address = address;
+                }
+                let mut data = cpu.get_register(*register);
+                if *register == PC {
+                    data = data.wrapping_add(4);
+                }
                 trace!("Storing to addr: {:x}, data: {:x} from Reg({:x})", address, data, register);
                 if let Err(e) = mem.write_word(address, data) {
                     warn!("{}", e);
@@ -956,8 +963,14 @@ impl Operation for BlockDataTransfer {
             }
         }
 
-        if self.w && !registers.contains(&self.rn) {
+        if self.w {
             cpu.set_register(self.rn, address as u32);
+
+            if !self.l && self.registers.contains(&self.rn) {
+                if let Err(e) = mem.write_word(rn_address, address as u32) {
+                    warn!("{}", e);
+                };
+            }
         }
 
         if self.registers.contains(&PC) && self.l {
