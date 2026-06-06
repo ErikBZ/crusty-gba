@@ -278,7 +278,7 @@ impl Cpu {
         self.set_register_for_mode(rn, value, mode);
     }
 
-    pub fn set_register_for_mode(&mut self, rn: usize, value: u32, mode :CpuMode) {
+    pub fn set_register_for_mode(&mut self, rn: usize, value: u32, mode: CpuMode) {
         match mode {
             CpuMode::Fiq => self.fiq_banked_gen_regs[rn - 8] = value,
             CpuMode::Supervisor => self.svc_banked_regs[rn - 13] = value,

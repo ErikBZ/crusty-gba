@@ -925,9 +925,7 @@ impl Operation for BlockDataTransfer {
         for register in registers.iter() {
             if self.p {
                 address = address.wrapping_add_signed(step);
-                if self.w {
-                    cpu.set_register(self.rn, address as u32);
-                }
+
             }
 
             if self.l {
@@ -939,7 +937,12 @@ impl Operation for BlockDataTransfer {
                     }
                 };
                 trace!("Loading from addr: {:x}. Reg({:x})", address, register);
-                cpu.set_register(*register, res);
+                if self.s {
+                    cpu.set_register_for_mode(*register, res, CpuMode::User);
+                } else {
+                    cpu.set_register(*register, res);
+                }
+                // cpu.set_register(*register, res);
             } else {
                 let data = cpu.get_register(*register);
                 trace!("Storing to addr: {:x}, data: {:x} from Reg({:x})", address, data, register);
@@ -950,13 +953,14 @@ impl Operation for BlockDataTransfer {
 
             if !self.p {
                 address = address.wrapping_add_signed(step);
-                if self.w {
-                    cpu.set_register(self.rn, address as u32);
-                }
             }
         }
 
-        if self.registers.contains(&PC) {
+        if self.w && !registers.contains(&self.rn) {
+            cpu.set_register(self.rn, address as u32);
+        }
+
+        if self.registers.contains(&PC) && self.l {
             cpu.flush_pipeline(mem, cpu.get_register(PC) as usize);
         }
 
