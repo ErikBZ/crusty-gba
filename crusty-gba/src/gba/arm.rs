@@ -938,11 +938,11 @@ impl Operation for BlockDataTransfer {
                         0
                     }
                 };
-                trace!("Loading from addr: {:x} (maps to {:x}). Reg({:x})", address, address >> 2, register);
+                trace!("Loading from addr: {:x}. Reg({:x})", address, register);
                 cpu.set_register(*register, res);
             } else {
                 let data = cpu.get_register(*register);
-                trace!("Storing to addr: {:x} (maps to {:x}), data: {:x} from Reg({:x})", address, address & !3, data, register);
+                trace!("Storing to addr: {:x}, data: {:x} from Reg({:x})", address, data, register);
                 if let Err(e) = mem.write_word(address, data) {
                     warn!("{}", e);
                 };
@@ -955,8 +955,6 @@ impl Operation for BlockDataTransfer {
                 }
             }
         }
-
-
 
         if self.registers.contains(&PC) {
             cpu.flush_pipeline(mem, cpu.get_register(PC) as usize);
