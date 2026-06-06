@@ -258,11 +258,15 @@ impl Cpu {
             return self.registers[rn];
         }
 
+        self.get_register_for_mode(rn, mode)
+    }
+
+    pub fn get_register_for_mode(&self, rn: usize, mode: CpuMode) -> u32 {
         match mode {
             CpuMode::Fiq => self.fiq_banked_gen_regs[rn - 8],
             CpuMode::Supervisor => self.svc_banked_regs[rn - 13],
-            CpuMode::Irq => self.irq_banked_regs[rn - 13],
             CpuMode::Abort => self.abt_banked_regs[rn - 13],
+            CpuMode::Irq => self.irq_banked_regs[rn - 13],
             CpuMode::Undefined => self.und_banked_regs[rn - 13],
             CpuMode::User | CpuMode::System => self.registers[rn],
         }

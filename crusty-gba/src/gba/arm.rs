@@ -948,7 +948,13 @@ impl Operation for BlockDataTransfer {
                 if *register == self.rn {
                     rn_address = address;
                 }
-                let mut data = cpu.get_register(*register);
+
+                let mut data = if self.s {
+                    cpu.get_register_for_mode(*register, CpuMode::User)
+                } else {
+                    cpu.get_register(*register)
+                };
+
                 if *register == PC {
                     data = data.wrapping_add(4);
                 }
@@ -964,7 +970,9 @@ impl Operation for BlockDataTransfer {
         }
 
         if self.w {
-            cpu.set_register(self.rn, address as u32);
+            if !self.registers.contains(&self.rn) {
+                cpu.set_register(self.rn, address as u32);
+            }
 
             if !self.l && self.registers.contains(&self.rn) {
                 if let Err(e) = mem.write_word(rn_address, address as u32) {
@@ -974,7 +982,12 @@ impl Operation for BlockDataTransfer {
         }
 
         if self.registers.contains(&PC) && self.l {
-            cpu.flush_pipeline(mem, cpu.get_register(PC) as usize);
+            if self.l {
+                cpu.flush_pipeline(mem, cpu.get_register(PC) as usize);
+            }
+            if self.s {
+                cpu.set_cpsr(cpu.get_psr());
+            }
         }
 
         let entries = self.registers.len() as u32;
