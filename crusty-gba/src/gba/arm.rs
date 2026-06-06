@@ -903,8 +903,8 @@ pub struct BlockDataTransfer {
     s: bool,
     w: bool,
     l: bool,
-    rn: u8,
-    register_list: u16,
+    rn: usize,
+    registers: Vec<usize>,
 }
 
 impl Operation for BlockDataTransfer {
@@ -912,20 +912,23 @@ impl Operation for BlockDataTransfer {
         // TODO: Take into consideration the S flag
         // TODO: Propogate the mem error to signify ABORT signal
         // When rn is 13 then we are doing stack ops, otherwise no
-        let mut address = cpu.get_register(self.rn as usize) as usize;
-        let registers = bit_map_to_array(self.register_list as u32);
+        let mut address = cpu.get_register(self.rn) as usize;
+        let mut registers = self.registers.clone();
+        let step: isize = if self.u {
+            4
+        } else {
+            registers.reverse();
+            -4
+        };
 
-        for i in 0..registers.len() {
-            if self.p && self.w {
-                if self.u {
-                    address += 4
-                } else {
-                    address -= 4
+        // TODO: I think the write back only needs to happen at the very end
+        for register in registers.iter() {
+            if self.p {
+                address = address.wrapping_add_signed(step);
+                if self.w {
+                    cpu.set_register(self.rn, address as u32);
                 }
-                cpu.set_register(self.rn as usize, address as u32);
             }
-
-            let reg = if !self.u { registers.len() - i - 1 } else { i };
 
             if self.l {
                 let res = match mem.read_word(address) {
@@ -935,37 +938,37 @@ impl Operation for BlockDataTransfer {
                         0
                     }
                 };
-                cpu.set_register(registers[reg] as usize, res);
+                trace!("Loading from addr: {:x} (maps to {:x}). Reg({:x})", address, address >> 2, register);
+                cpu.set_register(*register, res);
             } else {
-                match mem.write_word(address, cpu.get_register(registers[reg] as usize)) {
-                    Ok(_) => (),
-                    Err(e) => {
-                        warn!("{}", e);
-                    }
+                let data = cpu.get_register(*register);
+                trace!("Storing to addr: {:x} (maps to {:x}), data: {:x} from Reg({:x})", address, address & !3, data, register);
+                if let Err(e) = mem.write_word(address, data) {
+                    warn!("{}", e);
                 };
             }
 
-            if !self.p && self.w {
-                if self.u {
-                    address += 4
-                } else {
-                    address -= 4
+            if !self.p {
+                address = address.wrapping_add_signed(step);
+                if self.w {
+                    cpu.set_register(self.rn, address as u32);
                 }
-                cpu.set_register(self.rn as usize, address as u32);
             }
         }
 
-        if registers.contains(&(PC as u32)) {
+
+
+        if self.registers.contains(&PC) {
             cpu.flush_pipeline(mem, cpu.get_register(PC) as usize);
         }
 
-        let entries = registers.len() as u32;
+        let entries = self.registers.len() as u32;
         let cycles_per_entry = read_cycles_per_32(address);
         let cycles = calc_cycles_for_stm_ldm(
             cycles_per_entry,
             entries,
             self.l,
-            registers.contains(&(PC as u32)),
+            self.registers.contains(&PC),
         );
         cpu.add_cycles(cycles);
     }
@@ -979,8 +982,8 @@ impl From<u32> for BlockDataTransfer {
             s: (inst >> 22 & 1) == 1,
             w: (inst >> 21 & 1) == 1,
             l: (inst >> 20 & 1) == 1,
-            rn: (inst >> 16 & 0xf) as u8,
-            register_list: (inst & 0xffff) as u16,
+            rn: (inst >> 16 & 0xf) as usize,
+            registers: bit_map_to_array(inst & 0xffff),
         }
     }
 }

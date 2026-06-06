@@ -8,7 +8,6 @@ use super::system::SystemMemory;
 use super::{is_signed, Conditional, CPSR_C, CPSR_N, CPSR_T, CPSR_V, CPSR_Z};
 use core::fmt;
 use std::collections::HashMap;
-use tracing::field::debug;
 use tracing::{debug, error, trace, info};
 
 pub const PC: usize = 15;
@@ -271,7 +270,7 @@ impl Cpu {
 
     pub fn set_register(&mut self, rn: usize, value: u32) {
         let mode = CpuMode::from(self.cpsr);
-        trace!("Writing {:x} to register {:x}. In mode {:?}", rn, value, mode);
+        trace!("Writing {:x} to register {:x}. In mode {:?}", value, rn, mode);
         if rn == 15 || (rn < 13 && !((mode == CpuMode::Fiq) && rn > 7)) {
             return self.registers[rn] = value;
         }

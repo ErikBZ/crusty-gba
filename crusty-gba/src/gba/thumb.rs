@@ -963,7 +963,7 @@ impl Operation for AddOffsetSPOp {
 struct PushPopRegOp {
     l: bool,
     r: bool,
-    rlist: u8,
+    registers: Vec<usize>,
 }
 
 impl From<u32> for PushPopRegOp {
@@ -971,24 +971,23 @@ impl From<u32> for PushPopRegOp {
         PushPopRegOp {
             l: (value >> 11 & 1) == 1,
             r: (value >> 8 & 1) == 1,
-            rlist: (value & 0xff) as u8,
+            registers: bit_map_to_array(value & 0xff),
         }
     }
 }
 
 impl Operation for PushPopRegOp {
     fn run(&self, cpu: &mut Cpu, mem: &mut impl Memory) {
-        let mut registers = bit_map_to_array(self.rlist as u32);
+        let mut registers = self.registers.clone();
         if self.r {
-            registers.push(if self.l { PC as u32 } else { LR as u32 });
+            registers.push(if self.l { PC } else { LR });
         }
 
-        for i in 0..registers.len() {
+        for reg in registers.iter() {
             if self.l {
-                let reg = registers[i];
                 let value = match mem.read_word(cpu.get_register(SP) as usize) {
                     Ok(n) => {
-                        if reg == PC as u32 {
+                        if *reg == PC {
                             n & 0xfffffffe
                         } else {
                             n
@@ -999,10 +998,10 @@ impl Operation for PushPopRegOp {
                         0
                     }
                 };
-                cpu.set_register(reg as usize, value);
+                cpu.set_register(*reg, value);
                 // TODO: Super Hacky, update pipeline. This should need to be done and, we should fetch inst at the
                 // end i think.
-                if reg == PC as u32 {
+                if *reg == PC {
                     let addr = cpu.get_register(PC) as usize;
                     let next_inst = if cpu.is_thumb_mode() {
                         mem.read_halfword(addr as usize)
@@ -1014,16 +1013,15 @@ impl Operation for PushPopRegOp {
                         Ok(n) => n,
                         Err(_) => panic!(),
                     };
-                    cpu.set_register(reg as usize, (addr + 2) as u32)
+                    cpu.set_register(*reg, (addr + 2) as u32)
                 }
 
                 cpu.set_register(SP, cpu.get_register(SP) + 4);
             } else {
-                let reg = registers[registers.len() - i - 1];
                 cpu.set_register(SP, cpu.get_register(SP) - 4);
                 match mem.write_word(
                     cpu.get_register(SP) as usize,
-                    cpu.get_register(reg as usize),
+                    cpu.get_register(*reg),
                 ) {
                     Ok(_) => (),
                     Err(e) => warn!("{}", e),
@@ -1038,7 +1036,7 @@ impl Operation for PushPopRegOp {
             cycles_per_entires,
             n,
             self.l,
-            registers.contains(&(PC as u32)),
+            registers.contains(&PC),
         );
         cpu.add_cycles(cycles);
     }
@@ -1097,7 +1095,7 @@ impl Operation for MultipleLoadStoreOp {
             cycles_per_entires,
             n,
             self.l,
-            registers.contains(&(PC as u32)),
+            registers.contains(&PC),
         );
         cpu.add_cycles(cycles);
     }
