@@ -513,6 +513,7 @@ impl Cpu {
         };
         self.run_instruction(ram, inst, self.instruction_address());
 
+        // NOTE: Don't need this now that I restore the PSR in data op
         if self.interrupt_entries.contains_key(&self.instruction_address()) {
             let mode = self.interrupt_entries.remove(&self.instruction_address()).unwrap();
             self.cpsr = self.get_psr_for_mode(mode);

@@ -937,10 +937,11 @@ impl Operation for BlockDataTransfer {
                         0
                     }
                 };
-                trace!("Loading from addr: {:x}. Reg({:x})", address, register);
-                if self.s {
+                if self.s && !self.registers.contains(&PC) {
+                    trace!("Loading data into User Regs: {:x} from addr: {:x}. Reg({:x})", res, address, register);
                     cpu.set_register_for_mode(*register, res, CpuMode::User);
                 } else {
+                    trace!("Loading data: {:x} from addr: {:x}. Reg({:x})", res, address, register);
                     cpu.set_register(*register, res);
                 }
                 // cpu.set_register(*register, res);
@@ -969,6 +970,7 @@ impl Operation for BlockDataTransfer {
             }
         }
 
+        // NOTE: This looks horrible!
         if self.w {
             if !self.registers.contains(&self.rn) {
                 cpu.set_register(self.rn, address as u32);
@@ -978,6 +980,11 @@ impl Operation for BlockDataTransfer {
                 if let Err(e) = mem.write_word(rn_address, address as u32) {
                     warn!("{}", e);
                 };
+                if self.s {
+                    cpu.set_register_for_mode(self.rn, address as u32, CpuMode::User);
+                } else {
+                    cpu.set_register(self.rn, address as u32);
+                }
             }
         }
 
