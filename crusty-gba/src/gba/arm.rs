@@ -973,13 +973,20 @@ impl Operation for BlockDataTransfer {
         // NOTE: This looks horrible!
         if self.w {
             if !self.registers.contains(&self.rn) {
-                cpu.set_register(self.rn, address as u32);
+                if self.s && !self.l{
+                    cpu.set_register_for_mode(self.rn, address as u32, CpuMode::User);
+                } else {
+                    cpu.set_register(self.rn, address as u32);
+                }
             }
 
             if !self.l && self.registers.contains(&self.rn) {
                 if let Err(e) = mem.write_word(rn_address, address as u32) {
                     warn!("{}", e);
                 };
+            }
+
+            if !self.l {
                 if self.s {
                     cpu.set_register_for_mode(self.rn, address as u32, CpuMode::User);
                 } else {
