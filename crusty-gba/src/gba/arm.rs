@@ -926,7 +926,6 @@ impl Operation for BlockDataTransfer {
         for register in registers.iter() {
             if self.p {
                 address = address.wrapping_add_signed(step);
-
             }
 
             if self.l {
@@ -980,6 +979,7 @@ impl Operation for BlockDataTransfer {
                 }
             }
 
+            // NOTE: This doesn't work when !self.u cause address will be to high
             if !self.l && self.registers.contains(&self.rn) {
                 if let Err(e) = mem.write_word(rn_address, address as u32) {
                     warn!("{}", e);
