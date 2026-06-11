@@ -1232,19 +1232,12 @@ impl Operation for HalfwordDataOp {
         let offset = match self.mode {
             AddressingMode3::Reg(m) => cpu.get_register(m as usize),
             AddressingMode3::Imm(byte_offset) => byte_offset as u32,
-        } as usize;
+        } as isize;
         let mut address = cpu.get_register(self.rn) as usize;
+        let offset = if self.u { offset } else { -offset };
 
         if self.p {
-            if self.u {
-                address = address.wrapping_add(offset);
-            } else {
-                address = address.wrapping_sub(offset);
-            }
-
-            if self.w {
-                cpu.set_register(self.rn, address as u32);
-            }
+            address = address.wrapping_add_signed(offset);
         }
 
         let cycles_per_entry = read_cycles_per_8_16(address);
@@ -1298,11 +1291,10 @@ impl Operation for HalfwordDataOp {
         }
 
         if !self.p {
-            if self.u {
-                address = address.wrapping_add(offset);
-            } else {
-                address = address.wrapping_sub(offset);
-            }
+            address = address.wrapping_add_signed(offset);
+        }
+
+        if self.w {
             cpu.set_register(self.rn, address as u32);
         }
     }
@@ -1520,4 +1512,24 @@ mod test {
         };
         assert_eq!(op, op2);
     }
+
+    #[test]
+    fn test_halfword_decode() {
+        let inst: u32 = 0x01b093b2;
+        let op = Arm::try_from(inst);
+        let op2 = HalfwordDataOp {
+            p: false,
+            s: false,
+            u: false,
+            w: false,
+            l: false,
+            h: false,
+            rn: 0,
+            rd: 0,
+            mode: AddressingMode3::Reg(0)
+        };
+        let op2 = Arm::HalfwordDataOp(op2);
+        assert_eq!(op, Ok(op2));
+    }
 }
+
