@@ -212,10 +212,24 @@ impl Operation for DataProcessingOp {
         cycles += cycle;
 
         let mut lhs = cpu.get_register(self.rn);
-        // if self.rn == PC {
+        if self.rn == PC {
+            if let Operand::ShiftWithReg(_, _, _) = self.operand {
+                lhs = lhs.wrapping_add(4);
+            }
+        }
+        // if self.rn == PC && matches!(
+        //     self.opcode,
+        //         DataProcessingType::Sub
+        //         | DataProcessingType::Cmp
+        //         | DataProcessingType::Add
+        //         | DataProcessingType::Cmn
+        //         | DataProcessingType::Rsb
+        //         | DataProcessingType::Adc
+        //         | DataProcessingType::Rsc
+        //         | DataProcessingType::Sbc) {
         //     lhs = lhs.wrapping_add(4);
         // }
-        //
+
         if self.rd == PC {
             cycles += 1;
         }
@@ -389,14 +403,7 @@ impl Operand {
         match self {
             Self::Imm(_, y, _) => *y,
             // NOTE: Value from regs only uses the first byte
-            Self::ShiftWithReg(_, y, _) => {
-                let res = cpu.get_register(*y) & 0xff;
-                if *y == PC {
-                    res + 4
-                } else {
-                    res
-                }
-            },
+            Self::ShiftWithReg(_, y, _) => cpu.get_register(*y) & 0xff,
             Self::ShiftImm(_, y, _) => *y,
         }
     }
