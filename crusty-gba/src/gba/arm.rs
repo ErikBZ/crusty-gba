@@ -217,18 +217,6 @@ impl Operation for DataProcessingOp {
                 lhs = lhs.wrapping_add(4);
             }
         }
-        // if self.rn == PC && matches!(
-        //     self.opcode,
-        //         DataProcessingType::Sub
-        //         | DataProcessingType::Cmp
-        //         | DataProcessingType::Add
-        //         | DataProcessingType::Cmn
-        //         | DataProcessingType::Rsb
-        //         | DataProcessingType::Adc
-        //         | DataProcessingType::Rsc
-        //         | DataProcessingType::Sbc) {
-        //     lhs = lhs.wrapping_add(4);
-        // }
 
         if self.rd == PC {
             cycles += 1;
