@@ -223,8 +223,6 @@ impl Operation for DataProcessingOp {
         }
         let mut v_status = false;
 
-        // NOTE: Take into consideration lhs/rhs as PC here
-
         trace!("lhs({lhs:x}), rhs({rhs:x})");
         let res = match self.opcode {
             DataProcessingType::Orr => lhs | rhs,
