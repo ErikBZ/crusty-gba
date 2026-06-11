@@ -2,17 +2,17 @@ use super::cpu::{Cpu, LR, PC};
 use super::error::InstructionDecodeError;
 use super::system::{read_cycles_per_32, read_cycles_per_8_16};
 use super::utils::calc_cycles_for_stm_ldm;
-use super::{bit_map_to_array, get_v_from_add, get_v_from_sub, Operation, SystemMemory};
-use super::{CPSR_C, CPSR_T};
+use super::{bit_map_to_array, Operation};
 
-use crate::gba::cpu::{CpuMode, Opcode};
+use crate::gba::cpu::CpuMode;
 use crate::gba::EXCEPTION_VECTOR_SWI;
 use crate::utils::shifter::CpuShifter;
-use crate::utils::Bitable;
+use crate::utils::{ArmCalculations, BYTE, Bitable, HALFWORD};
 use crate::memory::Memory;
-use tracing::{warn, info};
+use tracing::{warn, trace};
+use tracing_subscriber::registry::Data;
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 pub enum Arm {
     MultiplyOp(MultiplyOp),
     MultiplyLongOp(MultiplyLongOp),
@@ -90,7 +90,7 @@ impl TryFrom<u32> for Arm {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 struct UndefinedInstruction;
 impl Operation for UndefinedInstruction {
     // TODO: Implement. Take undef trap
@@ -100,7 +100,7 @@ impl Operation for UndefinedInstruction {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 struct SoftwareInterruptOp {
     comment: usize
 }
@@ -112,7 +112,10 @@ impl Operation for SoftwareInterruptOp {
         // The PC is updated before this instruction runs so the next instruction
         // is actually saved in 'instruction_address'
         cpu.add_interrupt_entry(cpu.instruction_address(), CpuMode::Supervisor);
-        cpu.set_register_for_mode(LR, cpu.instruction_address() as u32, CpuMode::Supervisor);
+
+        let addr_to_return_to = cpu.instruction_address().wrapping_add(4) as u32;
+        cpu.set_register_for_mode(LR, addr_to_return_to, CpuMode::Supervisor);
+
         cpu.set_psr_for_mode(cpu.cpsr, CpuMode::Supervisor);
         cpu.set_register(PC, EXCEPTION_VECTOR_SWI as u32);
         cpu.flush_pipeline(mem, EXCEPTION_VECTOR_SWI);
@@ -142,8 +145,8 @@ pub enum AddressingMode3 {
 pub struct DataProcessingOp {
     pub s: bool,
     pub i: bool,
-    pub rn: u8,
-    pub rd: u8,
+    pub rn: usize,
+    pub rd: usize,
     operand: Operand,
     opcode: DataProcessingType,
 }
@@ -191,8 +194,8 @@ impl From<u32> for DataProcessingOp {
         DataProcessingOp {
             i: (inst >> 25 & 0x1) == 0x1,
             s: (inst >> 20 & 0x1) == 0x1,
-            rd: (inst >> 12 & 0xf) as u8,
-            rn: (inst >> 16 & 0xf) as u8,
+            rd: (inst >> 12 & 0xf) as usize,
+            rn: (inst >> 16 & 0xf) as usize,
             operand: Operand::from(inst),
             opcode,
         }
@@ -200,84 +203,68 @@ impl From<u32> for DataProcessingOp {
 }
 
 impl Operation for DataProcessingOp {
-    fn run(&self, cpu: &mut Cpu, _mem: &mut impl Memory) {
-        let (op2, c_out) = self.operand.apply(cpu);
+    fn run(&self, cpu: &mut Cpu, mem: &mut impl Memory) {
+        let (rhs, mut carry_out) = self.operand.apply(cpu);
+        trace!("Using rhs value as: {:x}, carry: {}", rhs, carry_out);
         // NOTE: check the operand type. Imm is 0, Reg is 1
         let cycle = 1;
         let mut cycles = 1;
-        let rn_value = cpu.get_register(self.rn as usize) as u64;
-
         cycles += cycle;
 
-        if self.rd as usize == PC {
+        let mut lhs = cpu.get_register(self.rn);
+        if self.rn == PC {
+            if let Operand::ShiftWithReg(_, _, _) = self.operand {
+                lhs = lhs.wrapping_add(4);
+            }
+        }
+
+        if self.rd == PC {
             cycles += 1;
         }
-
-        let operand2 = op2 as u64;
-        let carry = ((cpu.cpsr & CPSR_C) >> 29) as u64;
         let mut v_status = false;
 
+        trace!("lhs({lhs:x}), rhs({rhs:x})");
         let res = match self.opcode {
-            DataProcessingType::And | DataProcessingType::Tst => rn_value & operand2,
-            DataProcessingType::Eor | DataProcessingType::Teq => (rn_value ^ operand2) & 0xffffffff,
-            DataProcessingType::Sub | DataProcessingType::Cmp => {
-                // Note: 2s complementing
-                let rhs = !op2 as u64;
-                let res = rn_value + rhs + 1;
-                v_status = get_v_from_sub(rn_value, operand2, res);
+            DataProcessingType::Orr => lhs | rhs,
+            DataProcessingType::Mov => rhs,
+            DataProcessingType::Bic => lhs & !rhs,
+            DataProcessingType::Mvn => !rhs,
+            DataProcessingType::And | DataProcessingType::Tst => lhs & rhs,
+            DataProcessingType::Eor | DataProcessingType::Teq => lhs ^ rhs,
+            DataProcessingType::Sub | DataProcessingType::Cmp | DataProcessingType::Rsb |
+            DataProcessingType::Add | DataProcessingType::Cmn | DataProcessingType::Adc |
+            DataProcessingType::Sbc | DataProcessingType::Rsc => {
+                let (res, c, v) = if matches!(self.opcode, DataProcessingType::Sub | DataProcessingType::Cmp) {
+                    lhs.arm_sub(rhs)
+                } else if matches!(self.opcode, DataProcessingType::Add | DataProcessingType::Cmn) {
+                    lhs.arm_add(rhs)
+                } else if matches!(self.opcode, DataProcessingType::Rsb) {
+                    rhs.arm_sub(lhs)
+                } else if matches!(self.opcode, DataProcessingType::Adc) {
+                    lhs.arm_add_carry(rhs, cpu.c_status())
+                } else if matches!(self.opcode, DataProcessingType::Rsc) {
+                    rhs.arm_sub_carry(lhs, cpu.c_status())
+                } else if matches!(self.opcode, DataProcessingType::Sbc) {
+                    lhs.arm_sub_carry(rhs, cpu.c_status())
+                } else {
+                    unreachable!()
+                };
+                v_status |= v;
+                carry_out = c;
                 res
             }
-            DataProcessingType::Rsb => {
-                // Note: 2s complementing
-                let rhs = !cpu.get_register(self.rn as usize) as u64;
-                let res = operand2 + rhs + 1;
-                v_status = get_v_from_sub(operand2, rn_value, res);
-                res
-            }
-            DataProcessingType::Add | DataProcessingType::Cmn => {
-                let res = rn_value + operand2;
-                v_status = get_v_from_add(rn_value, operand2, res);
-                res
-            }
-            DataProcessingType::Adc => {
-                let res = rn_value + operand2 + carry;
-                v_status = get_v_from_add(rn_value, operand2, res);
-                res
-            }
-            // TODO: Ccheck v_staus here:
-            DataProcessingType::Sbc => {
-                // Note: 2s complementing
-                let rhs = !op2 as u64;
-                let res = rn_value + rhs + carry;
-                v_status = get_v_from_sub(rn_value, operand2, res);
-                res
-            }
-            DataProcessingType::Rsc => {
-                let rhs = !cpu.get_register(self.rn as usize) as u64;
-                let res = operand2 + rhs + carry;
-                v_status = get_v_from_sub(operand2, rn_value, res);
-                res
-            }
-            DataProcessingType::Orr => rn_value | operand2,
-            DataProcessingType::Mov => operand2,
-            DataProcessingType::Bic => rn_value & !operand2,
-            DataProcessingType::Mvn => !operand2,
         };
-        let c_out = if self.is_logical_operation() {
-            c_out
-        } else {
-            res.bit_is_high(32)
-        };
-        let res: u32 = (res & 0xffffffff) as u32;
+        trace!("{:x} c_out: {}, v_out: {}", res, carry_out, v_status);
 
-        if !(self.opcode == DataProcessingType::Cmp
-            || self.opcode == DataProcessingType::Tst
-            || self.opcode == DataProcessingType::Teq
-            || self.opcode == DataProcessingType::Cmn)
-        {
-            cpu.set_register(self.rd as usize, res);
+        if !matches!(self.opcode, DataProcessingType::Cmp
+            | DataProcessingType::Tst
+            | DataProcessingType::Teq
+            | DataProcessingType::Cmn
+        ) {
+            cpu.set_register(self.rd, res);
         }
 
+        // NOTE: I wonder if i even need this now
         if matches!(
             self.opcode,
             DataProcessingType::And
@@ -293,8 +280,29 @@ impl Operation for DataProcessingOp {
         }
 
         if self.s {
-            cpu.update_cpsr(res, v_status, c_out);
+            cpu.update_cpsr(res, v_status, carry_out);
         }
+
+        if self.rd == PC {
+            if !matches!(
+                self.opcode,
+                DataProcessingType::Cmp
+                    | DataProcessingType::Tst
+                    | DataProcessingType::Teq
+                    | DataProcessingType::Cmn
+            ) {
+                cpu.flush_pipeline(mem, cpu.pc());
+            }
+
+            if self.s && !(CpuMode::User == cpu.get_mode() && matches!(
+                self.opcode,
+                DataProcessingType::Teq | DataProcessingType::Tst
+                    | DataProcessingType::Cmp | DataProcessingType::Cmn
+            )) {
+                cpu.set_cpsr(cpu.get_psr());
+            }
+        } 
+
         cpu.add_cycles(cycles);
     }
 }
@@ -365,7 +373,14 @@ impl Operand {
     fn lhs(&self, cpu: &Cpu) -> u32 {
         match self {
             Self::Imm(x, _, _) => *x,
-            Self::ShiftWithReg(x, _, _) => cpu.get_register(*x),
+            Self::ShiftWithReg(x, _, _) => {
+                let res = cpu.get_register(*x);
+                if *x == PC {
+                    res + 4
+                } else {
+                    res
+                }
+            },
             Self::ShiftImm(x, _, _) => cpu.get_register(*x),
         }
     }
@@ -389,6 +404,7 @@ impl Operand {
     /// Returns (value, cycles, carry_out)
     //NOTE: The assembler will convert LSR #0, ROR #0, ASR #0 to LSL #0,
     //      so I shouldn't have to do anything
+    //      I can probably just consume this
     fn apply(&self, cpu: &Cpu) -> (u32, bool) {
         let lhs = self.lhs(cpu);
         // LSR #32
@@ -433,24 +449,24 @@ pub struct MultiplyOp {
     // whether operation should accumulate
     a: bool,
     s: bool,
-    rd: u8,
-    rn: u8,
-    rs: u8,
-    rm: u8,
+    rd: usize,
+    rn: usize,
+    rs: usize,
+    rm: usize,
 }
 
 impl Operation for MultiplyOp {
     fn run(&self, cpu: &mut Cpu, _mem: &mut impl Memory) {
-        let rn_value = cpu.get_register(self.rn as usize);
-        let rs_value = cpu.get_register(self.rs as usize);
-        let rm_value = cpu.get_register(self.rm as usize);
+        let rn_value = cpu.get_register(self.rn);
+        let rs_value = cpu.get_register(self.rs);
+        let rm_value = cpu.get_register(self.rm);
 
         let mut res = rm_value.wrapping_mul(rs_value);
         if self.a {
-            res += rn_value;
+            res = res.wrapping_add(rn_value);
         }
 
-        cpu.set_register(self.rd as usize, res);
+        cpu.set_register(self.rd, res);
         // TODO: C is meaningless and V is unaffected. Update this to reflect this
         cpu.update_cpsr(res, cpu.v_status(), cpu.c_status());
         // NOTE:
@@ -486,10 +502,10 @@ impl From<u32> for MultiplyOp {
         Self {
             a: (inst >> 21 & 0x1) == 0x1,
             s: (inst >> 20 & 0x1) == 0x1,
-            rd: (inst >> 16 & 0xf) as u8,
-            rn: (inst >> 12 & 0xf) as u8,
-            rs: (inst >> 8 & 0xf) as u8,
-            rm: (inst & 0xf) as u8,
+            rd: (inst >> 16 & 0xf) as usize,
+            rn: (inst >> 12 & 0xf) as usize,
+            rs: (inst >> 8 & 0xf) as usize,
+            rm: (inst & 0xf) as usize,
         }
     }
 }
@@ -532,34 +548,40 @@ impl From<u32> for MultiplyLongOp {
 #[derive(Debug, PartialEq)]
 pub struct SingleDataSwapOp {
     b: bool,
-    rn: u8,
-    rd: u8,
-    rm: u8,
+    rn: usize,
+    rd: usize,
+    rm: usize,
 }
 
 impl Operation for SingleDataSwapOp {
     // TODO: Propogate Error for ABORT signals
     fn run(&self, cpu: &mut Cpu, mem: &mut impl Memory) {
-        let address = cpu.get_register(self.rn as usize) as usize;
-        match mem.read_word(address) {
-            Ok(n) => cpu.set_register(self.rd as usize, n),
+        let address = cpu.get_register(self.rn) as usize;
+        let out_data = cpu.get_register(self.rm);
+        trace!("Reading from {} with value: {:x}", self.rm, out_data);
+        let in_data = if self.b {
+            mem.read_byte(address)
+        } else {
+            mem.read_word(address)
+        };
+
+        trace!("Saving {:x?} to register: {}", in_data, self.rd);
+        match in_data {
+            Ok(d) => cpu.set_register(self.rd, d),
             Err(e) => warn!("{}", e),
         }
 
-        let data = cpu.get_register(self.rm as usize);
-        let cycles = if self.b {
-            match mem.write_byte(address, data) {
-                Ok(_) => (),
-                Err(e) => warn!("{}", e),
-            };
-            read_cycles_per_8_16(address)
+        trace!("Writing {:x} to address: {:x}", out_data, address);
+        let (res, cycles) = if self.b {
+            (mem.write_byte(address, out_data), read_cycles_per_8_16(address))
         } else {
-            match mem.write_word(address, data) {
-                Ok(_) => (),
-                Err(e) => warn!("{}", e),
-            };
-            read_cycles_per_32(address)
+            (mem.write_word(address, out_data), read_cycles_per_32(address))
         };
+
+        match res {
+            Ok(_) => (),
+            Err(e) => warn!("{}", e)
+        }
 
         // TODO: 1S + 2N + 1I
         cpu.add_cycles(cycles + 3);
@@ -570,48 +592,26 @@ impl From<u32> for SingleDataSwapOp {
     fn from(inst: u32) -> Self {
         Self {
             b: (inst >> 22 & 0x1) == 0x1,
-            rn: (inst >> 16 & 0xf) as u8,
-            rd: (inst >> 12 & 0xf) as u8,
-            rm: (inst & 0xf) as u8,
+            rn: (inst >> 16 & 0xf) as usize,
+            rd: (inst >> 12 & 0xf) as usize,
+            rm: (inst & 0xf) as usize,
         }
     }
 }
 
 #[derive(Debug, PartialEq)]
 pub struct BranchExchangeOp {
-    rn: u8,
+    rn: usize,
 }
 
 impl Operation for BranchExchangeOp {
     fn run(&self, cpu: &mut Cpu, mem: &mut impl Memory) {
-        let mut addr = cpu.get_register(self.rn as usize);
+        let mut addr = cpu.get_register(self.rn);
+        trace!("r{}: {:x}", self.rn, addr);
         cpu.update_thumb(addr & 1 == 1);
+        trace!("Thumb mode after update: {}", cpu.is_thumb_mode());
         addr &= !1;
-        // Pipeline flush
-        cpu.decode = if cpu.is_thumb_mode() {
-            match mem.read_halfword(addr as usize) {
-                Ok(n) => n,
-                Err(e) => {
-                    warn!("{}", e);
-                    0
-                }
-            }
-        } else {
-            match mem.read_word(addr as usize) {
-                Ok(n) => n,
-                Err(e) => {
-                    warn!("{}", e);
-                    0
-                }
-            }
-        };
-
-        cpu.inst_addr = addr as usize;
-        if cpu.cpsr & CPSR_T == CPSR_T {
-            cpu.set_register(PC, addr + 2);
-        } else {
-            cpu.set_register(PC, addr + 4);
-        }
+        cpu.flush_pipeline(mem, addr as usize);
 
         // NOTE: 2S + 1N
         cpu.add_cycles(3);
@@ -621,7 +621,7 @@ impl Operation for BranchExchangeOp {
 impl From<u32> for BranchExchangeOp {
     fn from(inst: u32) -> Self {
         Self {
-            rn: (inst & 0xf) as u8,
+            rn: (inst & 0xf) as usize,
         }
     }
 }
@@ -634,24 +634,24 @@ pub struct BranchOp {
 
 impl Operation for BranchOp {
     fn run(&self, cpu: &mut Cpu, mem: &mut impl Memory) {
-        let offset = self.get_offset();
-        let addr = cpu.get_register(PC).wrapping_add(offset);
+        let addr = cpu.get_register(PC).wrapping_add(self.offset);
+        trace!("New calculated address: {:#010x} using offset: {:#010x}", addr, self.offset);
+        if self.offset & 0x08000000 == 0x08000000 {
+            trace!("Offset as i32: {}", self.offset as i32)
+        }
 
         if self.l {
             // NOTE: LR has to be the current decode
             cpu.set_register(LR, cpu.get_register(PC) - 4);
         }
 
-        cpu.decode = match mem.read_word(addr as usize) {
-            Ok(n) => n,
-            Err(e) => {
-                warn!("{}", e);
-                0
-            }
-        };
-        cpu.inst_addr = addr as usize;
+        cpu.flush_pipeline(mem, addr as usize);
 
-        cpu.set_register(PC, addr + 4);
+        trace!("decode addr: {:#010x}, decode: {:#010x}", cpu.get_register(PC) - 4, cpu.decode);
+        trace!("fetch addr: {:#010x}, fetch: {:#010x}", cpu.get_register(PC), cpu.fetch);
+
+        // Why am i doing this?
+        // cpu.set_register(PC, addr + 4);
         // NOTE: 2S + 1N
         cpu.add_cycles(3);
     }
@@ -659,20 +659,10 @@ impl Operation for BranchOp {
 
 impl From<u32> for BranchOp {
     fn from(inst: u32) -> Self {
+        let extend = if inst & (1 << 23) == (1 << 23) {0xfc000000} else {0};
         Self {
             l: (inst >> 24 & 0x1) == 0x1,
-            offset: (inst & 0xffffff) as u32,
-        }
-    }
-}
-
-impl BranchOp {
-    pub fn get_offset(&self) -> u32 {
-        // offset is shifted left by 2, and then sign extended to 32 bits
-        if self.offset & (1 << 23) == (1 << 23) {
-            (self.offset << 2) | 0xffc00000
-        } else {
-            self.offset << 2
+            offset: ((inst & 0xffffff) << 2) | extend
         }
     }
 }
@@ -789,8 +779,8 @@ pub struct SingleDataTfx {
     pub b: bool,
     pub w: bool,
     pub l: bool,
-    pub rn: u8,
-    pub rd: u8,
+    pub rn: usize,
+    pub rd: usize,
     operand: DataTfxOperand,
 }
 
@@ -827,16 +817,16 @@ impl Operation for SingleDataTfx {
         // TODO: add write back check somewhere
         // NOTE: IDK if c_out is gonna get set in this op?
         let (offset, c_out) = self.operand.apply(cpu);
-        let mut tfx_add = cpu.get_register(self.rn as usize);
+        let mut tfx_add = cpu.get_register(self.rn);
 
         if self.p {
             if self.u {
-                tfx_add += offset;
+                tfx_add = tfx_add.wrapping_add(offset);
             } else {
-                tfx_add -= offset;
+                tfx_add = tfx_add.wrapping_sub(offset);
             }
             if self.w {
-                cpu.set_register(self.rn as usize, tfx_add);
+                cpu.set_register(self.rn, tfx_add);
             }
         }
 
@@ -858,8 +848,8 @@ impl Operation for SingleDataTfx {
                     panic!()
                 }
             };
-            cpu.set_register(self.rd as usize, res);
-            if self.rd as usize == PC {
+            cpu.set_register(self.rd, res);
+            if self.rd== PC {
                 // NOTE: 2S + 2N + 1I
                 cpu.add_cycles(cycles + 4);
             } else {
@@ -870,10 +860,10 @@ impl Operation for SingleDataTfx {
             // NOTE: 2N
             let res = if self.b {
                 cycles += read_cycles_per_8_16(tfx_add as usize);
-                mem.write_byte(tfx_add as usize, cpu.get_register(self.rd as usize))
+                mem.write_byte(tfx_add as usize, cpu.get_register(self.rd))
             } else {
                 cycles += read_cycles_per_32(tfx_add as usize);
-                mem.write_word(tfx_add as usize, cpu.get_register(self.rd as usize))
+                mem.write_word(tfx_add as usize, cpu.get_register(self.rd))
             };
 
             cpu.add_cycles(cycles + 1);
@@ -890,11 +880,11 @@ impl Operation for SingleDataTfx {
         // for LDR
         if !self.p {
             if self.u {
-                tfx_add += offset;
+                tfx_add = tfx_add.wrapping_add(offset);
             } else {
-                tfx_add -= offset;
+                tfx_add = tfx_add.wrapping_sub(offset);
             }
-            cpu.set_register(self.rn as usize, tfx_add);
+            cpu.set_register(self.rn, tfx_add);
         }
     }
 }
@@ -908,8 +898,8 @@ impl From<u32> for SingleDataTfx {
             b: (inst >> 22 & 1) == 1,
             w: (inst >> 21 & 1) == 1,
             l: (inst >> 20 & 1) == 1,
-            rn: (inst >> 16 & 0xf) as u8,
-            rd: (inst >> 12 & 0xf) as u8,
+            rn: (inst >> 16 & 0xf) as usize,
+            rd: (inst >> 12 & 0xf) as usize,
             operand: DataTfxOperand::from(inst),
         }
     }
@@ -1197,8 +1187,8 @@ pub struct HalfwordDataOp {
     l: bool,
     s: bool,
     h: bool,
-    rn: u8,
-    rd: u8,
+    rn: usize,
+    rd: usize,
 }
 
 impl Operation for HalfwordDataOp {
@@ -1206,59 +1196,49 @@ impl Operation for HalfwordDataOp {
         let offset = match self.mode {
             AddressingMode3::Reg(m) => cpu.get_register(m as usize),
             AddressingMode3::Imm(byte_offset) => byte_offset as u32,
-        };
-        let mut address = cpu.get_register(self.rn as usize);
+        } as usize;
+        let mut address = cpu.get_register(self.rn) as usize;
 
         if self.p {
             if self.u {
-                address += offset;
+                address = address.wrapping_add(offset);
             } else {
-                address -= offset;
+                address = address.wrapping_sub(offset);
             }
 
             if self.w {
-                cpu.set_register(self.rn as usize, address);
+                cpu.set_register(self.rn, address as u32);
             }
         }
 
-        let cycles_per_entry = read_cycles_per_8_16(address as usize);
+        let cycles_per_entry = read_cycles_per_8_16(address);
 
         if self.l {
-            let res = match mem.read_word(address as usize) {
-                Ok(n) => n,
+            let data = if self.h {
+                mem.read_halfword(address)
+            } else {
+                mem.read_byte(address)
+            };
+
+            let mut data = match data {
+                Ok(d) => d,
                 Err(e) => {
-                    //TODO: Better error handling
                     warn!("{}", e);
                     0
                 }
             };
+            trace!("Read data: {:x} from address: {:x}", data, address);
 
-            let value: u32 = match (self.h, self.s) {
-                // TODO: Take into consideration the Endianess
-                // LDRB handled by SingleDataTfx
-                (false, false) => unreachable!(),
-                // LDRSB
-                (false, true) => {
-                    if res & 0x80 == 0x80 {
-                        res | 0xffffff00
-                    } else {
-                        res & 0xff
-                    }
+            if self.s && (data & 0x80 == 0x80 || data & 0x8000 == 0x8000) {
+                if self.h {
+                    data |= !HALFWORD
+                } else {
+                    data |= !BYTE
                 }
-                // LDRH
-                (true, false) => res & 0xffff,
-                // LDRSH
-                (true, true) => {
-                    if res & 0x8000 == 0x8000 {
-                        res | 0xffff0000
-                    } else {
-                        res & 0xffff
-                    }
-                }
-            };
+            }
 
-            cpu.set_register(self.rd as usize, value);
-            if self.rd as usize == PC {
+            cpu.set_register(self.rd, data);
+            if self.rd == PC {
                 // NOTE: 2I + 2N 1I
                 cpu.add_cycles(cycles_per_entry + 4);
             } else {
@@ -1270,11 +1250,12 @@ impl Operation for HalfwordDataOp {
                 unreachable!();
             };
             // STRH
-            match mem.write_halfword(address as usize, cpu.get_register(self.rd as usize)) {
+            if self.rd == PC {
+                address = address.wrapping_add(12);
+            }
+            match mem.write_halfword(address, cpu.get_register(self.rd)) {
                 Ok(_) => (),
-                Err(e) => {
-                    warn!("{}", e);
-                }
+                Err(e) => warn!("{}", e),
             }
             // NOTE: 2N
             cpu.add_cycles(cycles_per_entry + 1);
@@ -1282,11 +1263,11 @@ impl Operation for HalfwordDataOp {
 
         if !self.p {
             if self.u {
-                address += offset;
+                address = address.wrapping_add(offset);
             } else {
-                address -= offset;
+                address = address.wrapping_sub(offset);
             }
-            cpu.set_register(self.rn as usize, address);
+            cpu.set_register(self.rn, address as u32);
         }
     }
 }
@@ -1294,7 +1275,7 @@ impl Operation for HalfwordDataOp {
 impl From<u32> for HalfwordDataOp {
     fn from(inst: u32) -> Self {
         let p = (inst >> 24 & 1) == 1;
-        let byte_offset = ((inst & 0xf) | (inst >> 4 & 0xf0)) as u8;
+        let byte_offset = ((inst & 0xf) | ((inst >> 4) & 0xf0)) as u8;
         let rm = (inst & 0xf) as u8;
 
         // oh don't need post and pre
@@ -1311,8 +1292,8 @@ impl From<u32> for HalfwordDataOp {
             l: (inst >> 20 & 1) == 1,
             s: (inst >> 6 & 1) == 1,
             h: (inst >> 5 & 1) == 1,
-            rn: (inst >> 16 & 0xf) as u8,
-            rd: (inst >> 12 & 0xf) as u8,
+            rn: (inst >> 16 & 0xf) as usize,
+            rd: (inst >> 12 & 0xf) as usize,
             mode,
         }
     }

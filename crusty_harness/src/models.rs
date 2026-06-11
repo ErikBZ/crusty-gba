@@ -23,30 +23,37 @@ pub struct Test {
 pub async fn run_test(t: Test, idx: usize, is_thumb: bool) -> Result<(), (usize, TestError)> {
     let mut initial_cpu = Cpu::from(t.initial);
     let mut final_cpu = Cpu::from(t.end);
-    let mut mem = TestMemory::new(t.transactions);
+    let mut mem = TestMemory::new(&t.transactions);
+    trace!("{:x?}", mem);
 
-    initial_cpu.inst_addr = t.base_addr;
-    initial_cpu.decode = t.opcode;
     initial_cpu.update_thumb(is_thumb);
+    trace!("Initial:\n{}", initial_cpu);
+
     initial_cpu.tick(&mut mem);
     // NOTE: Not checking cycles. Come back to this to actually check this properly
     final_cpu.cycles = initial_cpu.cycles;
-    trace!("Initial:\n{}", initial_cpu);
+    // NOTE: We only for our implementation of the CPU. Will probably be removed
+    for (k, v) in initial_cpu.interrupt_entries.iter() {
+        final_cpu.interrupt_entries.insert(*k, *v);
+    }
 
-    if initial_cpu == final_cpu {
+    let mut final_mem = TestMemory::new(&t.transactions);
+    final_mem.apply_write_transactions(&t.transactions);
+
+    if initial_cpu == final_cpu && mem == final_mem {
         debug!("Test {} Passed!", idx);
         Ok(())
     } else {
         debug!("Test {} Failed!", idx);
-        debug!("Opcode: {}, Instruction: {:?}", t.opcode, Opcode::arm(t.opcode));
         trace!("Expected: \n{}\nActual: \n{}", final_cpu, initial_cpu);
+        trace!("Expected: \n{:x?}\nActual: \n{:x?}", final_mem, mem);
         let te = TestError::new(t.opcode);
-        Err((idx, te.apply_differences(initial_cpu, final_cpu)))
+        Err((idx, te.apply_differences(final_cpu, initial_cpu, mem, final_mem)))
     }
 }
 
 #[derive(Debug, Deserialize)]
-pub struct CpuState {
+struct CpuState {
     #[serde(rename="R")]
     registers: [u32; 16],
     #[serde(rename="R_fiq")]
@@ -63,7 +70,7 @@ pub struct CpuState {
     cpsr: u32,
     #[serde(rename="SPSR")]
     spsr: [u32; 5],
-    pipeline: [usize; 2],
+    pipeline: [u32; 2],
     access: u32,
 }
 
@@ -78,7 +85,8 @@ impl From<CpuState> for Cpu {
             und_banked_regs: value.r_und,
             cpsr: value.cpsr,
             psr: value.spsr,
-            inst_addr: value.pipeline[0],
+            decode: value.pipeline[0],
+            fetch: value.pipeline[1],
             cycles: 0,
             ..Default::default()
         }
@@ -95,13 +103,13 @@ pub struct Transaction {
     access: u32,
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, PartialEq)]
 pub struct TestMemory {
-    memory: HashMap<usize, u32>
+    pub memory: HashMap<usize, u32>
 }
 
 impl TestMemory {
-    pub fn new(transactions: Vec<Transaction>) -> TestMemory {
+    pub fn new(transactions: &Vec<Transaction>) -> TestMemory {
         let mut x = Self {
             memory: HashMap::new()
         };
@@ -127,7 +135,7 @@ impl TestMemory {
     }
 
     // NOTE: I don't actually know is this is how things are suppose to get checked
-    pub fn apply_write_transactions(&mut self, transactions: Vec<Transaction>) {
+    pub fn apply_write_transactions(&mut self, transactions: &Vec<Transaction>) {
         for t in transactions {
             if t.kind == 2 {
                 if t.size == 4 {
@@ -144,7 +152,7 @@ impl TestMemory {
     }
 
     fn write_with_mask(&mut self, address: usize, block: u32, mask: u32) -> Result<(), crusty::memory::MemoryError> {
-        let i = (address & 0xffffff) >> 2;
+        let i = address >> 2;
         let shift = (address & 0x3) * 8;
         let old_data = self.read_word(address)?;
         let new_data = (old_data & !(mask << shift)) | ((block & mask) << shift);
@@ -182,14 +190,15 @@ impl Memory for TestMemory {
         let shift = address & 0b10;
         let data = self.read_word(address)?;
         let res = data >> (shift as u32 * 8);
-        Ok(res)       
+        Ok(res & HALFWORD)
     }
 
     fn read_byte(&self, address: usize) -> Result<u32, MemoryError> {
         let shift = address & 0b11;
+        trace!("Shift: {:x}", shift);
         let data = self.read_word(address)?;
         let res = data >> (shift as u32 * 8);
-        Ok(res)
+        Ok(res & BYTE)
     }
 
     fn read_byte_sign_ex(&self, address: usize) -> Result<u32, MemoryError> {

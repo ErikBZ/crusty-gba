@@ -1,5 +1,13 @@
 pub mod io_registers;
 pub mod shifter;
+mod math;
+
+pub use math::ArmCalculations;
+
+pub const KILOBYTE: usize = 1024;
+pub const WORD: u32 = 0xffffffff;
+pub const HALFWORD: u32 = 0xffff;
+pub const BYTE: u32 = 0xff;
 
 // Returns true if the bit at x is 1
 /// Use u32.bit_is_high instead

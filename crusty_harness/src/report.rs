@@ -3,6 +3,7 @@ use std::iter::zip;
 
 use crusty::Cpu;
 use serde::Serialize;
+use serde::de::Expected;
 use tracing::trace;
 
 use crate::models::TestMemory;
@@ -55,6 +56,10 @@ pub struct TestError {
     #[serde(skip_serializing_if = "Option::is_none")]
     register: Option<HashMap<usize, Difference>>,
     #[serde(skip_serializing_if = "Option::is_none")]
+    decode: Option<Difference>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    fetch: Option<Difference>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     fiq: Option<HashMap<usize, Difference>>,
     #[serde(skip_serializing_if = "Option::is_none")]
     svc: Option<HashMap<usize, Difference>>,
@@ -69,7 +74,7 @@ pub struct TestError {
     #[serde(skip_serializing_if = "Option::is_none")]
     spsr: Option<HashMap<usize, Difference>>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    mem: Option<TestMemory>
+    mem: Option<HashMap<usize, u32>>
 }
 
 impl TestError {
@@ -79,6 +84,8 @@ impl TestError {
             opcode,
             instruction_address: None,
             register: None,
+            decode: None,
+            fetch: None,
             fiq: None,
             svc: None,
             abt: None,
@@ -90,13 +97,38 @@ impl TestError {
         }
     }
 
-    pub fn apply_differences(mut self, expected: Cpu, actual: Cpu) -> Self {
+    pub fn apply_differences(mut self, expected: Cpu, actual: Cpu, expected_mem: TestMemory, actual_mem: TestMemory) -> Self {
+        // NOTE: Very rudimentry. Maybe make this a bit nicer?
+        if expected_mem != actual_mem {
+            let mut diffs: HashMap<usize, u32> = HashMap::new();
+            for (k, v) in expected_mem.memory.iter() {
+                if !actual_mem.memory.contains_key(k) {
+                    diffs.insert(*k ,*v);
+                }
+            }
+            self.mem = Some(diffs);
+        }
+
         if expected.cpsr != actual.cpsr {
-            self.add_cpsr_difference(Difference { actual: expected.cpsr, expected: actual.cpsr });
+            self.add_cpsr_difference(Difference { actual: actual.cpsr, expected: expected.cpsr });
         }
 
         if expected.instruction_address() != actual.instruction_address() {
-            self.add_cpsr_difference(Difference { actual: actual.inst_addr as u32, expected: expected.inst_addr as u32 });
+            self.instruction_address = Some(
+                Difference { actual: actual.instruction_address() as u32, expected: expected.instruction_address() as u32 }
+            );
+        }
+
+        if expected.fetch != actual.fetch {
+            self.fetch = Some(
+                Difference { actual: actual.fetch, expected: expected.fetch }
+            )
+        }
+
+        if expected.decode != actual.decode {
+            self.decode = Some(
+                Difference { actual: actual.decode, expected: expected.decode }
+            )
         }
 
         for (idx, (a, e)) in zip(actual.registers, expected.registers).enumerate() {
@@ -228,7 +260,7 @@ pub struct Difference {
 }
 
 impl Difference {
-    pub fn new(expected: u32, actual: u32) -> Self {
+    pub fn new(actual: u32, expected: u32) -> Self {
         Self { actual, expected }
     }
 }

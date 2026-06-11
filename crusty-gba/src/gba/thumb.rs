@@ -6,12 +6,15 @@ use super::{
     add_nums, bit_map_to_array, count_cycles, get_abs_int_value, get_v_from_add, get_v_from_sub,
     is_signed, subtract_nums, Conditional, Operation, CPSR_C, CPSR_T,
 };
+use crate::gba::EXCEPTION_VECTOR_SWI;
+use crate::gba::cpu::CpuMode;
 use crate::utils::shifter::CpuShifter;
+use crate::utils::ArmCalculations;
 use crate::{Cpu, SystemMemory};
 use crate::memory::Memory;
-use tracing::warn;
+use tracing::{warn, trace, error};
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 pub enum Thumb {
     AddSubtractOp(AddSubtractOp),
     MoveShiftedRegisterOp(MoveShiftedRegisterOp),
@@ -518,47 +521,33 @@ impl Operation for HiRegOp {
         let rs = cpu.get_register(self.rs);
         // NOTE: h1 = 0, h2 = 0, op = 00 | 01 | 10 is undefined, and should not be used
         if self.op != 0b11 && !(self.h1 || self.h2) {
-            unreachable!();
+            error!("Operation is invalid");
+            return;
+            // unreachable!();
         }
 
         match self.op {
-            0b00 => cpu.set_register(self.rd, rd + rs),
+            0b00 => {
+                // Maybe change this to overflowing_add if the CPSR doesn't matter to make this
+                // faster?
+                let (res, _, _) = rd.arm_add(rs);
+                // let res = when_operand_is_pc(res, self.rs == PC || self.rd == PC);
+                cpu.set_register(self.rd, res)
+            },
             0b01 => {
-                let (res, v_status) = subtract_nums(rd, rs, false);
-                let c_status = (res >> 32) & 1 == 1;
-                cpu.update_cpsr((res & 0xffffffff) as u32, v_status, c_status);
+                // NOTE: CHECK THIS
+                let (res, carry, overflow) = rd.arm_sub(rs);
+                cpu.update_cpsr(res, overflow, carry);
             }
-            0b10 => cpu.set_register(self.rd, rs),
+            0b10 => {
+                let val = if self.rd == PC { rs.wrapping_add(4) } else { rs };
+                cpu.set_register(self.rd, val)
+            },
             0b11 => {
-                let mut addr = cpu.get_register(self.rs);
+                let mut addr = cpu.get_register(self.rs) as usize;
                 cpu.update_thumb(addr & 1 == 1);
                 addr &= !1;
-
-                let next_inst = if cpu.is_thumb_mode() {
-                    mem.read_halfword(addr as usize)
-                } else {
-                    mem.read_word(addr as usize)
-                };
-
-                // Pipeline flush
-                // NOTE: This is a required read, so maybe panic/log or something?
-                cpu.decode = match next_inst {
-                    Ok(n) => n,
-                    Err(e) => {
-                        warn!(
-                            "Error reading from memory while decoding instruction: {}",
-                            e
-                        );
-                        0
-                    }
-                };
-                cpu.inst_addr = addr as usize;
-
-                if cpu.cpsr & CPSR_T == CPSR_T {
-                    cpu.set_register(PC, addr + 2);
-                } else {
-                    cpu.set_register(PC, addr + 4);
-                }
+                cpu.flush_pipeline(mem, addr);
             }
             _ => unreachable!(),
         }
@@ -645,14 +634,9 @@ impl From<u32> for LoadStoreRegOffsetOp {
 
 impl Operation for LoadStoreRegOffsetOp {
     fn run(&self, cpu: &mut Cpu, mem: &mut impl Memory) {
-        let ro_val = cpu.get_register(self.ro);
-        let offset = get_abs_int_value(ro_val);
-
-        let addr = if is_signed(ro_val) {
-            (cpu.get_register(self.rb) - offset) as usize
-        } else {
-            (cpu.get_register(self.rb) + offset) as usize
-        };
+        let offset = cpu.get_register(self.ro) as usize;
+        let base = cpu.get_register(self.rb) as usize;
+        let addr = base.wrapping_add(offset);
 
         if self.l {
             let block = if self.b {
@@ -670,7 +654,6 @@ impl Operation for LoadStoreRegOffsetOp {
             };
             cpu.set_register(self.rd, data);
         } else {
-            // TODO: Rewrite with let x if, and match on the result x
             let res = if self.b {
                 mem.write_byte(addr, cpu.get_register(self.rd))
             } else {
@@ -679,9 +662,7 @@ impl Operation for LoadStoreRegOffsetOp {
 
             match res {
                 Ok(_) => (),
-                Err(e) => {
-                    warn!("{}", e)
-                }
+                Err(e) => warn!("{}", e)
             }
         }
 
@@ -718,13 +699,14 @@ impl From<u32> for LoadStoreSignExOp {
 
 impl Operation for LoadStoreSignExOp {
     fn run(&self, cpu: &mut Cpu, mem: &mut impl Memory) {
-        let addr = (cpu.get_register(self.rb) + cpu.get_register(self.ro)) as usize;
+        let base = cpu.get_register(self.rb) as usize;
+        let offset = cpu.get_register(self.ro) as usize;
+        let addr = base.wrapping_add(offset);
+
         if !self.h && !self.s {
             match mem.write_halfword(addr, cpu.get_register(self.rd)) {
                 Ok(_) => (),
-                Err(e) => {
-                    warn!("{}", e)
-                }
+                Err(e) => warn!("{}", e),
             }
         } else {
             let data = if self.h && !self.s {
@@ -1178,14 +1160,8 @@ impl Operation for ConditionalBranchOp {
         } else {
             cpu.get_register(PC) + offset_abs
         };
+        cpu.flush_pipeline(mem, addr as usize);
 
-        cpu.decode = match mem.read_halfword(addr as usize) {
-            Ok(n) => n,
-            Err(_) => 0,
-        };
-        cpu.inst_addr = addr as usize;
-
-        cpu.set_register(PC, addr + 2);
         // NOTE: 3S + 1N
         cpu.add_cycles(3)
     }
@@ -1206,12 +1182,21 @@ impl From<u32> for SoftwareInterruptOp {
 }
 
 impl Operation for SoftwareInterruptOp {
-    fn run(&self, cpu: &mut Cpu, _mem: &mut impl Memory) {
-        println!("{:?}", cpu);
-        println!("Cpu PC: {:x}", cpu.pc());
-        // Move address of next instruction into LR, Copy CPSR to SPSR
-        // Load SWI Vector Address into PC, swith to ARM mode, enter SVC
-        // todo!()
+    fn run(&self, cpu: &mut Cpu, mem: &mut impl Memory) {
+        // The PC is updated before this instruction runs so the next instruction
+        // is actually saved in 'instruction_address'
+        cpu.add_interrupt_entry(cpu.instruction_address(), CpuMode::Supervisor);
+
+        let addr_to_return_to = cpu.instruction_address().wrapping_add(2) as u32;
+        cpu.set_register_for_mode(LR, addr_to_return_to, CpuMode::Supervisor);
+
+        cpu.set_psr_for_mode(cpu.cpsr, CpuMode::Supervisor);
+        cpu.set_register(PC, EXCEPTION_VECTOR_SWI as u32);
+        cpu.update_thumb(false);
+        cpu.flush_pipeline(mem, EXCEPTION_VECTOR_SWI);
+        // Irq always disabled during a SWI
+        cpu.disable_irq();
+        cpu.set_cpsr_mode(CpuMode::Supervisor);
     }
 }
 
@@ -1235,18 +1220,9 @@ impl Operation for UnconditionalBranchOp {
         } else {
             self.offset
         };
-        let addr = cpu.get_register(PC).wrapping_add(offset);
+        let addr = cpu.get_register(PC).wrapping_add(offset) as usize;
+        cpu.flush_pipeline(mem, addr);
 
-        cpu.decode = match mem.read_halfword(addr as usize) {
-            Ok(n) => n,
-            Err(e) => {
-                warn!("{}", e);
-                0
-            }
-        };
-        cpu.inst_addr = addr as usize;
-
-        cpu.set_register(PC, addr + 2);
         // NOTE: 2S + 1N
         cpu.add_cycles(3);
     }
@@ -1285,20 +1261,13 @@ impl Operation for LongBranchWithLinkOp {
             cpu.add_cycles(1)
         } else {
             let temp = (cpu.get_register(PC) - 2) | 1;
-            let res = cpu.get_register(LR).wrapping_add(self.offset << 1);
-            cpu.set_register(PC, res);
+            let mut res = cpu.get_register(LR).wrapping_add(self.offset << 1) as usize;
+
+            // Making sure we're halfword aligned
+            res &= !1;
             cpu.set_register(LR, temp);
+            cpu.flush_pipeline(mem, res);
 
-            cpu.decode = match mem.read_halfword(cpu.get_register(PC) as usize) {
-                Ok(n) => n,
-                Err(e) => {
-                    warn!("{}", e);
-                    0
-                }
-            };
-            cpu.inst_addr = res as usize;
-
-            cpu.set_register(PC, cpu.get_register(PC) + 2);
             // NOTE: 3S + 1N
             cpu.add_cycles(3);
         }
