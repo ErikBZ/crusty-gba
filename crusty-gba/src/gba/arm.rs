@@ -1228,6 +1228,8 @@ pub struct HalfwordDataOp {
 }
 
 impl Operation for HalfwordDataOp {
+    // TODO: Tests where w(true) and rn(r15) and l(false)
+    // we flush before the write happens it seems
     fn run(&self, cpu: &mut Cpu, mem: &mut impl Memory) {
         // Could this cause an issue?
         let offset = match self.mode {
@@ -1312,9 +1314,11 @@ impl Operation for HalfwordDataOp {
         }
 
         if (self.w || !self.p) && (self.rn != self.rd || !self.l) {
-            cpu.set_register(self.rn, address as u32);
             if self.rn == PC {
+                cpu.set_register(self.rn, address as u32 + 4);
                 cpu.flush_pipeline(mem, cpu.get_register(PC) as usize);
+            } else {
+                cpu.set_register(self.rn, address as u32);
             }
         }
     }
