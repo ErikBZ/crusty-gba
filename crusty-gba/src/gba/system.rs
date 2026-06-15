@@ -88,6 +88,8 @@ impl Memory for SystemMemory {
     }
 
     // TODO: Makes this only borrow
+    // TODO: Misaligned reads still _work_
+    // TODO: Fix the methods so that it grabs the right misaligned data
     fn read_word(&self, address: usize) -> Result<u32, MemoryError> {
         let res = self.read_from_mem(address)?;
         Ok(res)

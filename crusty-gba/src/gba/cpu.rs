@@ -8,7 +8,6 @@ use super::system::SystemMemory;
 use super::{is_signed, Conditional, CPSR_C, CPSR_N, CPSR_T, CPSR_V, CPSR_Z};
 use core::fmt;
 use std::collections::HashMap;
-use tracing::field::debug;
 use tracing::{debug, error, trace, info};
 
 pub const PC: usize = 15;
@@ -259,11 +258,15 @@ impl Cpu {
             return self.registers[rn];
         }
 
+        self.get_register_for_mode(rn, mode)
+    }
+
+    pub fn get_register_for_mode(&self, rn: usize, mode: CpuMode) -> u32 {
         match mode {
             CpuMode::Fiq => self.fiq_banked_gen_regs[rn - 8],
             CpuMode::Supervisor => self.svc_banked_regs[rn - 13],
-            CpuMode::Irq => self.irq_banked_regs[rn - 13],
             CpuMode::Abort => self.abt_banked_regs[rn - 13],
+            CpuMode::Irq => self.irq_banked_regs[rn - 13],
             CpuMode::Undefined => self.und_banked_regs[rn - 13],
             CpuMode::User | CpuMode::System => self.registers[rn],
         }
@@ -271,7 +274,7 @@ impl Cpu {
 
     pub fn set_register(&mut self, rn: usize, value: u32) {
         let mode = CpuMode::from(self.cpsr);
-        trace!("Writing {:x} to register {:x}. In mode {:?}", rn, value, mode);
+        trace!("Writing {:x} to register {:x}. In mode {:?}", value, rn, mode);
         if rn == 15 || (rn < 13 && !((mode == CpuMode::Fiq) && rn > 7)) {
             return self.registers[rn] = value;
         }
@@ -279,7 +282,7 @@ impl Cpu {
         self.set_register_for_mode(rn, value, mode);
     }
 
-    pub fn set_register_for_mode(&mut self, rn: usize, value: u32, mode :CpuMode) {
+    pub fn set_register_for_mode(&mut self, rn: usize, value: u32, mode: CpuMode) {
         match mode {
             CpuMode::Fiq => self.fiq_banked_gen_regs[rn - 8] = value,
             CpuMode::Supervisor => self.svc_banked_regs[rn - 13] = value,
@@ -510,6 +513,7 @@ impl Cpu {
         };
         self.run_instruction(ram, inst, self.instruction_address());
 
+        // NOTE: Don't need this now that I restore the PSR in data op
         if self.interrupt_entries.contains_key(&self.instruction_address()) {
             let mode = self.interrupt_entries.remove(&self.instruction_address()).unwrap();
             self.cpsr = self.get_psr_for_mode(mode);

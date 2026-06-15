@@ -31,6 +31,7 @@ pub const CPSR_IRQ: u32 = 0x80;
 use crate::{SystemMemory, memory::Memory};
 
 // Operations can be ARM or Thumb instructions
+// TODO: Just take ownership of op
 pub trait Operation: std::fmt::Debug {
     fn run(&self, cpu: &mut cpu::Cpu, mem: &mut impl Memory);
 }
@@ -152,8 +153,8 @@ pub fn subtract_nums(o1: u32, o2: u32, carry: bool) -> (u64, bool) {
 
 // TODO: Find if there's a faster alternative
 // NOTE: Should be maybe be a Vec<usize> instead of Vec<u32>?
-pub fn bit_map_to_array(bitmap: u32) -> Vec<u32> {
-    let mut arr: Vec<u32> = vec![];
+pub fn bit_map_to_array(bitmap: u32) -> Vec<usize> {
+    let mut arr: Vec<usize> = vec![];
     for i in 0..31 {
         if (bitmap >> i) & 1 == 1 {
             arr.push(i);

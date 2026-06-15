@@ -74,7 +74,7 @@ pub struct TestError {
     #[serde(skip_serializing_if = "Option::is_none")]
     spsr: Option<HashMap<usize, Difference>>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    mem: Option<HashMap<usize, u32>>
+    mem: Option<HashMap<usize, (u32, u32)>>
 }
 
 impl TestError {
@@ -100,10 +100,17 @@ impl TestError {
     pub fn apply_differences(mut self, expected: Cpu, actual: Cpu, expected_mem: TestMemory, actual_mem: TestMemory) -> Self {
         // NOTE: Very rudimentry. Maybe make this a bit nicer?
         if expected_mem != actual_mem {
-            let mut diffs: HashMap<usize, u32> = HashMap::new();
+            let mut diffs: HashMap<usize, (u32, u32)> = HashMap::new();
             for (k, v) in expected_mem.memory.iter() {
                 if !actual_mem.memory.contains_key(k) {
-                    diffs.insert(*k ,*v);
+                    diffs.insert(*k<<2 ,(0, *v));
+                } else if actual_mem.memory.get(k) != expected_mem.memory.get(k) {
+                    diffs.insert(*k<<2, (*actual_mem.memory.get(k).unwrap(), *v));
+                }
+            }
+            for (k, v) in actual_mem.memory.iter() {
+                if !expected_mem.memory.contains_key(k) {
+                    diffs.insert(*k<<2, (*v, 0));
                 }
             }
             self.mem = Some(diffs);

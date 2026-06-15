@@ -911,8 +911,8 @@ pub struct BlockDataTransfer {
     s: bool,
     w: bool,
     l: bool,
-    rn: u8,
-    register_list: u16,
+    rn: usize,
+    registers: Vec<usize>,
 }
 
 impl Operation for BlockDataTransfer {
@@ -920,20 +920,21 @@ impl Operation for BlockDataTransfer {
         // TODO: Take into consideration the S flag
         // TODO: Propogate the mem error to signify ABORT signal
         // When rn is 13 then we are doing stack ops, otherwise no
-        let mut address = cpu.get_register(self.rn as usize) as usize;
-        let registers = bit_map_to_array(self.register_list as u32);
+        let mut address = cpu.get_register(self.rn) as usize;
+        let mut rn_address = 0;
+        let mut registers = self.registers.clone();
+        let step: isize = if self.u {
+            4
+        } else {
+            registers.reverse();
+            -4
+        };
 
-        for i in 0..registers.len() {
-            if self.p && self.w {
-                if self.u {
-                    address += 4
-                } else {
-                    address -= 4
-                }
-                cpu.set_register(self.rn as usize, address as u32);
+        // TODO: I think the write back only needs to happen at the very end
+        for register in registers.iter() {
+            if self.p {
+                address = address.wrapping_add_signed(step);
             }
-
-            let reg = if !self.u { registers.len() - i - 1 } else { i };
 
             if self.l {
                 let res = match mem.read_word(address) {
@@ -943,37 +944,81 @@ impl Operation for BlockDataTransfer {
                         0
                     }
                 };
-                cpu.set_register(registers[reg] as usize, res);
+                if self.s && !self.registers.contains(&PC) {
+                    trace!("Loading data into User Regs: {:x} from addr: {:x}. Reg({:x})", res, address, register);
+                    cpu.set_register_for_mode(*register, res, CpuMode::User);
+                } else {
+                    trace!("Loading data: {:x} from addr: {:x}. Reg({:x})", res, address, register);
+                    cpu.set_register(*register, res);
+                }
+                // cpu.set_register(*register, res);
             } else {
-                match mem.write_word(address, cpu.get_register(registers[reg] as usize)) {
-                    Ok(_) => (),
-                    Err(e) => {
-                        warn!("{}", e);
-                    }
+                if *register == self.rn {
+                    rn_address = address;
+                }
+
+                let mut data = if self.s {
+                    cpu.get_register_for_mode(*register, CpuMode::User)
+                } else {
+                    cpu.get_register(*register)
+                };
+
+                if *register == PC {
+                    data = data.wrapping_add(4);
+                }
+                trace!("Storing to addr: {:x}, data: {:x} from Reg({:x})", address, data, register);
+                if let Err(e) = mem.write_word(address, data) {
+                    warn!("{}", e);
                 };
             }
 
-            if !self.p && self.w {
-                if self.u {
-                    address += 4
-                } else {
-                    address -= 4
-                }
-                cpu.set_register(self.rn as usize, address as u32);
+            if !self.p {
+                address = address.wrapping_add_signed(step);
             }
         }
 
-        if registers.contains(&(PC as u32)) {
-            cpu.flush_pipeline(mem, cpu.get_register(PC) as usize);
+        // NOTE: This looks horrible!
+        if self.w {
+            if !self.registers.contains(&self.rn) {
+                if self.s && !self.l{
+                    cpu.set_register_for_mode(self.rn, address as u32, CpuMode::User);
+                } else {
+                    cpu.set_register(self.rn, address as u32);
+                }
+            }
+
+            // NOTE: This doesn't work when !self.u cause address will be to high
+            if !self.l && self.registers.contains(&self.rn) {
+                if let Err(e) = mem.write_word(rn_address, address as u32) {
+                    warn!("{}", e);
+                };
+            }
+
+            if !self.l {
+                if self.s {
+                    cpu.set_register_for_mode(self.rn, address as u32, CpuMode::User);
+                } else {
+                    cpu.set_register(self.rn, address as u32);
+                }
+            }
         }
 
-        let entries = registers.len() as u32;
+        if self.registers.contains(&PC) && self.l {
+            if self.l {
+                cpu.flush_pipeline(mem, cpu.get_register(PC) as usize);
+            }
+            if self.s {
+                cpu.set_cpsr(cpu.get_psr());
+            }
+        }
+
+        let entries = self.registers.len() as u32;
         let cycles_per_entry = read_cycles_per_32(address);
         let cycles = calc_cycles_for_stm_ldm(
             cycles_per_entry,
             entries,
             self.l,
-            registers.contains(&(PC as u32)),
+            self.registers.contains(&PC),
         );
         cpu.add_cycles(cycles);
     }
@@ -987,8 +1032,8 @@ impl From<u32> for BlockDataTransfer {
             s: (inst >> 22 & 1) == 1,
             w: (inst >> 21 & 1) == 1,
             l: (inst >> 20 & 1) == 1,
-            rn: (inst >> 16 & 0xf) as u8,
-            register_list: (inst & 0xffff) as u16,
+            rn: (inst >> 16 & 0xf) as usize,
+            registers: bit_map_to_array(inst & 0xffff),
         }
     }
 }

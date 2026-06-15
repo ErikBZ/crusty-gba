@@ -46,9 +46,11 @@ pub async fn run_test(t: Test, idx: usize, is_thumb: bool) -> Result<(), (usize,
     } else {
         debug!("Test {} Failed!", idx);
         trace!("Expected: \n{}\nActual: \n{}", final_cpu, initial_cpu);
-        trace!("Expected: \n{:x?}\nActual: \n{:x?}", final_mem, mem);
+        let act_mem = mem.to_vec();
+        let exp_mem = final_mem.to_vec();
+        trace!("Expected: \n{:x?}\nActual: \n{:x?}", exp_mem, act_mem);
         let te = TestError::new(t.opcode);
-        Err((idx, te.apply_differences(final_cpu, initial_cpu, mem, final_mem)))
+        Err((idx, te.apply_differences(final_cpu, initial_cpu, final_mem, mem)))
     }
 }
 
@@ -120,6 +122,8 @@ impl TestMemory {
                     error!("Memory already has this item!")
                 }
 
+                trace!("Writing data: {:x} to addr: {:x}, size: {}", t.data, t.addr, t.size);
+
                 if t.size == 4 {
                     let _ = x.write_word(t.addr, t.data);
                 } else if t.size == 2 {
@@ -132,6 +136,12 @@ impl TestMemory {
             }
         }
         x
+    }
+
+    fn to_vec(&self) -> Vec<(usize, u32)> {
+        let mut v = self.memory.clone().into_iter().map(|(k, v)| (k << 2, v)).collect::<Vec<(usize, u32)>>();
+        v.sort();
+        v
     }
 
     // NOTE: I don't actually know is this is how things are suppose to get checked
@@ -165,8 +175,11 @@ impl TestMemory {
 }
 
 impl Memory for TestMemory {
+    // Going to assume that we force align these, even when initting with the SST
     fn write_word(&mut self, address: usize, block: u32) -> Result<(), MemoryError> {
+        let address = address & !3;
         self.write_with_mask(address, block, WORD)?;
+        trace!("{:x?}", self.to_vec());
         Ok(())
     }
 
