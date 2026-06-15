@@ -1291,11 +1291,15 @@ impl Operation for HalfwordDataOp {
                 unreachable!();
             };
             // STRH
-            if self.rd == PC {
-                address = address.wrapping_add_signed(12);
-            }
+            let data = if self.rd == PC {
+                // address = address.wrapping_add_signed(12);
+                cpu.get_register(self.rd) + 4
+            } else {
+                cpu.get_register(self.rd)
+            };
+
             trace!("Writing to addr: {:x}", address);
-            match mem.write_halfword(address, cpu.get_register(self.rd)) {
+            match mem.write_halfword(address, data) {
                 Ok(_) => (),
                 Err(e) => warn!("{}", e),
             }
@@ -1307,7 +1311,7 @@ impl Operation for HalfwordDataOp {
             address = address.wrapping_add_signed(offset);
         }
 
-        if self.w || !self.p {
+        if (self.w || !self.p) && (self.rn != self.rd || !self.l) {
             cpu.set_register(self.rn, address as u32);
             if self.rn == PC {
                 cpu.flush_pipeline(mem, cpu.get_register(PC) as usize);
