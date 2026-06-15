@@ -7,7 +7,7 @@ use super::{bit_map_to_array, Operation};
 use crate::gba::cpu::CpuMode;
 use crate::gba::EXCEPTION_VECTOR_SWI;
 use crate::utils::shifter::CpuShifter;
-use crate::utils::{ArmCalculations, BYTE, Bitable, HALFWORD};
+use crate::utils::{ArmCalculations, BYTE, Bitable, HALFWORD, WORD};
 use crate::memory::Memory;
 use tracing::{warn, trace};
 use tracing_subscriber::registry::Data;
@@ -62,28 +62,28 @@ impl TryFrom<u32> for Arm {
             Ok(Self::MultiplyLongOp(MultiplyLongOp::from(value)))
         } else if is_single_data_swap(value) {
             Ok(Self::SingleDataSwapOp(SingleDataSwapOp::from(value)))
+        } else if is_halfword_data_tfx(value) || is_halfword_data_signed_tfx(value) {
+            Ok(Self::HalfwordDataOp(HalfwordDataOp::from(value)))
         } else if is_branch_and_exchange(value) {
             Ok(Self::BranchExchangeOp(BranchExchangeOp::from(value)))
-        } else if is_branch(value) {
-            Ok(Self::BranchOp(BranchOp::from(value)))
-        } else if is_software_interrupt(value) {
-            Ok(Self::SoftwareInterruptOp(SoftwareInterruptOp::from(value)))
         } else if is_single_data_tfx(value) {
             Ok(Self::SingleDataTfx(SingleDataTfx::from(value)))
         } else if is_block_data_tfx(value) {
             Ok(Self::BlockDataTransfer(BlockDataTransfer::from(value)))
+        } else if is_psr_transfer(value) {
+            Ok(Self::PsrTransferOp(PsrTransferOp::from(value)))
+        } else if is_data_processing(value) {
+            Ok(Self::DataProcessingOp(DataProcessingOp::from(value)))
+        } else if is_branch(value) {
+            Ok(Self::BranchOp(BranchOp::from(value)))
         } else if is_coprocessor_data_op(value) {
             Ok(Self::CoprocessDataOp(CoprocessDataOp::from(value)))
         } else if is_coprocessor_data_tfx(value) {
             Ok(Self::CoprocessDataTfx(CoprocessDataTfx::from(value)))
         } else if is_coprocessor_reg_tfx(value) {
             Ok(Self::CoprocessRegTfx(CoprocessRegTfx::from(value)))
-        } else if is_psr_transfer(value) {
-            Ok(Self::PsrTransferOp(PsrTransferOp::from(value)))
-        } else if is_halfword_data_tfx_imm(value) || is_halfword_data_tfx_reg(value) {
-            Ok(Self::HalfwordDataOp(HalfwordDataOp::from(value)))
-        } else if is_data_processing(value) {
-            Ok(Self::DataProcessingOp(DataProcessingOp::from(value)))
+        } else if is_software_interrupt(value) {
+            Ok(Self::SoftwareInterruptOp(SoftwareInterruptOp::from(value)))
         } else {
             Ok(Self::UndefinedInstruction(UndefinedInstruction))
         }
@@ -1229,6 +1229,7 @@ pub struct HalfwordDataOp {
 
 impl Operation for HalfwordDataOp {
     fn run(&self, cpu: &mut Cpu, mem: &mut impl Memory) {
+        // Could this cause an issue?
         let offset = match self.mode {
             AddressingMode3::Reg(m) => cpu.get_register(m as usize),
             AddressingMode3::Imm(byte_offset) => byte_offset as u32,
@@ -1236,9 +1237,13 @@ impl Operation for HalfwordDataOp {
         let mut address = cpu.get_register(self.rn) as usize;
         let offset = if self.u { offset } else { -offset };
 
+        trace!("Offset: {:x} + Address: {:x}", offset, address);
+
         if self.p {
             address = address.wrapping_add_signed(offset);
         }
+
+        trace!("Equals Address: {:x}", address);
 
         let cycles_per_entry = read_cycles_per_8_16(address);
 
@@ -1256,6 +1261,12 @@ impl Operation for HalfwordDataOp {
                     0
                 }
             };
+
+            if self.h && !address.is_multiple_of(2) {
+                trace!("rotating by {}!", ((address & 1) * 8));
+                data = data.rotate_right((address as u32 & 1) * 8);
+            }
+
             trace!("Read data: {:x} from address: {:x}", data, address);
 
             if self.s && (data & 0x80 == 0x80 || data & 0x8000 == 0x8000) {
@@ -1268,6 +1279,7 @@ impl Operation for HalfwordDataOp {
 
             cpu.set_register(self.rd, data);
             if self.rd == PC {
+                cpu.flush_pipeline(mem, cpu.get_register(PC) as usize);
                 // NOTE: 2I + 2N 1I
                 cpu.add_cycles(cycles_per_entry + 4);
             } else {
@@ -1280,8 +1292,9 @@ impl Operation for HalfwordDataOp {
             };
             // STRH
             if self.rd == PC {
-                address = address.wrapping_add(12);
+                address = address.wrapping_add_signed(12);
             }
+            trace!("Writing to addr: {:x}", address);
             match mem.write_halfword(address, cpu.get_register(self.rd)) {
                 Ok(_) => (),
                 Err(e) => warn!("{}", e),
@@ -1294,8 +1307,11 @@ impl Operation for HalfwordDataOp {
             address = address.wrapping_add_signed(offset);
         }
 
-        if self.w {
+        if self.w || !self.p {
             cpu.set_register(self.rn, address as u32);
+            if self.rn == PC {
+                cpu.flush_pipeline(mem, cpu.get_register(PC) as usize);
+            }
         }
     }
 }
@@ -1348,8 +1364,12 @@ pub fn is_branch_and_exchange(inst: u32) -> bool {
     inst & 0x0ffffff0 == 0x012fff10
 }
 
-pub fn is_halfword_data_tfx_reg(inst: u32) -> bool {
-    inst & 0x0e400f90 == 0x00000090
+pub fn is_halfword_data_tfx(inst: u32) -> bool {
+    inst & 0x0e0000f0 == 0x000000b0
+}
+
+pub fn is_halfword_data_signed_tfx(inst: u32) -> bool {
+    inst & 0x0e1000d0 == 0x001000d0
 }
 
 pub fn is_halfword_data_tfx_imm(inst: u32) -> bool {

@@ -1457,7 +1457,7 @@ mod test {
             PushPopRegOp {
                 l: false,
                 r: true,
-                rlist: 0b1111000
+                registers: vec![3, 4, 5, 6, 7]
             }
         );
     }

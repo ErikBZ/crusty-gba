@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 use tracing::{error, debug, trace};
 
-use crusty::{Cpu, gba::cpu::Opcode, memory::{Memory, MemoryError}};
+use crusty::{Cpu, memory::{Memory, MemoryError}};
 use serde::{Deserialize, Serialize};
 
 use crate::report::TestError;
@@ -162,6 +162,8 @@ impl TestMemory {
     }
 
     fn write_with_mask(&mut self, address: usize, block: u32, mask: u32) -> Result<(), crusty::memory::MemoryError> {
+        // NOTE: This already happens by default in system gba memory
+        let address = address & WORD as usize;
         let i = address >> 2;
         let shift = (address & 0x3) * 8;
         let old_data = self.read_word(address)?;
@@ -184,6 +186,7 @@ impl Memory for TestMemory {
     }
 
     fn write_halfword(&mut self, address: usize, block: u32) -> Result<(), MemoryError> {
+        let address = address & !1;
         self.write_with_mask(address, block, HALFWORD)?;
         Ok(())
     }
@@ -194,6 +197,8 @@ impl Memory for TestMemory {
     }
 
     fn read_word(&self, address: usize) -> Result<u32, MemoryError> {
+        // NOTE: This already happens by default in gba system
+        let address = address & WORD as usize;
         let addr_key = address >> 2;
         let data = *self.memory.get(&addr_key).unwrap_or(&0);
         Ok(data)
