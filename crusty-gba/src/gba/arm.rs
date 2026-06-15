@@ -1271,10 +1271,10 @@ impl Operation for HalfwordDataOp {
 
             trace!("Read data: {:x} from address: {:x}", data, address);
 
-            if self.s && (data & 0x80 == 0x80 || data & 0x8000 == 0x8000) {
-                if self.h {
+            if self.s {
+                if self.h && (data & 0x8000 == 0x8000){
                     data |= !HALFWORD
-                } else {
+                } else if (!self.h || !address.is_multiple_of(2)) && data & 0x80 == 0x80 {
                     data |= !BYTE
                 }
             }
