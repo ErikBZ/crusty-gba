@@ -54,7 +54,7 @@ impl CpuShifter for Cpu {
 
     fn rrx_with_carry(&self, lhs: u32) -> (u32, bool) {
         let c_in = if self.c_status() { 0x80000000 } else { 0 };
-        ((lhs >> 31) | c_in, (lhs & 1) == 0b1)
+        ((lhs >> 1) | c_in, (lhs & 1) == 0b1)
     }
 }
 

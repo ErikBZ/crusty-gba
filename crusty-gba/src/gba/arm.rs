@@ -10,7 +10,6 @@ use crate::utils::shifter::CpuShifter;
 use crate::utils::{ArmCalculations, BYTE, Bitable, HALFWORD, WORD};
 use crate::memory::Memory;
 use tracing::{warn, trace};
-use tracing_subscriber::registry::Data;
 
 #[derive(Debug, PartialEq)]
 pub enum Arm {
@@ -211,15 +210,17 @@ impl Operation for DataProcessingOp {
         let mut cycles = 1;
         cycles += cycle;
 
-        let lhs = cpu.get_register(self.rn);
-
+        let mut lhs = cpu.get_register(self.rn);
+        if self.rn == PC {
+            if let Operand::ShiftWithReg(_, _, _) = self.operand {
+                lhs = lhs.wrapping_add(4);
+            }
+        }
 
         if self.rd == PC {
             cycles += 1;
         }
         let mut v_status = false;
-
-        // NOTE: Take into consideration lhs/rhs as PC here
 
         trace!("lhs({lhs:x}), rhs({rhs:x})");
         let res = match self.opcode {
@@ -371,7 +372,14 @@ impl Operand {
     fn lhs(&self, cpu: &Cpu) -> u32 {
         match self {
             Self::Imm(x, _, _) => *x,
-            Self::ShiftWithReg(x, _, _) => cpu.get_register(*x),
+            Self::ShiftWithReg(x, _, _) => {
+                let res = cpu.get_register(*x);
+                if *x == PC {
+                    res + 4
+                } else {
+                    res
+                }
+            },
             Self::ShiftImm(x, _, _) => cpu.get_register(*x),
         }
     }
@@ -1263,6 +1271,7 @@ impl Operation for HalfwordDataOp {
                     0
                 }
             };
+            trace!("Read data: {:x} from address: {:x}", data, address);
 
             if self.h && !address.is_multiple_of(2) {
                 trace!("rotating by {}!", ((address & 1) * 8));
