@@ -1276,6 +1276,9 @@ impl Operation for HalfwordDataOp {
             if self.h && !address.is_multiple_of(2) {
                 trace!("rotating by {}!", ((address & 1) * 8));
                 data = data.rotate_right((address as u32 & 1) * 8);
+                if self.s {
+                    data &= BYTE;
+                }
             }
 
             trace!("Read data: {:x} from address: {:x}", data, address);
