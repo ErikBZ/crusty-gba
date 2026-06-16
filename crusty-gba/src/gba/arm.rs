@@ -455,19 +455,40 @@ pub struct MultiplyOp {
 }
 
 impl Operation for MultiplyOp {
-    fn run(&self, cpu: &mut Cpu, _mem: &mut impl Memory) {
-        let rn_value = cpu.get_register(self.rn);
-        let rs_value = cpu.get_register(self.rs);
-        let rm_value = cpu.get_register(self.rm);
+    // TODO: Use booths algo to get the right carry bits
+    fn run(&self, cpu: &mut Cpu, mem: &mut impl Memory) {
+        let mut rn_value = if self.a { cpu.get_register(self.rn) } else { 0 };
+        let mut rs_value = cpu.get_register(self.rs);
+        let mut rm_value = cpu.get_register(self.rm);
 
-        let mut res = rm_value.wrapping_mul(rs_value);
-        if self.a {
-            res = res.wrapping_add(rn_value);
+        if self.rs == PC {
+            rs_value = rs_value.wrapping_add(4);
+        }
+        if self.rm == PC {
+            rm_value = rm_value.wrapping_add(4);
+        }
+        if self.rn == PC && self.a {
+            rn_value = rn_value.wrapping_add(4);
         }
 
+        let (res, res_upper) = rm_value.carrying_mul_add(rs_value, 0, rn_value);
+        let c = res_upper & 1 == 1;
+        // let (res, mut c, _) = res.arm_add(rn_value);
+        // c |= c_upper;
+
+        trace!("{:x} * {:x} + {:x} = upper({:x}), lower({:x})", rm_value, rs_value, rn_value, res_upper, res);
+
+        let v = cpu.v_status();
+
         cpu.set_register(self.rd, res);
-        // TODO: C is meaningless and V is unaffected. Update this to reflect this
-        cpu.update_cpsr(res, cpu.v_status(), cpu.c_status());
+        if self.s {
+            // TODO: C is meaningless and V is unaffected. Update this to reflect this
+            cpu.update_cpsr(res, v, c);
+        }
+
+        if self.rd == PC {
+            cpu.flush_pipeline(mem, cpu.get_register(PC) as usize);
+        }
         // NOTE:
         //      MUL: 1S +(m)I
         //      MLA: 1S +(m+1)I
