@@ -3,8 +3,6 @@ use std::iter::zip;
 
 use crusty::Cpu;
 use serde::Serialize;
-use serde::de::Expected;
-use tracing::trace;
 
 use crate::models::TestMemory;
 

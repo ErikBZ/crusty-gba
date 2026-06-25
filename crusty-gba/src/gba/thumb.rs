@@ -979,54 +979,36 @@ impl From<u32> for PushPopRegOp {
 impl Operation for PushPopRegOp {
     fn run(&self, cpu: &mut Cpu, mem: &mut impl Memory) {
         let mut registers = self.registers.clone();
+        let mut address = cpu.get_register(SP) as usize;
         if self.r {
             registers.push(if self.l { PC } else { LR });
         }
 
-        for reg in registers.iter() {
-            if self.l {
-                let value = match mem.read_word(cpu.get_register(SP) as usize) {
-                    Ok(n) => {
-                        if *reg == PC {
-                            n & 0xfffffffe
-                        } else {
-                            n
-                        }
-                    }
-                    Err(e) => {
-                        warn!("{}", e);
-                        0
-                    }
+        if self.l {
+            for reg in registers.iter() {
+                let value = match mem.read_word(address) {
+                    Ok(d) => d,
+                    Err(e) => { warn!("{}", e); 0 }
                 };
+                trace!("Loading Data({:x}) from Addr({:x}) to Reg({:x})", value, address, *reg);
                 cpu.set_register(*reg, value);
-                // TODO: Super Hacky, update pipeline. This should need to be done and, we should fetch inst at the
-                // end i think.
-                if *reg == PC {
-                    let addr = cpu.get_register(PC) as usize;
-                    let next_inst = if cpu.is_thumb_mode() {
-                        mem.read_halfword(addr as usize)
-                    } else {
-                        mem.read_word(addr as usize)
-                    };
-
-                    cpu.decode = match next_inst {
-                        Ok(n) => n,
-                        Err(_) => panic!(),
-                    };
-                    cpu.set_register(*reg, (addr + 2) as u32)
-                }
-
-                cpu.set_register(SP, cpu.get_register(SP) + 4);
-            } else {
-                cpu.set_register(SP, cpu.get_register(SP) - 4);
-                match mem.write_word(
-                    cpu.get_register(SP) as usize,
-                    cpu.get_register(*reg),
-                ) {
+                address = address.wrapping_add(4);
+            }
+        } else {
+            for reg in registers.iter().rev() {
+                address = address.wrapping_sub(4);
+                trace!("Storing Data({:x}) to Addr({:x}) from Reg({:x})", cpu.get_register(*reg), address, *reg);
+                match mem.write_word(address, cpu.get_register(*reg)) {
                     Ok(_) => (),
                     Err(e) => warn!("{}", e),
-                };
+                }
             }
+        }
+
+        cpu.set_register(SP, address as u32);
+        if self.r && self.l {
+            cpu.set_register(PC, cpu.get_register(PC) & !1);
+            cpu.flush_pipeline(mem, cpu.get_register(PC) as usize);
         }
 
         // NOTE: This only read from the SP so it's always a cycle per entry of 1
