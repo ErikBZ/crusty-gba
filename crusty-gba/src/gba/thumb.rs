@@ -1028,7 +1028,7 @@ impl Operation for PushPopRegOp {
 struct MultipleLoadStoreOp {
     l: bool,
     rb: usize,
-    rlist: u8,
+    registers: Vec<usize>,
 }
 
 impl From<u32> for MultipleLoadStoreOp {
@@ -1036,7 +1036,7 @@ impl From<u32> for MultipleLoadStoreOp {
         MultipleLoadStoreOp {
             l: (value >> 11 & 1) == 1,
             rb: get_triplet_as_usize(value, 8),
-            rlist: (value & 0xff) as u8,
+            registers: bit_map_to_array(value & 0xff),
         }
     }
 }
@@ -1045,39 +1045,51 @@ impl Operation for MultipleLoadStoreOp {
     fn run(&self, cpu: &mut Cpu, mem: &mut impl Memory) {
         // TODO: use bit_map_to_array function here?
         let mut address = cpu.get_register(self.rb) as usize;
-        for i in 0..8 {
-            if (self.rlist >> i & 1) == 0 {
-                continue;
-            }
+        let mut banked_address = 0;
 
-            if self.l {
+        if self.l {
+            for reg in self.registers.iter() {
                 let value = match mem.read_word(address) {
-                    Ok(n) => n,
-                    Err(e) => {
-                        warn!("{}", e);
-                        0
-                    }
+                    Ok(d) => d,
+                    Err(e) => { warn!("{}", e); 0 }
                 };
-                cpu.set_register(i, value);
-            } else {
-                match mem.write_word(address, cpu.get_register(i)) {
+                cpu.set_register(*reg, value);
+                address = address.wrapping_add(4);
+            }
+        } else {
+            for reg in self.registers.iter() {
+                match mem.write_word(address, cpu.get_register(*reg)) {
+                    Ok(_) => (),
+                    Err(e) => warn!("{}", e),
+                };
+                if *reg == self.rb {
+                    banked_address = address;
+                }
+                address = address.wrapping_add(4);
+            }
+        }
+
+        if self.l {
+            if !self.registers.contains(&self.rb) {
+                cpu.set_register(self.rb, address as u32);
+            }
+        } else {
+            cpu.set_register(self.rb, address as u32);
+            if self.registers.contains(&self.rb) && self.registers[0] != self.rb {
+                match mem.write_word(banked_address, cpu.get_register(self.rb)) {
                     Ok(_) => (),
                     Err(e) => warn!("{}", e),
                 };
             }
-
-            address += 4;
         }
 
-        cpu.set_register(self.rb, address as u32);
-        let registers = bit_map_to_array(self.rlist.into());
-        let n = registers.len() as u32;
+        let n = self.registers.len() as u32;
         let cycles_per_entires = read_cycles_per_32(address);
         let cycles = calc_cycles_for_stm_ldm(
             cycles_per_entires,
             n,
             self.l,
-            registers.contains(&PC),
+            self.registers.contains(&PC),
         );
         cpu.add_cycles(cycles);
     }
