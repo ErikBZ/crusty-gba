@@ -213,8 +213,7 @@ impl Operation for AddSubtractOp {
         };
 
         let lhs = cpu.get_register(self.rs);
-        let (res, c_status, v_status) = if self.op {
-            lhs.arm_sub(offset)
+        let (res, c_status, v_status) = if self.op {            lhs.arm_sub(offset)
         } else {
             lhs.arm_add(offset)
         };
@@ -517,34 +516,30 @@ impl Operation for HiRegOp {
         let rd = cpu.get_register(self.rd);
         let rs = cpu.get_register(self.rs);
         // NOTE: h1 = 0, h2 = 0, op = 00 | 01 | 10 is undefined, and should not be used
-        if self.op != 0b11 && !(self.h1 || self.h2) {
-            error!("Operation is invalid");
-            return;
-            // unreachable!();
-        }
 
         match self.op {
             0b00 => {
-                // Maybe change this to overflowing_add if the CPSR doesn't matter to make this
-                // faster?
                 let (res, _, _) = rd.arm_add(rs);
-                // let res = when_operand_is_pc(res, self.rs == PC || self.rd == PC);
-                cpu.set_register(self.rd, res)
+                if self.rd == PC {
+                    cpu.flush_pipeline(mem, (res & !1) as usize);
+                } else {
+                    cpu.set_register(self.rd, res)
+                }
             },
             0b01 => {
-                // NOTE: CHECK THIS
                 let (res, carry, overflow) = rd.arm_sub(rs);
                 cpu.update_cpsr(res, overflow, carry);
             }
             0b10 => {
-                let val = if self.rd == PC { rs.wrapping_add(4) } else { rs };
-                cpu.set_register(self.rd, val)
+                if self.rd == PC {
+                    cpu.flush_pipeline(mem, (rs & !1) as usize);
+                } else {
+                    cpu.set_register(self.rd, rs)
+                }
             },
             0b11 => {
-                let mut addr = cpu.get_register(self.rs) as usize;
-                cpu.update_thumb(addr & 1 == 1);
-                addr &= !1;
-                cpu.flush_pipeline(mem, addr);
+                cpu.update_thumb(rs & 1 == 1);
+                cpu.flush_pipeline(mem, (rs & !1) as usize);
             }
             _ => unreachable!(),
         }
@@ -594,7 +589,7 @@ impl Operation for PcRelativeLoadOp {
         let block_from_mem = match mem.read_word(addr) {
             Ok(n) => n,
             Err(e) => {
-                warn!("{}", e);
+                // warn!("{}", e);
                 panic!()
             }
         };
@@ -645,7 +640,7 @@ impl Operation for LoadStoreRegOffsetOp {
             let data = match block {
                 Ok(n) => n,
                 Err(e) => {
-                    warn!("{}", e);
+                    // warn!("{}", e);
                     panic!()
                 }
             };
@@ -659,7 +654,7 @@ impl Operation for LoadStoreRegOffsetOp {
 
             match res {
                 Ok(_) => (),
-                Err(e) => warn!("{}", e)
+                Err(e) => (), //warn!("{}", e)
             }
         }
 
@@ -703,7 +698,7 @@ impl Operation for LoadStoreSignExOp {
         if !self.h && !self.s {
             match mem.write_halfword(addr, cpu.get_register(self.rd)) {
                 Ok(_) => (),
-                Err(e) => warn!("{}", e),
+                Err(e) => (), //warn!("{}", e),
             }
         } else {
             let data = if self.h && !self.s {
@@ -717,7 +712,7 @@ impl Operation for LoadStoreSignExOp {
             let data = match data {
                 Ok(n) => n,
                 Err(e) => {
-                    warn!("{}", e);
+                    //warn!("{}", e);
                     0
                 }
             };
@@ -769,7 +764,7 @@ impl Operation for LoadStoreImmOffsetOp {
             let res = match val {
                 Ok(n) => n,
                 Err(e) => {
-                    warn!("{}", e);
+                    //warn!("{}", e);
                     0
                 }
             };
@@ -783,7 +778,7 @@ impl Operation for LoadStoreImmOffsetOp {
 
             match res {
                 Ok(_) => (),
-                Err(e) => warn!("{}", e),
+                Err(e) => (),//warn!("{}", e),
             }
         }
 
