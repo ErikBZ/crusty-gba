@@ -201,6 +201,7 @@ impl Memory for TestMemory {
         let address = address & WORD as usize;
         let addr_key = address >> 2;
         let data = *self.memory.get(&addr_key).unwrap_or(&0);
+        trace!("Reading data({:x}) from addr({:x})", data, address);
         Ok(data)
     }
 

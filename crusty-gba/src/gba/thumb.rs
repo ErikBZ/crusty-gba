@@ -748,12 +748,14 @@ impl From<u32> for LoadStoreImmOffsetOp {
 
 impl Operation for LoadStoreImmOffsetOp {
     fn run(&self, cpu: &mut Cpu, mem: &mut impl Memory) {
-        let addr = (cpu.get_register(self.rb)
-            + if self.b {
+        let addr = (cpu.get_register(self.rb) +
+            if self.b {
                 self.offset
             } else {
                 self.offset << 2
-            }) as usize;
+            }
+        ) as usize;
+
         if self.l {
             let val = if self.b {
                 mem.read_byte(addr)
@@ -761,13 +763,19 @@ impl Operation for LoadStoreImmOffsetOp {
                 mem.read_word(addr)
             };
 
-            let res = match val {
+            let mut res = match val {
                 Ok(n) => n,
                 Err(e) => {
-                    //warn!("{}", e);
+                    warn!("{}", e);
                     0
                 }
             };
+
+            if !addr.is_multiple_of(4) {
+                let rot = (addr & 3) * 8;
+                res = res.rotate_right(rot as u32);
+            }
+
             cpu.set_register(self.rd, res);
         } else {
             let res = if self.b {
@@ -778,7 +786,7 @@ impl Operation for LoadStoreImmOffsetOp {
 
             match res {
                 Ok(_) => (),
-                Err(e) => (),//warn!("{}", e),
+                Err(e) => warn!("{}", e),
             }
         }
 
