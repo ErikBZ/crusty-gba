@@ -771,7 +771,7 @@ impl Operation for LoadStoreImmOffsetOp {
                 }
             };
 
-            if !addr.is_multiple_of(4) {
+            if !addr.is_multiple_of(4) & !self.b {
                 let rot = (addr & 3) * 8;
                 res = res.rotate_right(rot as u32);
             }
