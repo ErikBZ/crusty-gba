@@ -143,6 +143,7 @@ pub fn add_nums(o1: u32, o2: u32, carry: bool) -> (u64, bool) {
     (res, get_v_from_add(lhs, rhs, res))
 }
 
+#[deprecated]
 pub fn subtract_nums(o1: u32, o2: u32, carry: bool) -> (u64, bool) {
     let lhs = o1 as u64;
     let rhs = !o2 as u64;

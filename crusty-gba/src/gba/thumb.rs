@@ -205,7 +205,6 @@ impl From<u32> for AddSubtractOp {
 }
 
 impl Operation for AddSubtractOp {
-    // TODO: PC is being tracked incorrectly. Gotta fix that
     fn run(&self, cpu: &mut super::cpu::Cpu, _mem: &mut impl Memory) {
         let offset = if self.i {
             self.offset
@@ -213,14 +212,12 @@ impl Operation for AddSubtractOp {
             cpu.get_register(self.rn)
         };
 
-        let (res, v_status) = if self.op {
-            subtract_nums(cpu.get_register(self.rs), offset, false)
+        let lhs = cpu.get_register(self.rs);
+        let (res, c_status, v_status) = if self.op {
+            lhs.arm_sub(offset)
         } else {
-            add_nums(cpu.get_register(self.rs), offset, false)
+            lhs.arm_add(offset)
         };
-
-        let c_status = res >> 32 & 1 == 1;
-        let res = 0xffffffff & res as u32;
 
         cpu.update_cpsr(res, v_status, c_status);
         cpu.set_register(self.rd, res);
