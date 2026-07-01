@@ -226,8 +226,14 @@ impl Memory for TestMemory {
     }
 
     fn read_halfword_sign_ex(&self, address: usize) -> Result<u32, MemoryError> {
-        let res = self.read_halfword(address)? as i32;
-        Ok(((res << 16) >> 16) as u32)
+        let mut res = self.read_halfword(address)? as i32;
+        res <<= 16;
+        res = if !address.is_multiple_of(2) {
+            res >> 24
+        } else {
+            res >> 16
+        };
+        Ok(res as u32)
     }
 }
 

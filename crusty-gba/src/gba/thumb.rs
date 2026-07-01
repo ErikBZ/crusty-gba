@@ -640,7 +640,7 @@ impl Operation for LoadStoreRegOffsetOp {
             let data = match block {
                 Ok(n) => n,
                 Err(e) => {
-                    // warn!("{}", e);
+                    warn!("{}", e);
                     panic!()
                 }
             };
@@ -654,7 +654,7 @@ impl Operation for LoadStoreRegOffsetOp {
 
             match res {
                 Ok(_) => (),
-                Err(e) => (), //warn!("{}", e)
+                Err(e) => warn!("{}", e)
             }
         }
 
@@ -698,7 +698,7 @@ impl Operation for LoadStoreSignExOp {
         if !self.h && !self.s {
             match mem.write_halfword(addr, cpu.get_register(self.rd)) {
                 Ok(_) => (),
-                Err(e) => (), //warn!("{}", e),
+                Err(e) => warn!("{}", e),
             }
         } else {
             let data = if self.h && !self.s {
@@ -709,13 +709,17 @@ impl Operation for LoadStoreSignExOp {
                 mem.read_halfword_sign_ex(addr)
             };
 
-            let data = match data {
+            let mut data = match data {
                 Ok(n) => n,
                 Err(e) => {
-                    //warn!("{}", e);
+                    warn!("{}", e);
                     0
                 }
             };
+
+            if !addr.is_multiple_of(2) & !self.s {
+                data = data.rotate_right(8);
+            }
 
             cpu.set_register(self.rd, data);
         }
@@ -823,15 +827,18 @@ impl Operation for LoadStoreHalfWordOp {
     fn run(&self, cpu: &mut Cpu, mem: &mut impl Memory) {
         let addr = (cpu.get_register(self.rb) + self.offset) as usize;
         if self.l {
-            let block_from_mem = match mem.read_halfword(addr) {
+            let mut data = match mem.read_halfword(addr) {
                 Ok(n) => n,
                 Err(e) => {
                     warn!("{}", e);
                     panic!()
                 }
             };
+            if !addr.is_multiple_of(2) {
+                data = data.rotate_right(8);
+            }
 
-            cpu.set_register(self.rd, block_from_mem);
+            cpu.set_register(self.rd, data);
         } else {
             match mem.write_halfword(addr, cpu.get_register(self.rd)) {
                 Ok(_) => (),
