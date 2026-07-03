@@ -637,13 +637,19 @@ impl Operation for LoadStoreRegOffsetOp {
                 mem.read_word(addr)
             };
 
-            let data = match block {
+            let mut data = match block {
                 Ok(n) => n,
                 Err(e) => {
                     warn!("{}", e);
                     panic!()
                 }
             };
+
+            if !addr.is_multiple_of(4) && !self.b {
+                let rot = (addr & 3) * 8;
+                data = data.rotate_right(rot as u32);
+            }
+
             cpu.set_register(self.rd, data);
         } else {
             let res = if self.b {
@@ -876,7 +882,7 @@ impl Operation for SpRelativeLoadOp {
         let addr = (cpu.get_register(SP) + self.offset) as usize;
 
         if self.l {
-            let block_from_mem = match mem.read_word(addr) {
+            let mut data = match mem.read_word(addr) {
                 Ok(n) => n,
                 Err(e) => {
                     warn!("{}", e);
@@ -884,7 +890,12 @@ impl Operation for SpRelativeLoadOp {
                 }
             };
 
-            cpu.set_register(self.rd, block_from_mem);
+            if !addr.is_multiple_of(4) {
+                let rot = (addr & 3) * 8;
+                data = data.rotate_right(rot as u32);
+            }
+
+            cpu.set_register(self.rd, data);
         } else {
             match mem.write_word(addr, cpu.get_register(self.rd)) {
                 Ok(_) => (),
