@@ -16,7 +16,7 @@ use crate::{models::{Test, run_test}, report::SuiteReport};
 #[tokio::main]
 async fn main() {
     let args = cli::Cli::parse();
-    if args.file.is_some() && args.path.is_some() {
+    if args.file.is_some() && args.paths.is_some() {
         panic!("Cannot pass --file and --path in the same command")
     }
 
@@ -44,19 +44,22 @@ async fn main() {
         }
     };
 
-    if let Some(p) = args.path {
+    if let Some(paths) = args.paths {
         let mut results = vec![];
         let mut passed: usize = 0;
         let mut failed: usize = 0;
         let mut skipped: usize = 0;
+        let mut entries: Vec<_> = Vec::new();
 
-        let entries = match glob(&format!("{}/*.json", p)) {
-            Ok(g) => g,
-            Err(e) => {
-                error!("{}", e);
-                process::exit(1)
-            }
-        };
+        for p in paths {
+            match glob(&format!("{}/*.json", p)) {
+                Ok(g) => entries.extend(g),
+                Err(e) => {
+                    error!("{}", e);
+                    process::exit(1)
+                }
+            };
+        }
 
         for entry in entries {
             let path = match entry {
@@ -92,6 +95,7 @@ async fn main() {
             results.push(res);
         }
 
+        print_reports(&results);
         let j = serde_json::to_string_pretty(&results).expect("Couldn't write output json");
         output.write_all(j.as_bytes()).expect("Cannot write to file");
 
@@ -135,6 +139,13 @@ fn deserialize_test(path: &str) -> Result<Vec<Test>, serde_json::Error> {
     let mut contents = String::new();
     file.read_to_string(&mut contents).unwrap(); 
     serde_json::from_str(&contents)
+}
+
+fn print_reports(reports: &[SuiteReport]) {
+    println!("Path Failed Passed Total");
+    for sr in reports {
+        println!("{} {:>5} {:>5} {:>5}", sr.path, sr.failed, sr.passed, sr.total);
+    }
 }
 
 async fn run_tests(tests: Vec<Test>, threads: usize, path: String) -> SuiteReport {

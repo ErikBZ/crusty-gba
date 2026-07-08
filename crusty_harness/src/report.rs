@@ -9,7 +9,7 @@ use crate::models::TestMemory;
 /// Suite result is the sum of all tests in a single file
 #[derive(Debug, Serialize)]
 pub struct SuiteReport {
-    path: String,
+    pub path: String,
     failed_tests: HashMap<usize, TestError>,
     pub total: usize,
     pub failed: usize,

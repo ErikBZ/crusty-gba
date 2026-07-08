@@ -11,7 +11,7 @@ pub struct Cli {
 
     /// Path to directory with tests. Cannot be used with --file or --index
     #[arg(short, long)]
-    pub path: Option<String>,
+    pub paths: Option<Vec<String>>,
 
     /// Path to test suite. If --index is missing will run all tests in file
     #[arg(short, long)]
