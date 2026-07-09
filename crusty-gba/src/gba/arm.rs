@@ -10,6 +10,7 @@ use crate::utils::shifter::CpuShifter;
 use crate::utils::{ArmCalculations, BYTE, Bitable, HALFWORD, WORD};
 use crate::memory::Memory;
 use tracing::{warn, trace};
+use winit::event::Ime;
 
 #[derive(Debug, PartialEq)]
 pub enum Arm {
@@ -1138,42 +1139,51 @@ pub struct PsrTransferOp {
     i: bool,
     p: bool,
     bit_flags_only: bool,
-    pub rd: u8,
-    rm: u8,
-    rotate: u8,
-    imm: u8,
     op: PsrTransferType,
 }
 
 #[derive(Debug, PartialEq)]
 enum PsrTransferType {
-    MSR,
-    MRS,
+    Mrs(usize),
+    Msr(SourceOperand),
 }
+
+#[derive(Debug, PartialEq)]
+enum SourceOperand {
+    Imm { rot: u32, imm: u32 },
+    Reg (usize)
+}
+
 
 impl Operation for PsrTransferOp {
     fn run(&self, cpu: &mut Cpu, _mem: &mut impl Memory) {
         // TODO: change htis to if to remove a nest
-        match self.op {
-            PsrTransferType::MSR => {
-                let operand = self.get_operand(cpu);
-                let mask: u32 = if self.is_bit_flag_only() {
+        match &self.op {
+            PsrTransferType::Msr(so) => {
+                let operand = match so {
+                    SourceOperand::Imm{rot, imm} => imm.rotate_right(rot * 2),
+                    SourceOperand::Reg(r) => cpu.get_register(*r)
+                };
+                trace!("Operand: {}", operand);
+                let mask: u32 = if self.bit_flags_only {
                     0xf0000000
                 } else {
                     0xffffffff
                 };
 
                 if self.is_cspr() {
+                    trace!("Writing to cpsr");
                     cpu.cpsr = (cpu.cpsr & !mask) | (operand & mask)
                 } else {
+                    trace!("Writing to psr: {:x}", cpu.get_psr());
                     cpu.set_psr(cpu.get_psr() & !mask | (operand & mask))
                 }
             }
-            PsrTransferType::MRS => {
+            PsrTransferType::Mrs(rd) => {
                 if self.is_cspr() {
-                    cpu.set_register(self.rd as usize, cpu.cpsr);
+                    cpu.set_register(*rd, cpu.cpsr);
                 } else {
-                    cpu.set_register(self.rd as usize, cpu.get_psr());
+                    cpu.set_register(*rd, cpu.get_psr());
                 }
             }
         }
@@ -1184,41 +1194,36 @@ impl Operation for PsrTransferOp {
 
 impl From<u32> for PsrTransferOp {
     fn from(inst: u32) -> Self {
+        let immiedate =  (inst >> 25 & 1) == 1;
+
         let op = if is_mrs_op(inst) {
-            PsrTransferType::MRS
+            let rd = (inst >> 12 & 0xf) as usize;
+            PsrTransferType::Mrs(rd)
         } else {
-            PsrTransferType::MSR
+            let source_operand = if is_psr_flag_bits_only(inst) && immiedate {
+                let rot =  inst >> 8 & 0xf;
+                let imm =  inst & 0xff;
+                SourceOperand::Imm { rot , imm }
+            } else {
+                let rm = (inst & 0xf) as usize;
+                SourceOperand::Reg(rm)
+            };
+
+            PsrTransferType::Msr(source_operand)
         };
 
         Self {
-            i: (inst >> 25 & 1) == 1,
+            i: immiedate,
             p: (inst >> 22 & 1) == 1,
             bit_flags_only: is_psr_flag_bits_only(inst),
-            rd: (inst >> 12 & 0xf) as u8,
-            rm: (inst & 0xf) as u8,
-            rotate: (inst >> 8 & 0xf) as u8,
-            imm: (inst & 0xff) as u8,
             op,
         }
     }
 }
 
 impl PsrTransferOp {
-    pub fn get_operand(&self, cpu: &Cpu) -> u32 {
-        if self.i {
-            let imm = self.imm as u32;
-            imm.rotate_right((self.rotate as u32) * 2)
-        } else {
-            cpu.get_register(self.rm as usize)
-        }
-    }
-
     pub fn is_cspr(&self) -> bool {
         !self.p
-    }
-
-    pub fn is_bit_flag_only(&self) -> bool {
-        self.bit_flags_only
     }
 }
 
@@ -1429,9 +1434,9 @@ pub fn is_mrs_op(inst: u32) -> bool {
 }
 
 pub fn is_psr_transfer(inst: u32) -> bool {
-    (inst & 0x0fbf0fff == 0x010f0000)
-        || (inst & 0x0fbffff0 == 0x0129f000)
-        || (inst & 0x0dbff000 == 0x0128f000)
+    (inst & 0x0fb000f0 == 0x01000000)
+        || (inst & 0x0fb000f0 == 0x03200000)
+        || (inst & 0x0fb00000 == 0x03200000)
 }
 
 fn is_psr_flag_bits_only(inst: u32) -> bool {
@@ -1510,13 +1515,9 @@ mod test {
         let op = PsrTransferOp::from(inst);
         let op2 = PsrTransferOp {
             i: false,
-            imm: 12,
             bit_flags_only: false,
             p: false,
-            rd: 15,
-            rm: 12,
-            rotate: 0,
-            op: PsrTransferType::MSR,
+            op: PsrTransferType::Msr(SourceOperand::Reg(12)),
         };
         assert_eq!(op, op2);
     }
@@ -1527,13 +1528,9 @@ mod test {
         let op = PsrTransferOp::from(inst);
         let op2 = PsrTransferOp {
             i: false,
-            imm: 0,
             bit_flags_only: false,
             p: false,
-            rd: 12,
-            rm: 0,
-            rotate: 0,
-            op: PsrTransferType::MRS,
+            op: PsrTransferType::Mrs(12),
         };
         assert_eq!(op, op2);
     }
