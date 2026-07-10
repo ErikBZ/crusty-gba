@@ -474,7 +474,7 @@ impl Operation for MultiplyOp {
         let (res, _) = multiplicand.carrying_mul_add(multiplier, 0, accumulate);
         let mut cycles = Self::count_cycles(accumulate);
         let c = if cycles == 4 { 
-            accumulate >> 30 == 2
+            multiplier >> 30 == 2
         } else { 
             Self::booths_multiply(multiplier, multiplicand, accumulate)
         };
@@ -526,19 +526,18 @@ impl MultiplyOp {
     /// Finds the carry bit of a multiplication
     // Just copying this from NanoBoyAdvance cause I don't care too much about
     // this specifically
-    fn booths_multiply(multiplier: u32, mut multiplicand: u32, mut accumulate: u32) -> bool {
+    pub fn booths_multiply(multiplier: u32, mut multiplicand: u32, mut accumulate: u32) -> bool {
         multiplicand |= 1;
 
-        // Optimized first iter
-        let mut booth: u32 = (multiplier.wrapping_shl(31) as i32).unbounded_shr(31) as u32;
-        let mut carry = multiplicand.wrapping_mul(booth);
-        let mut sum = carry.wrapping_add(accumulate);
+        // // Optimized first iter
+        let mut booth: u32 = 0xffffffff;
+        let mut carry: u32 = 0;
+        let mut sum: u32= 0;
 
-        let mut shift: u32 = 29;
+        let mut shift: u32 = 31;
         loop {
             for _ in 0..4 {
-                shift = shift.wrapping_sub(2);
-                let next_booth: u32 = (multiplier.wrapping_shl(shift) as i32).unbounded_shr(shift) as u32;
+                let next_booth: u32 = multiplier.wrapping_shl(shift).unbounded_shr(shift);
                 let factor = next_booth.wrapping_sub(booth);
                 booth = next_booth;
 
@@ -546,9 +545,11 @@ impl MultiplyOp {
                 accumulate ^= carry ^ append;
                 sum = sum.wrapping_add(append);
                 carry = sum.wrapping_sub(accumulate);
+                shift = shift.wrapping_sub(2);
+
             }
 
-            if booth == multiplier {
+            if booth == multiplier || shift > 32 {
                 break;
             }
         }
@@ -1631,6 +1632,12 @@ mod test {
         };
         let op2 = Arm::HalfwordDataOp(op2);
         assert_eq!(op, Ok(op2));
+    }
+
+    #[test]
+    fn test_booths_algo_1() {
+        let carry = MultiplyOp::booths_multiply(0x79cf4fdb, 0x0fe5af1b, 0);
+        assert!(carry)
     }
 }
 
