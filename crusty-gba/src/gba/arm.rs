@@ -455,44 +455,106 @@ pub struct MultiplyOp {
 }
 
 impl Operation for MultiplyOp {
-    fn run(&self, cpu: &mut Cpu, _mem: &mut impl Memory) {
-        let rn_value = cpu.get_register(self.rn);
-        let rs_value = cpu.get_register(self.rs);
-        let rm_value = cpu.get_register(self.rm);
+    // TODO: Use booths algo to get the right carry bits
+    fn run(&self, cpu: &mut Cpu, mem: &mut impl Memory) {
+        let mut accumulate = if self.a { cpu.get_register(self.rn) } else { 0 };
+        let mut multiplier = cpu.get_register(self.rs);
+        let mut multiplicand = cpu.get_register(self.rm);
 
-        let mut res = rm_value.wrapping_mul(rs_value);
-        if self.a {
-            res = res.wrapping_add(rn_value);
+        if self.rs == PC {
+            multiplier = multiplier.wrapping_add(4);
+        }
+        if self.rm == PC {
+            multiplicand = multiplicand.wrapping_add(4);
+        }
+        if self.rn == PC && self.a {
+            accumulate = accumulate.wrapping_add(4);
         }
 
+        let (res, _) = multiplicand.carrying_mul_add(multiplier, 0, accumulate);
+        let mut cycles = Self::count_cycles(accumulate);
+        let c = if cycles == 4 { 
+            multiplier >> 30 == 2
+        } else { 
+            Self::booths_multiply(multiplier, multiplicand, accumulate)
+        };
+
+        trace!("{:x} * {:x} + {:x} = lower({:x})", multiplicand, multiplier, accumulate, res);
+
+        let v = cpu.v_status();
+
         cpu.set_register(self.rd, res);
-        // TODO: C is meaningless and V is unaffected. Update this to reflect this
-        cpu.update_cpsr(res, cpu.v_status(), cpu.c_status());
+        if self.s {
+            // TODO: C is meaningless and V is unaffected. Update this to reflect this
+            cpu.update_cpsr(res, v, c);
+        }
+
+        if self.rd == PC {
+            cpu.flush_pipeline(mem, cpu.get_register(PC) as usize);
+        }
+
+        if self.a {
+            cycles += 1;
+        }
         // NOTE:
         //      MUL: 1S +(m)I
         //      MLA: 1S +(m+1)I
-        cpu.add_cycles(self.count_cycles(rs_value));
+        cpu.add_cycles(cycles);
     }
 }
 
-impl MultiplyOp {
-    fn count_cycles(&self, mult_operand: u32) -> u32 {
-        let mut m = if (mult_operand & 0xffffff00) == 0 || (mult_operand & 0xffffff00 == 0xffffff00)
-        {
-            1
-        } else if (mult_operand & 0xffff0000) == 0 || (mult_operand & 0xffff0000 == 0xffff0000) {
-            2
-        } else if (mult_operand & 0xff000000) == 0 || (mult_operand & 0xff000000 == 0xff000000) {
-            3
-        } else {
-            4
-        };
+// fn get_carry_for_multiply(multiplier: u32) -> (bool, u32) {
+//     todo!()
+// }
 
-        if self.a {
-            m += 1;
+impl MultiplyOp {
+    fn count_cycles(mut multiplier: u32) -> u32 {
+        let mut mask = 0xffffff00;
+        let mut cycles = 1;
+        while mask != 0 {
+            multiplier &= mask;
+            if mask & multiplier == 0 {
+                break;
+            }
+            mask <<= 8;
+            cycles += 1;
         }
 
-        1 + m
+        cycles
+    }
+
+    /// Finds the carry bit of a multiplication
+    // Just copying this from NanoBoyAdvance cause I don't care too much about
+    // this specifically
+    pub fn booths_multiply(multiplier: u32, mut multiplicand: u32, mut accumulate: u32) -> bool {
+        multiplicand |= 1;
+
+        // // Optimized first iter
+        let mut booth: u32 = 0xffffffff;
+        let mut carry: u32 = 0;
+        let mut sum: u32= 0;
+
+        let mut shift: u32 = 31;
+        loop {
+            for _ in 0..4 {
+                let next_booth: u32 = multiplier.wrapping_shl(shift).unbounded_shr(shift);
+                let factor = next_booth.wrapping_sub(booth);
+                booth = next_booth;
+
+                let append: u32 = multiplicand.wrapping_mul(factor);
+                accumulate ^= carry ^ append;
+                sum = sum.wrapping_add(append);
+                carry = sum.wrapping_sub(accumulate);
+                shift = shift.wrapping_sub(2);
+
+            }
+
+            if booth == multiplier || shift > 32 {
+                break;
+            }
+        }
+
+        (carry & 1 << 31) != 0
     }
 }
 
@@ -1570,6 +1632,12 @@ mod test {
         };
         let op2 = Arm::HalfwordDataOp(op2);
         assert_eq!(op, Ok(op2));
+    }
+
+    #[test]
+    fn test_booths_algo_1() {
+        let carry = MultiplyOp::booths_multiply(0x79cf4fdb, 0x0fe5af1b, 0);
+        assert!(carry)
     }
 }
 

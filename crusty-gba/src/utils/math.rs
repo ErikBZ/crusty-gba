@@ -9,6 +9,7 @@ pub trait ArmCalculations {
 /// res, c, v
 impl ArmCalculations for u32 {
     // NOTE: Comeback to this and simplify it like arm_sub
+    /// res, c, v
     fn arm_add(self, rhs: u32) -> (u32, bool, bool) {
         let res = self.wrapping_add(rhs);
         let carry = ((self & rhs) | ((self ^ rhs) & !res)) >= 0x80000000;
@@ -16,6 +17,7 @@ impl ArmCalculations for u32 {
         (res, carry, overflow)
     }
 
+    /// res, c, v
     fn arm_sub(self, rhs: u32) -> (u32, bool, bool) {
         let (intermediate, i_carry) = self.overflowing_add(!rhs);
         let (res, carry, _) = intermediate.arm_add(1);
@@ -25,6 +27,7 @@ impl ArmCalculations for u32 {
         (res, carry | i_carry, v)
     }
 
+    /// res, c, v
     fn arm_add_carry(self, rhs: u32, carry_in: bool) -> (u32, bool, bool) {
         let carry_in = if carry_in {1} else {0};
         let res = self.wrapping_add(rhs).wrapping_add(carry_in);
@@ -33,6 +36,7 @@ impl ArmCalculations for u32 {
         (res, carry, overflow)
     }
 
+    /// res, c, v
     fn arm_sub_carry(self, rhs: u32, carry_in: bool) -> (u32, bool, bool) {
         let (intermediate, i_carry) = self.overflowing_add(!rhs);
         let carry = if carry_in {1} else {0};
