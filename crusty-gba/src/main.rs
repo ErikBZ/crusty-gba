@@ -21,11 +21,6 @@ use tracing_subscriber::{fmt, prelude::*, reload};
 use pixels::Error;
 
 fn main() -> Result<(), Error> {
-    let carry = MultiplyOp::booths_multiply(0x79cf4fdb, 0x0fe5af1b, 0);
-    // let carry = MultiplyOp::booths_multiply(0x277094bd, 0x6efcb647, 0);
-    panic!();
-
-
     let args = Args::parse();
     let filter: LevelFilter = match args.log_level {
         Some(c) => c.into(),
