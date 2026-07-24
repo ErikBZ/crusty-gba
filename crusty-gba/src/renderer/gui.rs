@@ -1,8 +1,8 @@
 use crate::gba::cpu::Cpu;
 use crate::gba::system::SystemMemory;
 use crate::ppu::Ppu;
-use std::time::Instant;
-use tracing::{event, Level};
+use std::time::{Duration, Instant};
+use tracing::{event, Level, info};
 use tracing_subscriber::filter::{LevelFilter, Targets};
 use tracing_subscriber::{reload::Handle, Registry};
 
@@ -76,9 +76,10 @@ pub fn run_gui(
                 }
                 let _ = pixels.render();
                 // TODO: This seems wrong?
-                let dt = Instant::now() - current;
-                if dt.as_secs_f64() > 0.0 {
-                    std::thread::sleep(dt);
+                let dt = Instant::now().duration_since(current);
+                let time_for_frame = Duration::from_secs_f64(0.1666);
+                if dt < time_for_frame {
+                    std::thread::sleep(time_for_frame - dt);
                 }
             }
             _ => (),
