@@ -9,7 +9,6 @@ use crate::ppu::Ppu;
 use crate::renderer::{run_debug, run_gui, run_ratatui};
 use clap::Parser;
 use cli::Args;
-use crusty::gba::arm::MultiplyOp;
 use gba::cpu::Cpu;
 use gba::system::SystemMemory;
 use std::fs::File;

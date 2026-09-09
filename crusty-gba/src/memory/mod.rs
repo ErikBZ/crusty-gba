@@ -1,4 +1,4 @@
-use std::fmt::{Display, Formatter, Error};
+use std::fmt::{Display, Formatter};
 
 pub trait Memory {
     fn read_word(&self, address: usize) -> Result<u32, MemoryError>;
@@ -9,6 +9,7 @@ pub trait Memory {
     fn write_word(&mut self, address: usize, block: u32) -> Result<(), MemoryError>;
     fn write_halfword(&mut self, address: usize, block: u32) -> Result<(), MemoryError>;
     fn write_byte(&mut self, address: usize, block: u32) -> Result<(), MemoryError>;
+    fn is_dma_enabled(&self) -> bool;
 }
 
 #[derive(Debug, PartialEq, Clone)]

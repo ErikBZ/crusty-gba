@@ -1,8 +1,9 @@
+use std::collections::VecDeque;
 use core::fmt;
 use tracing::{info, trace};
 
-use crate::memory::{Memory, MemoryError};
-use super::dma::DmaControl;
+use crate::{memory::{Memory, MemoryError}, utils::{Bitable, bit_is_one_at}};
+use super::dma::{DmaControl, DmaTransfer};
 use crate::utils::{WORD, HALFWORD, BYTE, KILOBYTE};
 
 const INTERNAL_DMA_CONTROL_0: usize = 0x0000ba;
@@ -36,6 +37,7 @@ pub fn read_cycles_per_32(address: usize) -> u32 {
 }
 
 
+// NOTE: Don't like that I'm adding the DMA stuff here, since this is just RAM stuff
 pub struct SystemMemory {
     system_rom: Vec<u32>,
     ewram: Vec<u32>,
@@ -47,6 +49,9 @@ pub struct SystemMemory {
     // TODO: do this later
     pak_rom: Vec<u32>,
     cart_ram: Vec<u32>,
+
+    //NOTE: Shouldn't be open yet
+    dma_transfer: VecDeque<DmaTransfer>
 }
 
 impl fmt::Debug for SystemMemory {
@@ -117,6 +122,15 @@ impl Memory for SystemMemory {
         let res = self.read_byte(address)? as i32;
         Ok(((res << 24) >> 24) as u32)
     }
+
+    fn is_dma_enabled(&self) -> bool {
+        let mut enabled = false;
+        enabled = DmaControl::from(self.io_ram[INTERNAL_DMA_CONTROL_0]).dma_enabled || enabled;
+        enabled = DmaControl::from(self.io_ram[INTERNAL_DMA_CONTROL_1]).dma_enabled || enabled;
+        enabled = DmaControl::from(self.io_ram[INTERNAL_DMA_CONTROL_2]).dma_enabled || enabled;
+        enabled = DmaControl::from(self.io_ram[INTERNAL_DMA_CONTROL_3]).dma_enabled || enabled;
+        enabled
+    }
 }
 
 impl SystemMemory {
@@ -132,6 +146,7 @@ impl SystemMemory {
             oam: vec![0; 1 * (KILOBYTE / 4)],
             pak_rom: vec![0; 16 * 1],
             cart_ram: vec![0; 16 * 1],
+            dma_transfer: VecDeque::new(),
         }
     }
 
@@ -147,6 +162,7 @@ impl SystemMemory {
             oam: vec![0; 0],
             pak_rom: vec![0; 0],
             cart_ram: vec![0; 0],
+            dma_transfer: VecDeque::new(),
         }
     }
 
@@ -222,12 +238,47 @@ impl SystemMemory {
         }
     }
 
-    pub fn is_dma_enabled(&self) -> bool {
+    fn copy_32(mut self, source: usize, dest: usize) -> Result<(), MemoryError> {
+        let source_mem = self.memory_map(source)?;
+        if source_mem.len() < source { return Err(MemoryError::OutOfBounds(source, source_mem.len())) }
+
+        let data = source_mem[source >> 2];
+        let dest_mem = self.memory_map_mut(dest)?;
+        if dest_mem.len() < dest { return Err(MemoryError::OutOfBounds(dest, dest_mem.len())) }
+
+        trace!("Copying data: {:x} from {:x} to {:x}", data, source, dest);
+        dest_mem[dest >> 2] = data;
+        Ok(())
+    }
+
+    fn copy_16(mut self, source: usize, dest: usize) -> Result<(), MemoryError> {
+        let source_mem = self.memory_map(source)?;
+        if source_mem.len() < source { return Err(MemoryError::OutOfBounds(source, source_mem.len())) }
+
+        let data = source_mem[source >> 2];
+        let data = if source & 2 == 2 { data >> 16 } else { data } & 0xffff;
+
+        let dest_mem = self.memory_map_mut(dest)?;
+        if dest_mem.len() < dest { return Err(MemoryError::OutOfBounds(dest, dest_mem.len())) }
+
+        let old_data = dest_mem[dest >> 2];
+        let data = if dest & 2 == 2 {
+            (old_data & 0xffff) | data << 16
+        } else {
+            (old_data & !0xffff) | data
+        };
+
+        trace!("Copying data: {:x} from {:x} to {:x}", data, source, dest);
+        dest_mem[dest >> 2] = data;
+        Ok(())
+    }
+
+    pub fn is_dma_enabled_2(&self) -> bool {
         let mut enabled = false;
-        enabled = DmaControl::from(self.io_ram[INTERNAL_DMA_CONTROL_0]).dma_enabled || enabled;
-        enabled = DmaControl::from(self.io_ram[INTERNAL_DMA_CONTROL_1]).dma_enabled || enabled;
-        enabled = DmaControl::from(self.io_ram[INTERNAL_DMA_CONTROL_2]).dma_enabled || enabled;
-        enabled = DmaControl::from(self.io_ram[INTERNAL_DMA_CONTROL_3]).dma_enabled || enabled;
+        enabled |= self.io_ram[INTERNAL_DMA_CONTROL_0 >> 2].bit_is_high(31);
+        enabled |= self.io_ram[INTERNAL_DMA_CONTROL_1 >> 2].bit_is_high(31);
+        enabled |= self.io_ram[INTERNAL_DMA_CONTROL_2 >> 2].bit_is_high(31);
+        enabled |= self.io_ram[INTERNAL_DMA_CONTROL_3 >> 2].bit_is_high(31);
         enabled
     }
 

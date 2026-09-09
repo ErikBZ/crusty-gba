@@ -235,5 +235,9 @@ impl Memory for TestMemory {
         };
         Ok(res as u32)
     }
+
+    fn is_dma_enabled(&self) -> bool {
+        false
+    }
 }
 

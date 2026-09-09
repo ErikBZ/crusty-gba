@@ -25,3 +25,19 @@ impl From<u32> for DmaControl {
         }
     }
 }
+
+pub struct DmaTransfer {
+    current: u32,
+    count: u32,
+    source: u32,
+    destination: u32,
+}
+
+
+impl Iterator for DmaTransfer {
+    type Item = (u32, u32);
+
+    fn next(&mut self) -> Option<Self::Item> {
+        todo!()
+    }
+}
